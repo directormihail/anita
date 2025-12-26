@@ -10,12 +10,29 @@ import { handleChatCompletion } from './routes/chat-completion';
 import { handleTranscribe } from './routes/transcribe';
 import { handleAnalyzeFile } from './routes/analyze-file';
 import { handleCreateCheckoutSession } from './routes/create-checkout-session';
+import { handleGetTransactions } from './routes/get-transactions';
+import { handleGetConversations } from './routes/get-conversations';
+import { handleGetFinancialMetrics } from './routes/get-financial-metrics';
+import { handleGetXPStats } from './routes/get-xp-stats';
+import { handleGetTargets } from './routes/get-targets';
+import { handleGetAssets } from './routes/get-assets';
+import { handleCreateConversation } from './routes/create-conversation';
+import { handleGetMessages } from './routes/get-messages';
+import { handleSaveMessage } from './routes/save-message';
 import { applySecurityHeaders } from './utils/securityHeaders';
 import { requestIdMiddleware } from './middleware/requestId';
 import * as logger from './utils/logger';
 
 // Load environment variables
-dotenv.config();
+// Use explicit path to ensure .env is loaded from project root
+import path from 'path';
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+
+// #region agent log
+const debugSupabaseUrl = process.env.SUPABASE_URL;
+const debugSupabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+fetch('http://127.0.0.1:7242/ingest/60703aac-129d-4ef4-8e2a-73410ca29b0a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.ts:27',message:'dotenv.config() called - checking loaded env vars',data:{hasUrl:!!debugSupabaseUrl,urlLength:debugSupabaseUrl?.length||0,urlPreview:debugSupabaseUrl?.substring(0,50)||'null',hasServiceKey:!!debugSupabaseServiceKey,serviceKeyLength:debugSupabaseServiceKey?.length||0,serviceKeyPreview:debugSupabaseServiceKey?.substring(0,30)||'null',serviceKeyIsPlaceholder:debugSupabaseServiceKey?.includes('YOUR_')||debugSupabaseServiceKey?.includes('your_')||false},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+// #endregion
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -55,13 +72,13 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Security headers middleware (applied to all routes)
-app.use((req, res, next) => {
+app.use((_req, res, next) => {
   applySecurityHeaders(res);
   next();
 });
 
 // Health check endpoint (required for App Store)
-app.get('/health', (req: Request, res: Response) => {
+app.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({
     status: 'ok',
     timestamp: new Date().toISOString(),
@@ -71,7 +88,7 @@ app.get('/health', (req: Request, res: Response) => {
 });
 
 // Privacy policy endpoint (required for App Store)
-app.get('/privacy', (req: Request, res: Response) => {
+app.get('/privacy', (_req: Request, res: Response) => {
   res.status(200).json({
     privacyPolicy: 'https://anita.app/privacy',
     dataCollection: 'We collect minimal data necessary for app functionality.',
@@ -87,6 +104,15 @@ app.post('/api/v1/chat-completion', handleChatCompletion);
 app.post('/api/v1/transcribe', handleTranscribe);
 app.post('/api/v1/analyze-file', handleAnalyzeFile);
 app.post('/api/v1/create-checkout-session', handleCreateCheckoutSession);
+app.get('/api/v1/transactions', handleGetTransactions);
+app.get('/api/v1/conversations', handleGetConversations);
+app.post('/api/v1/create-conversation', handleCreateConversation);
+app.get('/api/v1/messages', handleGetMessages);
+app.post('/api/v1/save-message', handleSaveMessage);
+app.get('/api/v1/financial-metrics', handleGetFinancialMetrics);
+app.get('/api/v1/xp-stats', handleGetXPStats);
+app.get('/api/v1/targets', handleGetTargets);
+app.get('/api/v1/assets', handleGetAssets);
 
 // Legacy routes (redirect to v1 for backward compatibility)
 app.post('/api/chat-completion', handleChatCompletion);
@@ -94,10 +120,7 @@ app.post('/api/transcribe', handleTranscribe);
 app.post('/api/analyze-file', handleAnalyzeFile);
 app.post('/api/create-checkout-session', handleCreateCheckoutSession);
 
-// Handle OPTIONS preflight for all routes
-app.options('*', (req: Request, res: Response) => {
-  res.status(200).end();
-});
+// OPTIONS requests are handled by CORS middleware automatically
 
 // 404 handler
 app.use((req: Request, res: Response) => {
@@ -108,7 +131,7 @@ app.use((req: Request, res: Response) => {
 });
 
 // Error handler
-app.use((err: Error, req: Request, res: Response, next: express.NextFunction) => {
+app.use((err: Error, req: Request, res: Response, _next: express.NextFunction) => {
   logger.error('Unhandled error', { 
     error: err.message, 
     stack: err.stack,
@@ -142,6 +165,15 @@ app.listen(PORT, () => {
   console.log('   - POST /api/v1/transcribe');
   console.log('   - POST /api/v1/analyze-file');
   console.log('   - POST /api/v1/create-checkout-session');
+  console.log('   - GET  /api/v1/transactions');
+  console.log('   - GET  /api/v1/conversations');
+  console.log('   - POST /api/v1/create-conversation');
+  console.log('   - GET  /api/v1/messages');
+  console.log('   - POST /api/v1/save-message');
+  console.log('   - GET  /api/v1/financial-metrics');
+  console.log('   - GET  /api/v1/xp-stats');
+  console.log('   - GET  /api/v1/targets');
+  console.log('   - GET  /api/v1/assets');
   console.log('   - GET  /health');
   console.log('   - GET  /privacy');
   console.log('\n   ✅ Ready for iOS app!\n');

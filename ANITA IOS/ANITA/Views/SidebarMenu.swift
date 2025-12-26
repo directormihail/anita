@@ -9,21 +9,7 @@ import SwiftUI
 
 struct SidebarMenu: View {
     @Binding var isPresented: Bool
-    @State private var balance: Double = 570.06
-    @State private var income: Double = 1600.00
-    @State private var expense: Double = 1029.94
-    @State private var xp: Int = 254
-    @State private var xpToNextLevel: Int = 196
-    @State private var level: Int = 3
-    @State private var levelTitle: String = "BUDGET APPRENTICE"
-    @State private var conversations: [ConversationItem] = [
-        ConversationItem(title: "Friendly Check-In Chat", date: Date(), isToday: true),
-        ConversationItem(title: "Show my analytics", date: Calendar.current.date(byAdding: .day, value: -4, to: Date()) ?? Date(), isToday: false),
-        ConversationItem(title: "Show my analytics", date: Calendar.current.date(byAdding: .day, value: -5, to: Date()) ?? Date(), isToday: false),
-        ConversationItem(title: "Show my analytics", date: Calendar.current.date(byAdding: .day, value: -5, to: Date()) ?? Date(), isToday: false),
-        ConversationItem(title: "Food Expense Budgeting", date: Calendar.current.date(byAdding: .day, value: -5, to: Date()) ?? Date(), isToday: false),
-        ConversationItem(title: "Show my analytics", date: Date(timeIntervalSince1970: 1734480000), isToday: false) // 12/17/2025
-    ]
+    @StateObject private var viewModel = SidebarViewModel()
     
     var body: some View {
         ZStack {
@@ -68,7 +54,9 @@ struct SidebarMenu: View {
                             Spacer()
                             
                             Button(action: {
-                                // Upgrade action
+                                // TODO: Implement upgrade action
+                                // This could open a checkout session or navigate to upgrade view
+                                handleUpgrade()
                             }) {
                                 Text("Upgrade")
                                     .font(.system(size: 14, weight: .semibold))
@@ -81,37 +69,6 @@ struct SidebarMenu: View {
                         }
                         .padding(.horizontal, 16)
                         
-                        // Financial Overview Cards
-                        VStack(spacing: 12) {
-                            // Balance Card
-                            FinancialCard(
-                                icon: "dollarsign.circle.fill",
-                                title: "Balance",
-                                value: balance,
-                                isPositive: true,
-                                showSign: false
-                            )
-                            
-                            // Income Card
-                            FinancialCard(
-                                icon: "arrow.up.circle.fill",
-                                title: "Income",
-                                value: income,
-                                isPositive: true,
-                                showSign: true
-                            )
-                            
-                            // Expense Card
-                            FinancialCard(
-                                icon: "dollarsign.circle.fill",
-                                title: "Expense",
-                                value: expense,
-                                isPositive: false,
-                                showSign: true
-                            )
-                        }
-                        .padding(.horizontal, 16)
-                        
                         // Progress/XP Section
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
@@ -120,15 +77,22 @@ struct SidebarMenu: View {
                                         .font(.system(size: 16))
                                         .foregroundColor(.green)
                                     
-                                    Text("\(xp) XP")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundColor(.green)
+                                    if viewModel.isLoading {
+                                        ProgressView()
+                                            .tint(.green)
+                                            .scaleEffect(0.8)
+                                    } else {
+                                        Text("\(viewModel.xp) XP")
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundColor(.green)
+                                    }
                                 }
                                 
                                 Spacer()
                                 
                                 Button(action: {
-                                    // Info action
+                                    // TODO: Show XP info modal
+                                    print("XP info tapped")
                                 }) {
                                     Image(systemName: "info.circle")
                                         .font(.system(size: 18))
@@ -141,7 +105,7 @@ struct SidebarMenu: View {
                                 ZStack(alignment: .leading) {
                                     // Background
                                     RoundedRectangle(cornerRadius: 4)
-                                        .fill(Color(white: 0.2))
+                                        .fill(Color.white.opacity(0.1))
                                         .frame(height: 4)
                                     
                                     // Progress
@@ -155,18 +119,18 @@ struct SidebarMenu: View {
                             }
                             .frame(height: 4)
                             
-                            Text(". \(xpToNextLevel) to next level")
+                            Text(". \(viewModel.xpToNextLevel) to next level")
                                 .font(.system(size: 12))
                                 .foregroundColor(.gray)
                             
                             // Level Card
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("Level \(level)")
+                                    Text("Level \(viewModel.level)")
                                         .font(.system(size: 20, weight: .bold))
                                         .foregroundColor(.green)
                                     
-                                    Text(levelTitle)
+                                    Text(viewModel.levelTitle)
                                         .font(.system(size: 12))
                                         .foregroundColor(.gray)
                                 }
@@ -174,22 +138,27 @@ struct SidebarMenu: View {
                                 Spacer()
                             }
                             .padding(16)
-                            .background(Color(white: 0.1))
-                            .cornerRadius(12)
+                            .liquidGlass(cornerRadius: 12)
                         }
                         .padding(.horizontal, 16)
                         
                         // Conversations Section
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
-                                Text("Conversations (\(conversations.count))")
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundColor(.white)
+                                if viewModel.isLoading {
+                                    Text("Conversations...")
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundColor(.white)
+                                } else {
+                                    Text("Conversations (\(viewModel.conversations.count))")
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundColor(.white)
+                                }
                                 
                                 Spacer()
                                 
                                 Button(action: {
-                                    // New conversation action
+                                    handleNewConversation()
                                 }) {
                                     Image(systemName: "plus.circle.fill")
                                         .font(.system(size: 24))
@@ -198,32 +167,78 @@ struct SidebarMenu: View {
                             }
                             
                             // Conversations List
-                            VStack(spacing: 0) {
-                                ForEach(conversations) { conversation in
-                                    ConversationRow(conversation: conversation)
-                                    
-                                    if conversation.id != conversations.last?.id {
-                                        Divider()
-                                            .background(Color(white: 0.2))
-                                            .padding(.leading, 16)
+                            if viewModel.isLoading && viewModel.conversations.isEmpty {
+                                ProgressView()
+                                    .tint(.white)
+                                    .padding()
+                            } else if viewModel.conversations.isEmpty {
+                                Text("No conversations yet")
+                                    .font(.subheadline)
+                                    .foregroundColor(.gray)
+                                    .padding()
+                            } else {
+                                VStack(spacing: 0) {
+                                    ForEach(viewModel.conversations) { conversation in
+                                        ConversationRow(conversation: conversation) {
+                                            handleConversationTap(conversation.id)
+                                        }
+                                        
+                                        if conversation.id != viewModel.conversations.last?.id {
+                                            Divider()
+                                                .background(Color.white.opacity(0.1))
+                                                .padding(.leading, 16)
+                                        }
                                     }
                                 }
+                                .liquidGlass(cornerRadius: 12)
                             }
-                            .background(Color(white: 0.1))
-                            .cornerRadius(12)
+                            
+                            if let errorMessage = viewModel.errorMessage {
+                                Text(errorMessage)
+                                    .font(.caption)
+                                    .foregroundColor(.red)
+                                    .padding(.horizontal, 16)
+                            }
                         }
                         .padding(.horizontal, 16)
                         .padding(.bottom, 24)
-                    }
-                    .padding(.top, 8)
                 }
+                .padding(.top, 8)
             }
         }
+        .onAppear {
+            viewModel.loadData()
+        }
+        .refreshable {
+            viewModel.refresh()
+        }
+    }
     }
     
     private var progressPercentage: Double {
-        let totalXP = Double(xp + xpToNextLevel)
-        return totalXP > 0 ? Double(xp) / totalXP : 0
+        let totalXP = Double(viewModel.xp + viewModel.xpToNextLevel)
+        return totalXP > 0 ? Double(viewModel.xp) / totalXP : 0
+    }
+    
+    private func handleUpgrade() {
+        // TODO: Implement upgrade flow
+        // This could open a checkout session or navigate to upgrade view
+        print("Upgrade button tapped")
+    }
+    
+    private func handleNewConversation() {
+        // Close sidebar and start new conversation
+        isPresented = false
+        // TODO: Trigger new conversation in ChatView
+        // This could use a notification or environment object
+        NotificationCenter.default.post(name: NSNotification.Name("NewConversation"), object: nil)
+    }
+    
+    private func handleConversationTap(_ conversationId: String) {
+        // Close sidebar and open conversation
+        isPresented = false
+        // TODO: Load conversation in ChatView
+        NotificationCenter.default.post(name: NSNotification.Name("OpenConversation"), object: conversationId)
     }
 }
 
@@ -253,8 +268,7 @@ struct FinancialCard: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(Color(white: 0.1))
-        .cornerRadius(12)
+        .liquidGlass(cornerRadius: 12)
     }
     
     private func formatValue(_ amount: Double) -> String {
@@ -289,10 +303,11 @@ struct ConversationItem: Identifiable {
 // Conversation Row Component
 struct ConversationRow: View {
     let conversation: ConversationItem
+    var onTap: () -> Void = {}
     
     var body: some View {
         Button(action: {
-            // Open conversation
+            onTap()
         }) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {

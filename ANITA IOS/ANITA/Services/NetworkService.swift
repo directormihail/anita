@@ -14,12 +14,11 @@ class NetworkService: ObservableObject {
     private var baseURL: String
     
     private init() {
-        // Default to localhost for development, update for production
+        // Use Config.backendURL as default, allow override from UserDefaults
         if let url = UserDefaults.standard.string(forKey: "backendURL"), !url.isEmpty {
             self.baseURL = url
         } else {
-            // Default backend URL - update this to your production URL
-            self.baseURL = "http://localhost:3001"
+            self.baseURL = Config.backendURL
         }
     }
     
@@ -166,18 +165,65 @@ class NetworkService: ObservableObject {
     // MARK: - Health Check
     
     func checkHealth() async throws -> HealthResponse {
-        let url = URL(string: "\(baseURL)/health")!
-        let request = URLRequest(url: url)
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
+        let urlString = "\(baseURL)/health"
+        guard let url = URL(string: urlString) else {
+            print("[NetworkService] Invalid health check URL: \(urlString)")
             throw NetworkError.invalidResponse
         }
         
-        let decoder = JSONDecoder()
-        return try decoder.decode(HealthResponse.self, from: data)
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10.0 // 10 second timeout
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        
+        print("[NetworkService] Health check request to: \(url.absoluteString)")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("[NetworkService] Invalid response type")
+                throw NetworkError.invalidResponse
+            }
+            
+            print("[NetworkService] Health check response status: \(httpResponse.statusCode)")
+            
+            if httpResponse.statusCode == 200 {
+                let decoder = JSONDecoder()
+                do {
+                    let healthResponse = try decoder.decode(HealthResponse.self, from: data)
+                    print("[NetworkService] Health check successful: \(healthResponse.status)")
+                    return healthResponse
+                } catch {
+                    let responseString = String(data: data, encoding: .utf8) ?? "Unable to decode"
+                    print("[NetworkService] Decode error: \(error)")
+                    print("[NetworkService] Response body: \(responseString)")
+                    throw NetworkError.decodingError
+                }
+            } else {
+                let errorString = String(data: data, encoding: .utf8) ?? "Unknown error"
+                print("[NetworkService] Health check failed with status \(httpResponse.statusCode): \(errorString)")
+                throw NetworkError.httpError(httpResponse.statusCode)
+            }
+        } catch let error as NetworkError {
+            throw error
+        } catch {
+            print("[NetworkService] Network error: \(error.localizedDescription)")
+            if let urlError = error as? URLError {
+                switch urlError.code {
+                case .notConnectedToInternet:
+                    throw NetworkError.apiError("No internet connection")
+                case .timedOut:
+                    throw NetworkError.apiError("Request timed out. Check if backend is running.")
+                case .cannotFindHost:
+                    throw NetworkError.apiError("Cannot find host. Check backend URL.")
+                case .cannotConnectToHost:
+                    throw NetworkError.apiError("Cannot connect to host. Is backend running?")
+                default:
+                    throw NetworkError.apiError("Network error: \(urlError.localizedDescription)")
+                }
+            }
+            throw NetworkError.apiError(error.localizedDescription)
+        }
     }
     
     // MARK: - Privacy Policy
@@ -195,6 +241,281 @@ class NetworkService: ObservableObject {
         
         let decoder = JSONDecoder()
         return try decoder.decode(PrivacyResponse.self, from: data)
+    }
+    
+    // MARK: - Transactions
+    
+    func getTransactions(userId: String) async throws -> GetTransactionsResponse {
+        var urlComponents = URLComponents(string: "\(baseURL)/api/v1/transactions")!
+        urlComponents.queryItems = [URLQueryItem(name: "userId", value: userId)]
+        
+        guard let url = urlComponents.url else {
+            throw NetworkError.invalidResponse
+        }
+        
+        let request = URLRequest(url: url)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 200 {
+            let decoder = JSONDecoder()
+            return try decoder.decode(GetTransactionsResponse.self, from: data)
+        } else {
+            if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
+                throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)
+            }
+            throw NetworkError.httpError(httpResponse.statusCode)
+        }
+    }
+    
+    // MARK: - Conversations
+    
+    func getConversations(userId: String) async throws -> GetConversationsResponse {
+        var urlComponents = URLComponents(string: "\(baseURL)/api/v1/conversations")!
+        urlComponents.queryItems = [URLQueryItem(name: "userId", value: userId)]
+        
+        guard let url = urlComponents.url else {
+            throw NetworkError.invalidResponse
+        }
+        
+        let request = URLRequest(url: url)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 200 {
+            let decoder = JSONDecoder()
+            return try decoder.decode(GetConversationsResponse.self, from: data)
+        } else {
+            if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
+                throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)
+            }
+            throw NetworkError.httpError(httpResponse.statusCode)
+        }
+    }
+    
+    // MARK: - Financial Metrics
+    
+    func getFinancialMetrics(userId: String) async throws -> GetFinancialMetricsResponse {
+        var urlComponents = URLComponents(string: "\(baseURL)/api/v1/financial-metrics")!
+        urlComponents.queryItems = [URLQueryItem(name: "userId", value: userId)]
+        
+        guard let url = urlComponents.url else {
+            throw NetworkError.invalidResponse
+        }
+        
+        let request = URLRequest(url: url)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 200 {
+            let decoder = JSONDecoder()
+            return try decoder.decode(GetFinancialMetricsResponse.self, from: data)
+        } else {
+            if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
+                throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)
+            }
+            throw NetworkError.httpError(httpResponse.statusCode)
+        }
+    }
+    
+    // MARK: - XP Stats
+    
+    func getXPStats(userId: String) async throws -> GetXPStatsResponse {
+        var urlComponents = URLComponents(string: "\(baseURL)/api/v1/xp-stats")!
+        urlComponents.queryItems = [URLQueryItem(name: "userId", value: userId)]
+        
+        guard let url = urlComponents.url else {
+            throw NetworkError.invalidResponse
+        }
+        
+        let request = URLRequest(url: url)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 200 {
+            let decoder = JSONDecoder()
+            return try decoder.decode(GetXPStatsResponse.self, from: data)
+        } else {
+            if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
+                throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)
+            }
+            throw NetworkError.httpError(httpResponse.statusCode)
+        }
+    }
+    
+    // MARK: - Targets
+    
+    func getTargets(userId: String) async throws -> GetTargetsResponse {
+        var urlComponents = URLComponents(string: "\(baseURL)/api/v1/targets")!
+        urlComponents.queryItems = [URLQueryItem(name: "userId", value: userId)]
+        
+        guard let url = urlComponents.url else {
+            throw NetworkError.invalidResponse
+        }
+        
+        let request = URLRequest(url: url)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 200 {
+            let decoder = JSONDecoder()
+            return try decoder.decode(GetTargetsResponse.self, from: data)
+        } else {
+            if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
+                throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)
+            }
+            throw NetworkError.httpError(httpResponse.statusCode)
+        }
+    }
+    
+    // MARK: - Conversations
+    
+    func createConversation(userId: String, title: String) async throws -> CreateConversationResponse {
+        let url = URL(string: "\(baseURL)/api/v1/create-conversation")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let requestBody = CreateConversationRequest(userId: userId, title: title)
+        request.httpBody = try JSONEncoder().encode(requestBody)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 200 {
+            let decoder = JSONDecoder()
+            return try decoder.decode(CreateConversationResponse.self, from: data)
+        } else {
+            // Try to decode error response
+            let errorString = String(data: data, encoding: .utf8) ?? "Unknown error"
+            print("[NetworkService] Create conversation error: \(errorString)")
+            
+            if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
+                // error is non-optional String, message is optional String?
+                let errorMessage = errorResponse.message ?? errorResponse.error
+                // Check for foreign key constraint errors
+                if errorMessage.contains("foreign key") || errorMessage.contains("User not found") || errorMessage.contains("does not exist") {
+                    throw NetworkError.apiError("User not found. Please sign in or sign up first. Go to Settings to authenticate.")
+                }
+                throw NetworkError.apiError(errorMessage)
+            }
+            
+            // If we can't decode the error, check the raw string
+            if errorString.contains("foreign key") || errorString.contains("conversations_user_id_fkey") {
+                throw NetworkError.apiError("User not found. Please sign in or sign up first. Go to Settings to authenticate.")
+            }
+            
+            throw NetworkError.httpError(httpResponse.statusCode)
+        }
+    }
+    
+    // MARK: - Messages
+    
+    func getMessages(conversationId: String, userId: String) async throws -> GetMessagesResponse {
+        var urlComponents = URLComponents(string: "\(baseURL)/api/v1/messages")!
+        urlComponents.queryItems = [
+            URLQueryItem(name: "conversationId", value: conversationId),
+            URLQueryItem(name: "userId", value: userId)
+        ]
+        
+        guard let url = urlComponents.url else {
+            throw NetworkError.invalidResponse
+        }
+        
+        let request = URLRequest(url: url)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 200 {
+            let decoder = JSONDecoder()
+            return try decoder.decode(GetMessagesResponse.self, from: data)
+        } else {
+            if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
+                throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)
+            }
+            throw NetworkError.httpError(httpResponse.statusCode)
+        }
+    }
+    
+    func saveMessage(userId: String, conversationId: String, messageId: String, messageText: String, sender: String) async throws -> SaveMessageResponse {
+        let url = URL(string: "\(baseURL)/api/v1/save-message")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let requestBody = SaveMessageRequest(
+            userId: userId,
+            conversationId: conversationId,
+            messageId: messageId,
+            messageText: messageText,
+            sender: sender
+        )
+        request.httpBody = try JSONEncoder().encode(requestBody)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 200 {
+            let decoder = JSONDecoder()
+            return try decoder.decode(SaveMessageResponse.self, from: data)
+        } else {
+            if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
+                throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)
+            }
+            throw NetworkError.httpError(httpResponse.statusCode)
+        }
+    }
+    
+    // MARK: - Assets
+    
+    func getAssets(userId: String) async throws -> GetAssetsResponse {
+        var urlComponents = URLComponents(string: "\(baseURL)/api/v1/assets")!
+        urlComponents.queryItems = [URLQueryItem(name: "userId", value: userId)]
+        
+        guard let url = urlComponents.url else {
+            throw NetworkError.invalidResponse
+        }
+        
+        let request = URLRequest(url: url)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 200 {
+            let decoder = JSONDecoder()
+            return try decoder.decode(GetAssetsResponse.self, from: data)
+        } else {
+            if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
+                throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)
+            }
+            throw NetworkError.httpError(httpResponse.statusCode)
+        }
     }
 }
 

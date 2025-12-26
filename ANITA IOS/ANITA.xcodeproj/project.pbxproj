@@ -13,11 +13,19 @@
 		A1000008 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000007 /* Preview Assets.xcassets */; };
 		A1000010 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000009 /* Models.swift */; };
 		A1000012 /* NetworkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000011 /* NetworkService.swift */; };
+		A1000049 /* SupabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000050 /* SupabaseService.swift */; };
 		A1000014 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000013 /* ChatView.swift */; };
 		A1000020 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000019 /* SettingsView.swift */; };
 		A1000022 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000021 /* ChatViewModel.swift */; };
 		A1000033 /* FinanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000027 /* FinanceView.swift */; };
 		A1000035 /* SidebarMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000034 /* SidebarMenu.swift */; };
+		A1000036 /* FinanceViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000037 /* FinanceViewModel.swift */; };
+		A1000038 /* SidebarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000039 /* SidebarViewModel.swift */; };
+		A1000040 /* UserManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000041 /* UserManager.swift */; };
+		A1000043 /* CategoryAnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000044 /* CategoryAnalyticsView.swift */; };
+		A1000045 /* CategoryAnalyticsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000046 /* CategoryAnalyticsViewModel.swift */; };
+		A1000047 /* LiquidGlassModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000048 /* LiquidGlassModifier.swift */; };
+		A1000051 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000052 /* Config.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,12 +36,20 @@
 		A1000007 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		A1000009 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		A1000011 /* NetworkService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkService.swift; sourceTree = "<group>"; };
+		A1000050 /* SupabaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseService.swift; sourceTree = "<group>"; };
 		A1000013 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		A1000019 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A1000021 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
 		A1000027 /* FinanceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinanceView.swift; sourceTree = "<group>"; };
 		A1000029 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A1000034 /* SidebarMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarMenu.swift; sourceTree = "<group>"; };
+		A1000037 /* FinanceViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinanceViewModel.swift; sourceTree = "<group>"; };
+		A1000039 /* SidebarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarViewModel.swift; sourceTree = "<group>"; };
+		A1000041 /* UserManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserManager.swift; sourceTree = "<group>"; };
+		A1000044 /* CategoryAnalyticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryAnalyticsView.swift; sourceTree = "<group>"; };
+		A1000046 /* CategoryAnalyticsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryAnalyticsViewModel.swift; sourceTree = "<group>"; };
+		A1000048 /* LiquidGlassModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlassModifier.swift; sourceTree = "<group>"; };
+		A1000052 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -65,6 +81,7 @@
 				A1000032 /* ViewModels */,
 				A1000030 /* Services */,
 				A1000031 /* Models */,
+				A1000042 /* Utils */,
 				A1000004 /* Assets.xcassets */,
 				A1000006 /* Preview Content */,
 			);
@@ -86,6 +103,7 @@
 				A1000027 /* FinanceView.swift */,
 				A1000019 /* SettingsView.swift */,
 				A1000034 /* SidebarMenu.swift */,
+				A1000044 /* CategoryAnalyticsView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -94,6 +112,9 @@
 			isa = PBXGroup;
 			children = (
 				A1000021 /* ChatViewModel.swift */,
+				A1000037 /* FinanceViewModel.swift */,
+				A1000039 /* SidebarViewModel.swift */,
+				A1000046 /* CategoryAnalyticsViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -102,6 +123,7 @@
 			isa = PBXGroup;
 			children = (
 				A1000011 /* NetworkService.swift */,
+				A1000050 /* SupabaseService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -112,6 +134,16 @@
 				A1000009 /* Models.swift */,
 			);
 			path = Models;
+			sourceTree = "<group>";
+		};
+		A1000042 /* Utils */ = {
+			isa = PBXGroup;
+			children = (
+				A1000041 /* UserManager.swift */,
+				A1000048 /* LiquidGlassModifier.swift */,
+				A1000052 /* Config.swift */,
+			);
+			path = Utils;
 			sourceTree = "<group>";
 		};
 		A0FFFFFD /* Products */ = {
@@ -195,11 +227,19 @@
 				A1000003 /* ContentView.swift in Sources */,
 				A1000010 /* Models.swift in Sources */,
 				A1000012 /* NetworkService.swift in Sources */,
+				A1000049 /* SupabaseService.swift in Sources */,
 				A1000014 /* ChatView.swift in Sources */,
 				A1000020 /* SettingsView.swift in Sources */,
 				A1000022 /* ChatViewModel.swift in Sources */,
 				A1000033 /* FinanceView.swift in Sources */,
 				A1000035 /* SidebarMenu.swift in Sources */,
+				A1000036 /* FinanceViewModel.swift in Sources */,
+				A1000038 /* SidebarViewModel.swift in Sources */,
+				A1000040 /* UserManager.swift in Sources */,
+				A1000051 /* Config.swift in Sources */,
+				A1000043 /* CategoryAnalyticsView.swift in Sources */,
+				A1000045 /* CategoryAnalyticsViewModel.swift in Sources */,
+				A1000047 /* LiquidGlassModifier.swift in Sources */,
 				A1000001 /* ANITAApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

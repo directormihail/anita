@@ -8,14 +8,23 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @State private var backendURL: String = UserDefaults.standard.string(forKey: "backendURL") ?? "http://localhost:3001"
+    @StateObject private var userManager = UserManager.shared
+    @State private var backendURL: String = UserDefaults.standard.string(forKey: "backendURL") ?? Config.backendURL
     @State private var showBackendURLAlert = false
     @State private var healthStatus: String?
     @State private var isCheckingHealth = false
     @State private var showPrivacyPolicy = false
     @State private var privacyPolicy: PrivacyResponse?
+    @State private var showAuthSheet = false
+    @State private var authEmail = ""
+    @State private var authPassword = ""
+    @State private var isSignUp = false
+    @State private var authError: String?
+    @State private var isTestingSupabase = false
+    @State private var supabaseTestResult: String?
     
     private let networkService = NetworkService.shared
+    private let supabaseService = SupabaseService.shared
     
     var body: some View {
         ZStack {
@@ -35,6 +44,123 @@ struct SettingsView: View {
                             .padding(.bottom, 8)
                     }
                     
+                    // Authentication
+                    SettingsSection(title: "Authentication") {
+                        VStack(spacing: 0) {
+                            if userManager.isAuthenticated, let user = userManager.currentUser {
+                                SettingsRow(
+                                    title: "Signed in as",
+                                    value: user.email ?? user.id,
+                                    showChevron: false
+                                ) {}
+                                
+                                Divider()
+                                    .background(Color.white.opacity(0.1))
+                                    .padding(.leading, 20)
+                                
+                                Button(action: {
+                                    userManager.signOut()
+                                }) {
+                                    HStack {
+                                        Spacer()
+                                        Text("Sign Out")
+                                            .font(.body)
+                                            .foregroundColor(.red)
+                                        Spacer()
+                                    }
+                                    .padding(.vertical, 16)
+                                }
+                            } else {
+                                Button(action: {
+                                    showAuthSheet = true
+                                }) {
+                                    HStack {
+                                        Spacer()
+                                        Text("Sign In / Sign Up")
+                                            .font(.body)
+                                            .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                                        Spacer()
+                                    }
+                                    .padding(.vertical, 16)
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Supabase Status
+                    SettingsSection(title: "Supabase Status") {
+                        VStack(spacing: 0) {
+                            HStack {
+                                Text("Configuration")
+                                    .font(.body)
+                                    .foregroundColor(.white)
+                                
+                                Spacer()
+                                
+                                if Config.isConfigured {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(.green)
+                                        Text("Configured")
+                                            .font(.subheadline)
+                                            .foregroundColor(.gray)
+                                    }
+                                } else {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .foregroundColor(.yellow)
+                                        Text("Not Configured")
+                                            .font(.subheadline)
+                                            .foregroundColor(.gray)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 16)
+                            
+                            Divider()
+                                .background(Color.white.opacity(0.1))
+                                .padding(.leading, 20)
+                            
+                            HStack {
+                                if isTestingSupabase {
+                                    ProgressView()
+                                        .tint(Color(red: 0.4, green: 0.49, blue: 0.92))
+                                    Text("Testing...")
+                                        .font(.subheadline)
+                                        .foregroundColor(.gray)
+                                } else if let result = supabaseTestResult {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: result == "Success" ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                            .foregroundColor(result == "Success" ? .green : .red)
+                                        Text(result)
+                                            .font(.subheadline)
+                                            .foregroundColor(.gray)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 8)
+                            
+                            Divider()
+                                .background(Color.white.opacity(0.1))
+                                .padding(.leading, 20)
+                            
+                            Button(action: {
+                                testSupabaseConnection()
+                            }) {
+                                HStack {
+                                    Spacer()
+                                    Text("Test Connection")
+                                        .font(.body)
+                                        .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                                    Spacer()
+                                }
+                                .padding(.vertical, 16)
+                            }
+                        }
+                    }
+                    
                     // Backend Configuration
                     SettingsSection(title: "Backend Configuration") {
                         VStack(spacing: 0) {
@@ -52,7 +178,7 @@ struct SettingsView: View {
                             }
                             
                             Divider()
-                                .background(Color(white: 0.2))
+                                .background(Color.white.opacity(0.1))
                                 .padding(.leading, 20)
                             
                             Button(action: {
@@ -89,7 +215,7 @@ struct SettingsView: View {
                                     HStack(spacing: 8) {
                                         Image(systemName: status == "ok" ? "checkmark.circle.fill" : "xmark.circle.fill")
                                             .foregroundColor(status == "ok" ? .green : .red)
-                                        Text(status == "ok" ? "Connected" : "Error")
+                                        Text(status == "ok" ? "Connected" : status == "error" ? "Failed" : status)
                                             .font(.subheadline)
                                             .foregroundColor(.gray)
                                     }
@@ -98,8 +224,25 @@ struct SettingsView: View {
                             .padding(.horizontal, 20)
                             .padding(.vertical, 16)
                             
+                            // Show backend URL and helpful message
+                            VStack(alignment: .leading, spacing: 4) {
+                                if !backendURL.isEmpty {
+                                    Text("Backend: \(backendURL)")
+                                        .font(.caption)
+                                        .foregroundColor(.gray)
+                                }
+                                if healthStatus == "error" {
+                                    Text("💡 Make sure backend is running: cd 'ANITA backend' && npm run dev")
+                                        .font(.caption2)
+                                        .foregroundColor(.yellow)
+                                        .padding(.top, 4)
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 8)
+                            
                             Divider()
-                                .background(Color(white: 0.2))
+                                .background(Color.white.opacity(0.1))
                                 .padding(.leading, 20)
                             
                             Button(action: {
@@ -131,7 +274,7 @@ struct SettingsView: View {
                             }
                             
                             Divider()
-                                .background(Color(white: 0.2))
+                                .background(Color.white.opacity(0.1))
                                 .padding(.leading, 20)
                             
                             Button(action: {
@@ -160,7 +303,7 @@ struct SettingsView: View {
                             }
                             
                             Divider()
-                                .background(Color(white: 0.2))
+                                .background(Color.white.opacity(0.1))
                                 .padding(.leading, 20)
                             
                             Link(destination: URL(string: "https://anita.app")!) {
@@ -183,7 +326,7 @@ struct SettingsView: View {
                             ) {}
                             
                             Divider()
-                                .background(Color(white: 0.2))
+                                .background(Color.white.opacity(0.1))
                                 .padding(.leading, 20)
                             
                             VStack(alignment: .leading, spacing: 4) {
@@ -211,20 +354,73 @@ struct SettingsView: View {
                 PrivacyPolicyView(policy: policy)
             }
         }
+        .sheet(isPresented: $showAuthSheet) {
+            AuthSheet(
+                email: $authEmail,
+                password: $authPassword,
+                isSignUp: $isSignUp,
+                error: $authError,
+                onSignIn: {
+                    Task {
+                        do {
+                            print("[Settings] Attempting sign in with email: \(authEmail)")
+                            try await userManager.signIn(email: authEmail, password: authPassword)
+                            await MainActor.run {
+                                showAuthSheet = false
+                                authEmail = ""
+                                authPassword = ""
+                                authError = nil
+                            }
+                        } catch {
+                            print("[Settings] Sign in error: \(error)")
+                            await MainActor.run {
+                                authError = error.localizedDescription
+                            }
+                        }
+                    }
+                },
+                onSignUp: {
+                    Task {
+                        do {
+                            print("[Settings] Attempting sign up with email: \(authEmail)")
+                            try await userManager.signUp(email: authEmail, password: authPassword)
+                            await MainActor.run {
+                                showAuthSheet = false
+                                authEmail = ""
+                                authPassword = ""
+                                authError = nil
+                            }
+                        } catch {
+                            print("[Settings] Sign up error: \(error)")
+                            await MainActor.run {
+                                authError = error.localizedDescription
+                            }
+                        }
+                    }
+                }
+            )
+        }
     }
     
     private func checkHealth() {
         isCheckingHealth = true
         healthStatus = nil
         
+        print("[Settings] Checking health at: \(backendURL)/health")
+        
         Task {
             do {
                 let response = try await networkService.checkHealth()
+                print("[Settings] Health check successful: \(response.status)")
                 await MainActor.run {
                     healthStatus = response.status
                     isCheckingHealth = false
                 }
             } catch {
+                print("[Settings] Health check failed: \(error.localizedDescription)")
+                if let networkError = error as? NetworkError {
+                    print("[Settings] Network error details: \(networkError)")
+                }
                 await MainActor.run {
                     healthStatus = "error"
                     isCheckingHealth = false
@@ -243,6 +439,31 @@ struct SettingsView: View {
                 }
             } catch {
                 // Handle error
+            }
+        }
+    }
+    
+    private func testSupabaseConnection() {
+        guard Config.isConfigured else {
+            supabaseTestResult = "Not Configured"
+            return
+        }
+        
+        isTestingSupabase = true
+        supabaseTestResult = nil
+        
+        Task {
+            do {
+                let success = try await supabaseService.testConnection()
+                await MainActor.run {
+                    isTestingSupabase = false
+                    supabaseTestResult = success ? "Success" : "Failed"
+                }
+            } catch {
+                await MainActor.run {
+                    isTestingSupabase = false
+                    supabaseTestResult = "Error: \(error.localizedDescription)"
+                }
             }
         }
     }
@@ -291,8 +512,7 @@ struct SettingsSection<Content: View>: View {
                 .padding(.bottom, 8)
             
             content
-                .background(Color(white: 0.1))
-                .cornerRadius(12)
+                .liquidGlass(cornerRadius: 12)
                 .padding(.horizontal, 20)
         }
         .padding(.bottom, 8)
@@ -398,9 +618,87 @@ struct PrivacyPolicyView: View {
             }
             .navigationTitle("Privacy Policy")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.black, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
+                        dismiss()
+                    }
+                    .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                }
+            }
+        }
+    }
+}
+
+struct AuthSheet: View {
+    @Binding var email: String
+    @Binding var password: String
+    @Binding var isSignUp: Bool
+    @Binding var error: String?
+    let onSignIn: () -> Void
+    let onSignUp: () -> Void
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black
+                    .ignoresSafeArea()
+                
+                VStack(spacing: 24) {
+                    TextField("Email", text: $email)
+                        .textFieldStyle(.roundedBorder)
+                        .keyboardType(.emailAddress)
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
+                    
+                    SecureField("Password", text: $password)
+                        .textFieldStyle(.roundedBorder)
+                    
+                    if let error = error {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
+                    
+                    Button(action: {
+                        if isSignUp {
+                            onSignUp()
+                        } else {
+                            onSignIn()
+                        }
+                    }) {
+                        Text(isSignUp ? "Sign Up" : "Sign In")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color(red: 0.4, green: 0.49, blue: 0.92))
+                            .cornerRadius(12)
+                    }
+                    
+                    Button(action: {
+                        isSignUp.toggle()
+                        error = nil
+                    }) {
+                        Text(isSignUp ? "Already have an account? Sign In" : "Don't have an account? Sign Up")
+                            .font(.subheadline)
+                            .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                    }
+                }
+                .padding()
+            }
+            .navigationTitle(isSignUp ? "Sign Up" : "Sign In")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.black, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))

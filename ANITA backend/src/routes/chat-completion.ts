@@ -120,7 +120,7 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
     );
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+      const errorData = (await response.json().catch(() => ({}))) as { error?: { message?: string } };
       logger.error('OpenAI API request failed', { 
         status: response.status, 
         error: errorData.error?.message,
@@ -134,7 +134,7 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
       return;
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
     const aiResponse = data.choices?.[0]?.message?.content;
 
     if (!aiResponse) {

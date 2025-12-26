@@ -51,6 +51,17 @@ struct ChatView: View {
                 .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isSidebarPresented)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NewConversation"))) { _ in
+            // Start a new conversation by clearing messages
+            viewModel.startNewConversation()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenConversation"))) { notification in
+            if let conversationId = notification.object as? String {
+                Task {
+                    await viewModel.loadMessages(conversationId: conversationId)
+                }
+            }
+        }
     }
     
     private var mainContentView: some View {
@@ -111,25 +122,25 @@ struct ChatView: View {
                                 // Capability cards
                                 VStack(spacing: 16) {
                                     CapabilityCard(
-                                        icon: "doc.text.fill",
+                                        icon: "📝",
                                         title: "Record transactions",
                                         description: "Track your income and expenses"
                                     )
                                     
                                     CapabilityCard(
-                                        icon: "target",
+                                        icon: "🎯",
                                         title: "Set targets",
                                         description: "Create and manage your financial goals"
                                     )
                                     
                                     CapabilityCard(
-                                        icon: "chart.bar.fill",
+                                        icon: "📊",
                                         title: "Analytics",
                                         description: "Get insights into your spending patterns"
                                     )
                                     
                                     CapabilityCard(
-                                        icon: "bubble.left.and.bubble.right.fill",
+                                        icon: "💬",
                                         title: "Talk about finances",
                                         description: "Ask me anything about your money"
                                     )
@@ -215,8 +226,7 @@ struct ChatView: View {
                             .foregroundColor(.white)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 12)
-                            .background(Color(white: 0.15))
-                            .cornerRadius(24)
+                            .liquidGlass(cornerRadius: 24)
                             .lineLimit(1...4)
                             .disabled(viewModel.isLoading)
                         
@@ -229,8 +239,8 @@ struct ChatView: View {
                                     .font(.system(size: 16))
                                     .foregroundColor(.white)
                                     .frame(width: 40, height: 40)
-                                    .background(Color(white: 0.2))
-                                    .clipShape(Circle())
+                                    .background(Color(white: 0.12), in: Circle())
+                                    .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
                             }
                         } else {
                             Button(action: {
@@ -238,10 +248,10 @@ struct ChatView: View {
                             }) {
                                 Image(systemName: "paperplane.fill")
                                     .font(.system(size: 14))
-                                    .foregroundColor(.white)
+                                    .foregroundColor(viewModel.isLoading ? .gray : .white)
                                     .frame(width: 40, height: 40)
-                                    .background(viewModel.isLoading ? Color.gray : Color(white: 0.2))
-                                    .clipShape(Circle())
+                                    .background(Color(white: 0.12), in: Circle())
+                                    .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
                             }
                             .disabled(viewModel.isLoading)
                         }
@@ -252,17 +262,41 @@ struct ChatView: View {
                 }
                 
                 if let errorMessage = viewModel.errorMessage {
-                    Text(errorMessage)
-                        .font(.caption)
-                        .foregroundColor(.red)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 8)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.red)
+                            Text("Error")
+                                .font(.headline)
+                                .foregroundColor(.red)
+                            Spacer()
+                            Button(action: {
+                                viewModel.errorMessage = nil
+                            }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                        Text(errorMessage)
+                            .font(.subheadline)
+                            .foregroundColor(.white)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(12)
+                    .background(Color.red.opacity(0.2))
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.red.opacity(0.5), lineWidth: 1)
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
                 }
             }
         }
     }
 
-// Capability Card Component
+// Capability Card Component with liquid glass effect
 struct CapabilityCard: View {
     let icon: String
     let title: String
@@ -270,10 +304,9 @@ struct CapabilityCard: View {
     
     var body: some View {
         HStack(spacing: 16) {
-            // Icon
-            Image(systemName: icon)
-                .font(.system(size: 24))
-                .foregroundColor(.white)
+            // Icon (Apple emoji)
+            Text(icon)
+                .font(.system(size: 32))
                 .frame(width: 40, height: 40)
             
             // Text content
@@ -290,8 +323,8 @@ struct CapabilityCard: View {
             Spacer()
         }
         .padding(16)
-        .background(Color(white: 0.1))
-        .cornerRadius(12)
+        .frame(height: 80) // Fixed height for all cards
+        .liquidGlass(cornerRadius: 16)
     }
 }
 
@@ -307,8 +340,7 @@ struct QuickActionButton: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(Color(white: 0.15))
-                .cornerRadius(8)
+                .liquidGlass(cornerRadius: 8)
         }
     }
 }
@@ -343,15 +375,23 @@ struct MessageBubble: View {
             VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
                 Text(message.content)
                     .font(.body)
-                    .foregroundColor(isUser ? .white : .white)
+                    .foregroundColor(.white)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
-                    .background(
-                        isUser 
-                            ? Color(red: 0.4, green: 0.49, blue: 0.92)
-                            : Color(white: 0.15)
-                    )
-                    .cornerRadius(18)
+                    .background {
+                        if isUser {
+                            RoundedRectangle(cornerRadius: 18)
+                                .fill(Color(red: 0.4, green: 0.49, blue: 0.92))
+                        } else {
+                            // Super dark gray background with subtle stroke
+                            RoundedRectangle(cornerRadius: 18)
+                                .fill(Color(white: 0.12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 18)
+                                        .stroke(.white.opacity(0.15), lineWidth: 1)
+                                )
+                        }
+                    }
                     .frame(maxWidth: UIScreen.main.bounds.width * 0.75, alignment: isUser ? .trailing : .leading)
                 
                 Text(message.timestamp, style: .time)
@@ -363,13 +403,14 @@ struct MessageBubble: View {
             if isUser {
                 // User avatar
                 Circle()
-                    .fill(Color(white: 0.2))
+                    .fill(Color(white: 0.12))
                     .frame(width: 32, height: 32)
                     .overlay(
                         Image(systemName: "person.fill")
                             .font(.system(size: 14))
                             .foregroundColor(.white)
                     )
+                    .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
             }
         }
         .padding(.horizontal, 16)

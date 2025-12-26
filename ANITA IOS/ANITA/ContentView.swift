@@ -37,25 +37,38 @@ struct ContentView: View {
             }
             .accentColor(Color(red: 0.4, green: 0.49, blue: 0.92)) // #667eea purple accent
             .onAppear {
-                // Customize tab bar appearance to match webapp
+                // Customize tab bar appearance with transparent liquid glass effect
                 let appearance = UITabBarAppearance()
-                appearance.configureWithOpaqueBackground()
-                appearance.backgroundColor = UIColor.black
+                appearance.configureWithTransparentBackground()
+                
+                // Fully transparent background
+                appearance.backgroundColor = UIColor.clear
+                
+                // Use ultra thin material for liquid glass blur effect
+                appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterialDark)
+                
+                // Remove shadow for clean transparent look
                 appearance.shadowColor = UIColor.clear
                 
-                // Selected item
+                // Selected item styling
                 appearance.stackedLayoutAppearance.selected.iconColor = UIColor(red: 0.4, green: 0.49, blue: 0.92, alpha: 1.0)
                 appearance.stackedLayoutAppearance.selected.titleTextAttributes = [
                     .foregroundColor: UIColor(red: 0.4, green: 0.49, blue: 0.92, alpha: 1.0)
                 ]
                 
-                // Normal item
-                appearance.stackedLayoutAppearance.normal.iconColor = UIColor(white: 0.8, alpha: 1.0)
+                // Normal item styling with slight transparency
+                appearance.stackedLayoutAppearance.normal.iconColor = UIColor(white: 0.8, alpha: 0.8)
                 appearance.stackedLayoutAppearance.normal.titleTextAttributes = [
-                    .foregroundColor: UIColor(white: 0.8, alpha: 1.0)
+                    .foregroundColor: UIColor(white: 0.8, alpha: 0.8)
                 ]
                 
+                // Apply appearance settings
                 UITabBar.appearance().standardAppearance = appearance
+                UITabBar.appearance().isTranslucent = true
+                UITabBar.appearance().backgroundColor = UIColor.clear
+                UITabBar.appearance().barTintColor = UIColor.clear
+                
+                // Apply to scroll edge appearance for iOS 15+
                 if #available(iOS 15.0, *) {
                     UITabBar.appearance().scrollEdgeAppearance = appearance
                 }

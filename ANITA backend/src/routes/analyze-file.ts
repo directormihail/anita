@@ -84,7 +84,7 @@ function validateAnalyzeFileRequest(body: any): { valid: boolean; error?: string
 /**
  * Create analysis prompt based on file type and options
  */
-function createAnalysisPrompt(fileName: string, fileType: string, options: Record<string, unknown> = {}): string {
+function createAnalysisPrompt(_fileName: string, fileType: string, _options: Record<string, unknown> = {}): string {
   const basePrompt = `You are ANITA, a financial analysis AI. Analyze the provided file content and extract financial data.`;
 
   const fileTypePrompts: Record<string, string> = {
@@ -231,7 +231,7 @@ export async function handleAnalyzeFile(req: Request, res: Response): Promise<vo
     );
 
     if (!gptResponse.ok) {
-      const errorData = await gptResponse.json().catch(() => ({ error: { message: 'Unknown error' } }));
+      const errorData = (await gptResponse.json().catch(() => ({ error: { message: 'Unknown error' } }))) as { error?: { message?: string } };
       logger.error('OpenAI API error', { 
         status: gptResponse.status, 
         error: errorData.error?.message,
@@ -240,8 +240,12 @@ export async function handleAnalyzeFile(req: Request, res: Response): Promise<vo
       throw new Error(`GPT API error: ${errorData.error?.message || 'Unknown error'}`);
     }
 
-    const gptData = await gptResponse.json();
-    const analysisResult = gptData.choices[0].message.content;
+    const gptData = (await gptResponse.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const analysisResult = gptData.choices?.[0]?.message?.content;
+
+    if (!analysisResult) {
+      throw new Error('No analysis result from OpenAI');
+    }
 
     // Parse the AI response to extract structured data
     let extractedData;

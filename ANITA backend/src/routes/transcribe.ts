@@ -170,7 +170,7 @@ export async function handleTranscribe(req: Request, res: Response): Promise<voi
     );
 
     if (!whisperResponse.ok) {
-      const errorData = await whisperResponse.json().catch(() => ({ error: { message: 'Unknown error' } }));
+      const errorData = (await whisperResponse.json().catch(() => ({ error: { message: 'Unknown error' } }))) as { error?: { message?: string } };
       logger.error('Whisper API error', { 
         status: whisperResponse.status, 
         error: errorData.error?.message,
@@ -179,8 +179,12 @@ export async function handleTranscribe(req: Request, res: Response): Promise<voi
       throw new Error(`Whisper API error: ${errorData.error?.message || 'Unknown error'}`);
     }
 
-    const whisperData = await whisperResponse.json();
+    const whisperData = (await whisperResponse.json()) as { text?: string };
     const transcript = whisperData.text;
+
+    if (!transcript) {
+      throw new Error('No transcript from Whisper API');
+    }
 
     // Get conversation history
     const { data: messages, error: messagesError } = await supabase
@@ -233,7 +237,7 @@ export async function handleTranscribe(req: Request, res: Response): Promise<voi
     );
 
     if (!gptResponse.ok) {
-      const errorData = await gptResponse.json().catch(() => ({ error: { message: 'Unknown error' } }));
+      const errorData = (await gptResponse.json().catch(() => ({ error: { message: 'Unknown error' } }))) as { error?: { message?: string } };
       logger.error('GPT API error', { 
         status: gptResponse.status, 
         error: errorData.error?.message,
@@ -242,8 +246,12 @@ export async function handleTranscribe(req: Request, res: Response): Promise<voi
       throw new Error(`GPT API error: ${errorData.error?.message || 'Unknown error'}`);
     }
 
-    const gptData = await gptResponse.json();
-    const aiResponse = gptData.choices[0].message.content;
+    const gptData = (await gptResponse.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const aiResponse = gptData.choices?.[0]?.message?.content;
+
+    if (!aiResponse) {
+      throw new Error('No response from GPT API');
+    }
 
     // Save to conversations table
     const { error: saveError } = await supabase
