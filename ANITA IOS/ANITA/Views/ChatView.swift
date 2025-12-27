@@ -11,6 +11,7 @@ struct ChatView: View {
     @StateObject private var viewModel = ChatViewModel()
     @FocusState private var isInputFocused: Bool
     @State private var isSidebarPresented = false
+    @State private var showUpgradeView = false
     
     // Check if we should show the welcome screen (no messages yet)
     private var showWelcomeScreen: Bool {
@@ -62,39 +63,62 @@ struct ChatView: View {
                 }
             }
         }
+        .sheet(isPresented: $showUpgradeView) {
+            UpgradeView()
+        }
     }
     
     private var mainContentView: some View {
         VStack(spacing: 0) {
             // Top navigation bar
-                HStack {
-                    // Hamburger menu with notification dot
-                    Button(action: {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            isSidebarPresented.toggle()
+                ZStack {
+                    HStack {
+                        // Hamburger menu with notification dot
+                        Button(action: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                isSidebarPresented.toggle()
+                            }
+                        }) {
+                            ZStack {
+                                Image(systemName: "line.3.horizontal")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(.white)
+                                
+                                // Notification dot
+                                Circle()
+                                    .fill(Color.yellow)
+                                    .frame(width: 8, height: 8)
+                                    .offset(x: 6, y: -6)
+                            }
                         }
-                    }) {
-                        ZStack {
-                            Image(systemName: "line.3.horizontal")
-                                .font(.system(size: 20))
-                                .foregroundColor(.white)
-                            
-                            // Notification dot
-                            Circle()
-                                .fill(Color.yellow)
-                                .frame(width: 8, height: 8)
-                                .offset(x: 6, y: -6)
-                        }
+                        .padding(.leading, 16)
+                        
+                        Spacer()
+                        
+                        // ANITA text
+                        Text("ANITA")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.trailing, 16)
                     }
-                    .padding(.leading, 16)
                     
-                    Spacer()
-                    
-                    // ANITA text
-                    Text("ANITA")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.trailing, 16)
+                    // Plan information - centered
+                    HStack(spacing: 8) {
+                        Text("Ultimate")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                        
+                        Button(action: {
+                            showUpgradeView = true
+                        }) {
+                            Text("Upgrade")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                        }
+                        .liquidGlass(cornerRadius: 8)
+                    }
                 }
                 .padding(.top, 8)
                 .padding(.bottom, 12)
@@ -119,33 +143,49 @@ struct ChatView: View {
                                 }
                                 .padding(.top, 40)
                                 
-                                // Capability cards
-                                VStack(spacing: 16) {
-                                    CapabilityCard(
-                                        icon: "📝",
+                                // Capability bullet points (clickable)
+                                VStack(alignment: .leading, spacing: 20) {
+                                    ClickableFeatureBullet(
+                                        icon: "doc.text.fill",
                                         title: "Record transactions",
-                                        description: "Track your income and expenses"
+                                        description: "Track your income and expenses",
+                                        action: {
+                                            viewModel.inputText = "Record a transaction"
+                                            viewModel.sendMessage()
+                                        }
                                     )
                                     
-                                    CapabilityCard(
-                                        icon: "🎯",
+                                    ClickableFeatureBullet(
+                                        icon: "target",
                                         title: "Set targets",
-                                        description: "Create and manage your financial goals"
+                                        description: "Create and manage your financial goals",
+                                        action: {
+                                            viewModel.inputText = "Set a target"
+                                            viewModel.sendMessage()
+                                        }
                                     )
                                     
-                                    CapabilityCard(
-                                        icon: "📊",
+                                    ClickableFeatureBullet(
+                                        icon: "chart.bar.fill",
                                         title: "Analytics",
-                                        description: "Get insights into your spending patterns"
+                                        description: "Get insights into your spending patterns",
+                                        action: {
+                                            viewModel.inputText = "Show analytics"
+                                            viewModel.sendMessage()
+                                        }
                                     )
                                     
-                                    CapabilityCard(
-                                        icon: "💬",
+                                    ClickableFeatureBullet(
+                                        icon: "message.fill",
                                         title: "Talk about finances",
-                                        description: "Ask me anything about your money"
+                                        description: "Ask me anything about your money",
+                                        action: {
+                                            viewModel.inputText = "Tell me about my finances"
+                                            viewModel.sendMessage()
+                                        }
                                     )
                                 }
-                                .padding(.horizontal, 20)
+                                .padding(.horizontal, 32)
                                 
                                 Text("Start a conversation to begin managing your finances!")
                                     .font(.system(size: 14))
@@ -158,21 +198,14 @@ struct ChatView: View {
                             // Messages list
                             LazyVStack(alignment: .leading, spacing: 16) {
                                 ForEach(viewModel.messages) { message in
-                                    MessageBubble(message: message)
+                                    MessageBubble(message: message, viewModel: viewModel)
                                         .id(message.id)
                                 }
                                 
                                 if viewModel.isLoading {
-                                    HStack {
-                                        ProgressView()
-                                            .tint(Color(red: 0.4, green: 0.49, blue: 0.92))
-                                        Text("ANITA is thinking...")
-                                            .font(.subheadline)
-                                            .foregroundColor(.gray)
-                                        Spacer()
-                                    }
-                                    .padding(.horizontal, 20)
-                                    .padding(.vertical, 12)
+                                    CurrencyLoadingAnimation()
+                                        .padding(.horizontal, 20)
+                                        .padding(.vertical, 12)
                                 }
                             }
                             .padding(.vertical, 20)
@@ -296,35 +329,97 @@ struct ChatView: View {
         }
     }
 
-// Capability Card Component with liquid glass effect
-struct CapabilityCard: View {
+// Clickable Feature Bullet Component matching WelcomeView design
+struct ClickableFeatureBullet: View {
     let icon: String
     let title: String
     let description: String
+    let action: () -> Void
+    
+    @State private var isPressed = false
     
     var body: some View {
-        HStack(spacing: 16) {
-            // Icon (Apple emoji)
-            Text(icon)
-                .font(.system(size: 32))
-                .frame(width: 40, height: 40)
-            
-            // Text content
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
+        Button(action: {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            action()
+        }) {
+            HStack(alignment: .top, spacing: 16) {
+                // Bullet point icon
+                VStack {
+                    ZStack {
+                        // Glass circle background
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(white: 0.2).opacity(0.3),
+                                        Color(white: 0.15).opacity(0.2)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 40, height: 40)
+                            .overlay {
+                                Circle()
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.white.opacity(0.2),
+                                                Color.white.opacity(0.1)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 1
+                                    )
+                            }
+                        
+                        Image(systemName: icon)
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.9),
+                                        Color.white.opacity(0.75)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    }
+                    
+                    Spacer()
+                }
+                .padding(.top, 2)
                 
-                Text(description)
-                    .font(.system(size: 14))
-                    .foregroundColor(.gray)
+                // Text content
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(title)
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white.opacity(0.95))
+                    
+                    Text(description)
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundColor(.white.opacity(0.65))
+                        .lineSpacing(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                
+                Spacer()
             }
-            
-            Spacer()
         }
-        .padding(16)
-        .frame(height: 80) // Fixed height for all cards
-        .liquidGlass(cornerRadius: 16)
+        .buttonStyle(FeatureBulletButtonStyle())
+    }
+}
+
+struct FeatureBulletButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .opacity(configuration.isPressed ? 0.8 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: configuration.isPressed)
     }
 }
 
@@ -347,76 +442,200 @@ struct QuickActionButton: View {
 
 struct MessageBubble: View {
     let message: ChatMessage
+    @ObservedObject var viewModel: ChatViewModel
+    @State private var selectedFeedback: String? // "like" or "dislike"
+    @State private var showCopyConfirmation = false
     
     var isUser: Bool {
         message.role == "user"
     }
     
+    init(message: ChatMessage, viewModel: ChatViewModel) {
+        self.message = message
+        self.viewModel = viewModel
+        _selectedFeedback = State(initialValue: message.feedbackType)
+    }
+    
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            if !isUser {
-                // ANITA avatar
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(red: 0.4, green: 0.49, blue: 0.92), Color(red: 0.5, green: 0.6, blue: 1.0)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 32, height: 32)
-                    .overlay(
-                        Text("A")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
-                    )
+        HStack(alignment: .top, spacing: 0) {
+            if isUser {
+                Spacer()
             }
             
-            VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
-                Text(message.content)
-                    .font(.body)
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 16)
+            VStack(alignment: isUser ? .trailing : .leading, spacing: 8) {
+                if isUser {
+                    // User message: Dark gray bubble with white text, right-aligned
+                    Text(message.content)
+                        .font(.body)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background {
+                            RoundedRectangle(cornerRadius: 18)
+                                .fill(Color(red: 0.25, green: 0.25, blue: 0.25)) // Dark gray
+                        }
+                        .frame(maxWidth: UIScreen.main.bounds.width * 0.75, alignment: .trailing)
+                } else {
+                    // ANITA message: Formatted structured text, left-aligned, no bubble
+                    // Match webapp's structured message display with GPT-like spacing
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(TextFormatter.formatResponse(message.content))
+                            .frame(maxWidth: UIScreen.main.bounds.width * 0.9, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .foregroundColor(.white)
+                            .textSelection(.enabled)
+                            .lineSpacing(6)
+                            .kerning(0.2)
+                    }
                     .padding(.vertical, 12)
-                    .background {
-                        if isUser {
-                            RoundedRectangle(cornerRadius: 18)
-                                .fill(Color(red: 0.4, green: 0.49, blue: 0.92))
-                        } else {
-                            // Super dark gray background with subtle stroke
-                            RoundedRectangle(cornerRadius: 18)
-                                .fill(Color(white: 0.12))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 18)
-                                        .stroke(.white.opacity(0.15), lineWidth: 1)
-                                )
+                    .padding(.horizontal, 4)
+                    
+                    // Like/Dislike/Copy buttons (only for ANITA messages)
+                    HStack(spacing: 16) {
+                        FeedbackButton(
+                            icon: "hand.thumbsup",
+                            isSelected: selectedFeedback == "like",
+                            action: {
+                                let newFeedback = selectedFeedback == "like" ? nil : "like"
+                                selectedFeedback = newFeedback
+                                Task {
+                                    await viewModel.saveFeedback(
+                                        messageId: message.id,
+                                        feedbackType: newFeedback
+                                    )
+                                }
+                            }
+                        )
+                        FeedbackButton(
+                            icon: "hand.thumbsdown",
+                            isSelected: selectedFeedback == "dislike",
+                            action: {
+                                let newFeedback = selectedFeedback == "dislike" ? nil : "dislike"
+                                selectedFeedback = newFeedback
+                                Task {
+                                    await viewModel.saveFeedback(
+                                        messageId: message.id,
+                                        feedbackType: newFeedback
+                                    )
+                                }
+                            }
+                        )
+                        // Copy button
+                        Button(action: {
+                            UIPasteboard.general.string = message.content
+                            showCopyConfirmation = true
+                            // Hide confirmation after 2 seconds
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                showCopyConfirmation = false
+                            }
+                        }) {
+                            Image(systemName: showCopyConfirmation ? "checkmark" : "doc.on.doc")
+                                .font(.system(size: 16))
+                                .foregroundColor(showCopyConfirmation ? .white : .gray)
+                                .frame(width: 28, height: 28)
                         }
                     }
-                    .frame(maxWidth: UIScreen.main.bounds.width * 0.75, alignment: isUser ? .trailing : .leading)
-                
-                Text(message.timestamp, style: .time)
-                    .font(.caption2)
-                    .foregroundColor(.gray)
-                    .padding(.horizontal, 4)
+                }
             }
             
-            if isUser {
-                // User avatar
-                Circle()
-                    .fill(Color(white: 0.12))
-                    .frame(width: 32, height: 32)
-                    .overlay(
-                        Image(systemName: "person.fill")
-                            .font(.system(size: 14))
-                            .foregroundColor(.white)
-                    )
-                    .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
+            if !isUser {
+                Spacer()
             }
         }
         .padding(.horizontal, 16)
     }
 }
 
+struct FeedbackButton: View {
+    let icon: String
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 16))
+                .foregroundColor(isSelected ? .white : .gray)
+                .frame(width: 28, height: 28)
+        }
+    }
+}
+
+struct CurrencyLoadingAnimation: View {
+    @State private var animationOffsets: [CGFloat] = [0, 0, 0]
+    @State private var animationTimers: [Timer] = []
+    
+    private let currencies = ["€", "$", "¥"]
+    private let jumpHeight: CGFloat = 8
+    private let bounceDuration: Double = 0.6 // Time for one bounce (up and down)
+    private let delayBetween: Double = 0.2 // Delay between each symbol
+    
+    var body: some View {
+        HStack(spacing: 10) {
+            ForEach(0..<currencies.count, id: \.self) { index in
+                Text(currencies[index])
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(.white)
+                    .offset(y: animationOffsets[index])
+            }
+        }
+        .onAppear {
+            startAnimation()
+        }
+        .onDisappear {
+            stopAnimation()
+        }
+    }
+    
+    private func startAnimation() {
+        // Start each symbol's animation with a delay
+        for index in 0..<currencies.count {
+            let delay = Double(index) * delayBetween
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                animateSymbol(at: index)
+            }
+        }
+    }
+    
+    private func animateSymbol(at index: Int) {
+        // Create a repeating bounce animation for this symbol
+        let timer = Timer.scheduledTimer(withTimeInterval: bounceDuration * 2 + delayBetween * Double(currencies.count), repeats: true) { _ in
+            // Bounce up
+            withAnimation(.easeOut(duration: bounceDuration / 2)) {
+                animationOffsets[index] = -jumpHeight
+            }
+            
+            // Bounce down
+            DispatchQueue.main.asyncAfter(deadline: .now() + bounceDuration / 2) {
+                withAnimation(.easeIn(duration: bounceDuration / 2)) {
+                    animationOffsets[index] = 0
+                }
+            }
+        }
+        
+        // Start immediately
+        withAnimation(.easeOut(duration: bounceDuration / 2)) {
+            animationOffsets[index] = -jumpHeight
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + bounceDuration / 2) {
+            withAnimation(.easeIn(duration: bounceDuration / 2)) {
+                animationOffsets[index] = 0
+            }
+        }
+        
+        animationTimers.append(timer)
+    }
+    
+    private func stopAnimation() {
+        animationTimers.forEach { $0.invalidate() }
+        animationTimers.removeAll()
+        animationOffsets = [0, 0, 0]
+    }
+}
+
 #Preview {
     ChatView()
 }
+

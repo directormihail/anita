@@ -8,16 +8,16 @@ import { createClient } from '@supabase/supabase-js';
 import { applySecurityHeaders } from '../utils/securityHeaders';
 import * as logger from '../utils/logger';
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl || !supabaseServiceKey) {
-  logger.error('Supabase configuration missing');
+// Lazy-load Supabase client to ensure env vars are loaded
+function getSupabaseClient() {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
+  if (supabaseUrl && supabaseServiceKey) {
+    return createClient(supabaseUrl, supabaseServiceKey);
+  }
+  return null;
 }
-
-const supabase = supabaseUrl && supabaseServiceKey 
-  ? createClient(supabaseUrl, supabaseServiceKey)
-  : null;
 
 export async function handleGetAssets(req: Request, res: Response): Promise<void> {
   applySecurityHeaders(res);
@@ -48,6 +48,7 @@ export async function handleGetAssets(req: Request, res: Response): Promise<void
       return;
     }
 
+    const supabase = getSupabaseClient();
     if (!supabase) {
       logger.error('Supabase not configured', { requestId });
       res.status(500).json({

@@ -66,3 +66,4 @@ echo "2. The server should show: '✅ All required environment variables are set
 echo ""
 echo "3. Test the chat in your iOS app - it should work now! ✅"
 
+

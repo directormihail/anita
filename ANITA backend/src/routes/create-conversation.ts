@@ -8,24 +8,20 @@ import { createClient } from '@supabase/supabase-js';
 import { applySecurityHeaders } from '../utils/securityHeaders';
 import * as logger from '../utils/logger';
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-// #region agent log
-fetch('http://127.0.0.1:7242/ingest/60703aac-129d-4ef4-8e2a-73410ca29b0a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-conversation.ts:11-12',message:'Environment variables loaded',data:{hasUrl:!!supabaseUrl,urlLength:supabaseUrl?.length||0,urlPreview:supabaseUrl?.substring(0,50)||'null',hasServiceKey:!!supabaseServiceKey,serviceKeyLength:supabaseServiceKey?.length||0,serviceKeyPreview:supabaseServiceKey?.substring(0,30)||'null',serviceKeyIsPlaceholder:supabaseServiceKey?.includes('YOUR_')||supabaseServiceKey?.includes('your_')||supabaseServiceKey?.includes('placeholder')||false},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-// #endregion
-
-// Validate values before creating client - check for placeholders
-const isUrlValid = supabaseUrl && supabaseUrl.trim() !== '' && !supabaseUrl.includes('YOUR_') && !supabaseUrl.includes('your_') && !supabaseUrl.includes('placeholder');
-const isServiceKeyValid = supabaseServiceKey && supabaseServiceKey.trim() !== '' && !supabaseServiceKey.includes('YOUR_') && !supabaseServiceKey.includes('your_') && !supabaseServiceKey.includes('placeholder');
-
-// #region agent log
-fetch('http://127.0.0.1:7242/ingest/60703aac-129d-4ef4-8e2a-73410ca29b0a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'create-conversation.ts:18-20',message:'Supabase validation check',data:{isUrlValid,isServiceKeyValid,willCreateClient:isUrlValid && isServiceKeyValid},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-// #endregion
-
-const supabase = (isUrlValid && isServiceKeyValid)
-  ? createClient(supabaseUrl!, supabaseServiceKey!)
-  : null;
+// Lazy-load Supabase client to ensure env vars are loaded
+function getSupabaseClient() {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
+  // Validate values before creating client - check for placeholders
+  const isUrlValid = supabaseUrl && supabaseUrl.trim() !== '' && !supabaseUrl.includes('YOUR_') && !supabaseUrl.includes('your_') && !supabaseUrl.includes('placeholder');
+  const isServiceKeyValid = supabaseServiceKey && supabaseServiceKey.trim() !== '' && !supabaseServiceKey.includes('YOUR_') && !supabaseServiceKey.includes('your_') && !supabaseServiceKey.includes('placeholder');
+  
+  if (isUrlValid && isServiceKeyValid) {
+    return createClient(supabaseUrl!, supabaseServiceKey!);
+  }
+  return null;
+}
 
 export async function handleCreateConversation(req: Request, res: Response): Promise<void> {
   applySecurityHeaders(res);
@@ -71,6 +67,7 @@ export async function handleCreateConversation(req: Request, res: Response): Pro
       return;
     }
 
+    const supabase = getSupabaseClient();
     if (!supabase) {
       const missingVars = [];
       

@@ -67,3 +67,4 @@ This script will guide you through the process interactively.
 3. Verify the key starts with `eyJhbGci...`
 4. Make sure there are no extra spaces in the .env file
 
+

@@ -15,12 +15,14 @@ struct ChatMessage: Identifiable, Codable {
     let role: String // "user" or "assistant"
     let content: String
     let timestamp: Date
+    var feedbackType: String? // "like" or "dislike"
     
-    init(id: String = UUID().uuidString, role: String, content: String, timestamp: Date = Date()) {
+    init(id: String = UUID().uuidString, role: String, content: String, timestamp: Date = Date(), feedbackType: String? = nil) {
         self.id = id
         self.role = role
         self.content = content
         self.timestamp = timestamp
+        self.feedbackType = feedbackType
     }
 }
 
@@ -28,11 +30,15 @@ struct ChatCompletionRequest: Codable {
     let messages: [ChatMessageRequest]
     let maxTokens: Int?
     let temperature: Double?
+    let userId: String?
+    let conversationId: String?
     
     enum CodingKeys: String, CodingKey {
         case messages
         case maxTokens = "maxTokens"
         case temperature
+        case userId
+        case conversationId
     }
 }
 
@@ -405,5 +411,40 @@ struct SaveMessageResponse: Codable {
     let success: Bool
     let message: SupabaseMessageData
     let requestId: String?
+}
+
+// MARK: - Message Feedback Models
+
+struct SaveMessageFeedbackRequest: Codable {
+    let userId: String
+    let messageId: String
+    let conversationId: String?
+    let feedbackType: String // "like" or "dislike"
+}
+
+struct SaveMessageFeedbackResponse: Codable {
+    let success: Bool
+    let feedback: MessageFeedback?
+    let requestId: String?
+}
+
+struct MessageFeedback: Codable {
+    let id: String?
+    let userId: String
+    let messageId: String
+    let conversationId: String?
+    let feedbackType: String
+    let createdAt: String?
+    let updatedAt: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case userId = "user_id"
+        case messageId = "message_id"
+        case conversationId = "conversation_id"
+        case feedbackType = "feedback_type"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
 }
 

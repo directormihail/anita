@@ -8,16 +8,16 @@ import { createClient } from '@supabase/supabase-js';
 import { applySecurityHeaders } from '../utils/securityHeaders';
 import * as logger from '../utils/logger';
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl || !supabaseServiceKey) {
-  logger.error('Supabase configuration missing');
+// Lazy-load Supabase client to ensure env vars are loaded
+function getSupabaseClient() {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
+  if (supabaseUrl && supabaseServiceKey) {
+    return createClient(supabaseUrl, supabaseServiceKey);
+  }
+  return null;
 }
-
-const supabase = supabaseUrl && supabaseServiceKey 
-  ? createClient(supabaseUrl, supabaseServiceKey)
-  : null;
 
 export async function handleGetMessages(req: Request, res: Response): Promise<void> {
   applySecurityHeaders(res);
@@ -58,8 +58,11 @@ export async function handleGetMessages(req: Request, res: Response): Promise<vo
       return;
     }
 
+    const supabase = getSupabaseClient();
     if (!supabase) {
       const missingVars = [];
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
       
       // Check URL - only flag if actually missing or placeholder
       if (!supabaseUrl || supabaseUrl.trim() === '' || supabaseUrl.includes('YOUR_') || supabaseUrl.includes('your_') || supabaseUrl.includes('placeholder')) {

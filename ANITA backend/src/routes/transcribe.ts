@@ -11,18 +11,24 @@ import { sanitizeInput } from '../utils/sanitizeInput';
 import { fetchWithTimeout, TIMEOUTS } from '../utils/timeout';
 import * as logger from '../utils/logger';
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const openaiApiKey = process.env.OPENAI_API_KEY;
-const openaiModel = process.env.OPENAI_MODEL || 'gpt-4o-mini';
-
-if (!supabaseUrl || !supabaseServiceKey) {
-  logger.error('Supabase configuration missing');
+// Lazy-load environment variables to ensure they're loaded after dotenv.config()
+function getOpenAIConfig() {
+  return {
+    apiKey: process.env.OPENAI_API_KEY,
+    model: process.env.OPENAI_MODEL || 'gpt-4o-mini'
+  };
 }
 
-const supabase = supabaseUrl && supabaseServiceKey 
-  ? createClient(supabaseUrl, supabaseServiceKey)
-  : null;
+// Lazy-load Supabase client to ensure env vars are loaded
+function getSupabaseClient() {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
+  if (supabaseUrl && supabaseServiceKey) {
+    return createClient(supabaseUrl, supabaseServiceKey);
+  }
+  return null;
+}
 
 /**
  * Validate transcription request
@@ -84,6 +90,11 @@ export async function handleTranscribe(req: Request, res: Response): Promise<voi
 
   try {
     const requestId = req.requestId || 'unknown';
+    
+    // Get configs (lazy-loaded to ensure env vars are available)
+    const openaiConfig = getOpenAIConfig();
+    const openaiApiKey = openaiConfig.apiKey;
+    const supabase = getSupabaseClient();
     
     // Validate API keys
     if (!openaiApiKey) {
@@ -227,7 +238,7 @@ export async function handleTranscribe(req: Request, res: Response): Promise<voi
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: openaiModel,
+          model: openaiConfig.model,
           messages: messages_for_gpt,
           max_tokens: 500,
           temperature: 0.7,

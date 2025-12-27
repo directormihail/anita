@@ -78,3 +78,4 @@ If you still see warnings about missing variables, double-check:
 - Check backend console logs for specific error messages
 - Verify your Supabase project is active (not paused)
 
+

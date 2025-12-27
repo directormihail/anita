@@ -56,6 +56,14 @@ class UserManager: ObservableObject {
         }
     }
     
+    func signInWithGoogle() async throws {
+        let authResponse = try await supabaseService.signInWithGoogle()
+        await MainActor.run {
+            self.currentUser = authResponse.user
+            self.isAuthenticated = true
+        }
+    }
+    
     func signOut() {
         supabaseService.signOut()
         Task { @MainActor in

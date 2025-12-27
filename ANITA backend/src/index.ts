@@ -3,9 +3,15 @@
  * TypeScript Express server for iOS app
  */
 
+// Load environment variables FIRST, before any other imports
+// This ensures all modules can access process.env values
+import dotenv from 'dotenv';
+import path from 'path';
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+
+// Now import everything else after env vars are loaded
 import express, { Request, Response } from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import { handleChatCompletion } from './routes/chat-completion';
 import { handleTranscribe } from './routes/transcribe';
 import { handleAnalyzeFile } from './routes/analyze-file';
@@ -19,14 +25,10 @@ import { handleGetAssets } from './routes/get-assets';
 import { handleCreateConversation } from './routes/create-conversation';
 import { handleGetMessages } from './routes/get-messages';
 import { handleSaveMessage } from './routes/save-message';
+import { handleSaveMessageFeedback } from './routes/save-message-feedback';
 import { applySecurityHeaders } from './utils/securityHeaders';
 import { requestIdMiddleware } from './middleware/requestId';
 import * as logger from './utils/logger';
-
-// Load environment variables
-// Use explicit path to ensure .env is loaded from project root
-import path from 'path';
-dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 // #region agent log
 const debugSupabaseUrl = process.env.SUPABASE_URL;
@@ -109,6 +111,7 @@ app.get('/api/v1/conversations', handleGetConversations);
 app.post('/api/v1/create-conversation', handleCreateConversation);
 app.get('/api/v1/messages', handleGetMessages);
 app.post('/api/v1/save-message', handleSaveMessage);
+app.post('/api/v1/save-message-feedback', handleSaveMessageFeedback);
 app.get('/api/v1/financial-metrics', handleGetFinancialMetrics);
 app.get('/api/v1/xp-stats', handleGetXPStats);
 app.get('/api/v1/targets', handleGetTargets);
@@ -170,6 +173,7 @@ app.listen(PORT, () => {
   console.log('   - POST /api/v1/create-conversation');
   console.log('   - GET  /api/v1/messages');
   console.log('   - POST /api/v1/save-message');
+  console.log('   - POST /api/v1/save-message-feedback');
   console.log('   - GET  /api/v1/financial-metrics');
   console.log('   - GET  /api/v1/xp-stats');
   console.log('   - GET  /api/v1/targets');

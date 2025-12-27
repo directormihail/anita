@@ -29,7 +29,7 @@ class NetworkService: ObservableObject {
     
     // MARK: - Chat Completion
     
-    func sendChatMessage(messages: [ChatMessageRequest], maxTokens: Int = 800, temperature: Double = 0.7) async throws -> ChatCompletionResponse {
+    func sendChatMessage(messages: [ChatMessageRequest], maxTokens: Int = 800, temperature: Double = 0.7, userId: String? = nil, conversationId: String? = nil) async throws -> ChatCompletionResponse {
         let url = URL(string: "\(baseURL)/api/v1/chat-completion")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -38,7 +38,9 @@ class NetworkService: ObservableObject {
         let requestBody = ChatCompletionRequest(
             messages: messages,
             maxTokens: maxTokens,
-            temperature: temperature
+            temperature: temperature,
+            userId: userId,
+            conversationId: conversationId
         )
         
         request.httpBody = try JSONEncoder().encode(requestBody)
@@ -482,6 +484,39 @@ class NetworkService: ObservableObject {
         if httpResponse.statusCode == 200 {
             let decoder = JSONDecoder()
             return try decoder.decode(SaveMessageResponse.self, from: data)
+        } else {
+            if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
+                throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)
+            }
+            throw NetworkError.httpError(httpResponse.statusCode)
+        }
+    }
+    
+    // MARK: - Message Feedback
+    
+    func saveMessageFeedback(userId: String, messageId: String, conversationId: String?, feedbackType: String) async throws -> SaveMessageFeedbackResponse {
+        let url = URL(string: "\(baseURL)/api/v1/save-message-feedback")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let requestBody = SaveMessageFeedbackRequest(
+            userId: userId,
+            messageId: messageId,
+            conversationId: conversationId,
+            feedbackType: feedbackType
+        )
+        request.httpBody = try JSONEncoder().encode(requestBody)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 200 {
+            let decoder = JSONDecoder()
+            return try decoder.decode(SaveMessageFeedbackResponse.self, from: data)
         } else {
             if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
                 throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)

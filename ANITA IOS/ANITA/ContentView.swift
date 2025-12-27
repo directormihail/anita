@@ -7,10 +7,31 @@
 
 import SwiftUI
 
+enum AuthViewState {
+    case welcome
+    case login
+    case signUp
+}
+
 struct ContentView: View {
+    @StateObject private var authViewModel = AuthViewModel()
     @State private var selectedTab = 0
+    @State private var authViewState: AuthViewState = .welcome
     
     var body: some View {
+        Group {
+            if authViewModel.isAuthenticated {
+                mainContentView
+            } else {
+                authContentView
+            }
+        }
+        .task {
+            await authViewModel.checkAuthStatus()
+        }
+    }
+    
+    private var mainContentView: some View {
         ZStack {
             // Black background matching webapp
             Color.black
@@ -72,6 +93,54 @@ struct ContentView: View {
                 if #available(iOS 15.0, *) {
                     UITabBar.appearance().scrollEdgeAppearance = appearance
                 }
+            }
+        }
+    }
+    
+    private var authContentView: some View {
+        Group {
+            switch authViewState {
+            case .welcome:
+                WelcomeView(
+                    onShowLogin: {
+                        withAnimation {
+                            authViewState = .login
+                        }
+                    },
+                    onShowSignUp: {
+                        withAnimation {
+                            authViewState = .signUp
+                        }
+                    }
+                )
+                
+            case .login:
+                LoginView(
+                    onAuthSuccess: {
+                        Task {
+                            await authViewModel.checkAuthStatus()
+                        }
+                    },
+                    onBack: {
+                        withAnimation {
+                            authViewState = .welcome
+                        }
+                    }
+                )
+                
+            case .signUp:
+                SignUpView(
+                    onAuthSuccess: {
+                        Task {
+                            await authViewModel.checkAuthStatus()
+                        }
+                    },
+                    onBack: {
+                        withAnimation {
+                            authViewState = .welcome
+                        }
+                    }
+                )
             }
         }
     }

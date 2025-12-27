@@ -39,36 +39,6 @@ struct SidebarMenu: View {
                 
                 ScrollView {
                     VStack(spacing: 24) {
-                        // Ultimate Plan section
-                        HStack {
-                            HStack(spacing: 8) {
-                                Image(systemName: "star.fill")
-                                    .font(.system(size: 16))
-                                    .foregroundColor(.yellow)
-                                
-                                Text("Ultimate Plan")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(.white)
-                            }
-                            
-                            Spacer()
-                            
-                            Button(action: {
-                                // TODO: Implement upgrade action
-                                // This could open a checkout session or navigate to upgrade view
-                                handleUpgrade()
-                            }) {
-                                Text("Upgrade")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 8)
-                                    .background(Color.purple)
-                                    .cornerRadius(8)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        
                         // Progress/XP Section
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
@@ -218,12 +188,6 @@ struct SidebarMenu: View {
     private var progressPercentage: Double {
         let totalXP = Double(viewModel.xp + viewModel.xpToNextLevel)
         return totalXP > 0 ? Double(viewModel.xp) / totalXP : 0
-    }
-    
-    private func handleUpgrade() {
-        // TODO: Implement upgrade flow
-        // This could open a checkout session or navigate to upgrade view
-        print("Upgrade button tapped")
     }
     
     private func handleNewConversation() {

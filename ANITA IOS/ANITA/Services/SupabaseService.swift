@@ -6,6 +6,12 @@
 //
 
 import Foundation
+import AuthenticationServices
+import UIKit
+
+#if canImport(GoogleSignIn)
+import GoogleSignIn
+#endif
 
 class SupabaseService {
     static let shared = SupabaseService()
@@ -14,6 +20,9 @@ class SupabaseService {
     private var supabaseAnonKey: String
     private var accessToken: String?
     
+    // Track OAuth progress
+    private var isOAuthInProgress = false
+    
     private init() {
         // Load from Config instead of UserDefaults
         self.supabaseUrl = Config.supabaseURL
@@ -21,6 +30,14 @@ class SupabaseService {
         
         if !Config.isConfigured {
             print("[Supabase] ⚠️ WARNING: Supabase not configured! Please set SUPABASE_URL and SUPABASE_ANON_KEY in Config.swift")
+        }
+        
+        // Check Google Sign-In configuration
+        if !Config.isGoogleSignInConfigured {
+            print("[Supabase] ⚠️ WARNING: Google Sign-In not configured! \(Config.googleSignInStatus)")
+            print("[Supabase] See GOOGLE_SIGNIN_IOS_SETUP.md for setup instructions")
+        } else {
+            print("[Supabase] ✓ Google Sign-In configuration validated")
         }
     }
     
@@ -192,6 +209,127 @@ class SupabaseService {
         setAccessToken(nil)
     }
     
+    // MARK: - OAuth Authentication (Native Google Sign-In)
+    
+    func signInWithGoogle() async throws -> AuthResponse {
+        #if canImport(GoogleSignIn)
+        guard !supabaseUrl.isEmpty, !supabaseAnonKey.isEmpty else {
+            throw SupabaseError.notConfigured
+        }
+        
+        // Prevent multiple simultaneous sign-in attempts
+        let alreadyInProgress = await MainActor.run {
+            if self.isOAuthInProgress {
+                return true
+            }
+            self.isOAuthInProgress = true
+            return false
+        }
+        
+        if alreadyInProgress {
+            throw SupabaseError.authFailed("Google sign-in already in progress")
+        }
+        
+        defer {
+            Task { @MainActor in
+                self.isOAuthInProgress = false
+            }
+        }
+        
+        // Get the root view controller for Google Sign-In
+        guard let windowScene = await UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootViewController = await windowScene.windows.first?.rootViewController else {
+            throw SupabaseError.authFailed("Could not find root view controller")
+        }
+        
+        // Configure Google Sign-In
+        guard !Config.googleClientID.isEmpty else {
+            throw SupabaseError.authFailed("Google Client ID not configured. Please set GOOGLE_CLIENT_ID in Config.swift. See GOOGLE_SIGNIN_IOS_SETUP.md for instructions. You need an iOS OAuth Client ID from Google Cloud Console (not a Web Client ID).")
+        }
+        
+        // Validate client ID format
+        guard Config.isValidGoogleClientID(Config.googleClientID) else {
+            throw SupabaseError.authFailed("Invalid Google Client ID format. Expected format: 123456789-abc123def456.apps.googleusercontent.com. Make sure you're using an iOS OAuth Client ID, not a Web Client ID.")
+        }
+        
+        let configuration = GIDConfiguration(clientID: Config.googleClientID)
+        GIDSignIn.sharedInstance.configuration = configuration
+        
+        // Perform native Google Sign-In
+        let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController)
+        
+        guard let idToken = result.user.idToken?.tokenString else {
+            throw SupabaseError.authFailed("No ID token received from Google")
+        }
+        
+        let accessToken = result.user.accessToken.tokenString
+        
+        print("[Supabase] Google Sign-In successful, ID token received")
+        
+        // Exchange ID token with Supabase
+        return try await signInWithIdToken(idToken: idToken, accessToken: accessToken)
+        #else
+        throw SupabaseError.authFailed("GoogleSignIn SDK not installed. Please add it via Swift Package Manager:\n1. File → Add Package Dependencies\n2. URL: https://github.com/google/GoogleSignIn-iOS\n3. Version: 7.0.0 or later")
+        #endif
+    }
+    
+    private func signInWithIdToken(idToken: String, accessToken: String) async throws -> AuthResponse {
+        let baseUrl = supabaseUrl.hasSuffix("/") ? String(supabaseUrl.dropLast()) : supabaseUrl
+        let url = URL(string: "\(baseUrl)/auth/v1/token?grant_type=id_token")!
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        
+        // Use form-encoded data as per OAuth2 standards
+        var components = URLComponents()
+        components.queryItems = [
+            URLQueryItem(name: "provider", value: "google"),
+            URLQueryItem(name: "id_token", value: idToken),
+            URLQueryItem(name: "access_token", value: accessToken)
+        ]
+        request.httpBody = components.query?.data(using: .utf8)
+        
+        print("[Supabase] Exchanging Google ID token with Supabase")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SupabaseError.invalidResponse
+        }
+        
+        print("[Supabase] ID token exchange response status: \(httpResponse.statusCode)")
+        
+        if let responseString = String(data: data, encoding: .utf8) {
+            print("[Supabase] Response body: \(responseString)")
+        }
+        
+        if httpResponse.statusCode == 200 {
+            let decoder = JSONDecoder()
+            do {
+                let authResponse = try decoder.decode(AuthResponse.self, from: data)
+                setAccessToken(authResponse.accessToken)
+                print("[Supabase] Google sign-in successful, user ID: \(authResponse.user.id)")
+                return authResponse
+            } catch {
+                print("[Supabase] Decode error: \(error)")
+                throw SupabaseError.authFailed("Failed to decode response: \(error.localizedDescription)")
+            }
+        } else {
+            let errorString = String(data: data, encoding: .utf8) ?? "Unknown error"
+            print("[Supabase] Google sign-in failed with status \(httpResponse.statusCode): \(errorString)")
+            
+            if let error = try? JSONDecoder().decode(SupabaseAuthError.self, from: data) {
+                let errorMsg = error.message ?? error.error ?? "Authentication failed"
+                throw SupabaseError.authFailed(errorMsg)
+            } else {
+                throw SupabaseError.authFailed("Authentication failed: \(errorString)")
+            }
+        }
+    }
+    
     func getCurrentUser() async throws -> User? {
         guard let token = accessToken else {
             return nil
@@ -340,7 +478,17 @@ struct AuthResponse: Codable {
         refreshToken = try container.decode(String.self, forKey: .refreshToken)
         user = try container.decode(User.self, forKey: .user)
     }
+    
+    // Custom initializer for OAuth
+    init(accessToken: String, tokenType: String, expiresIn: Int, refreshToken: String, user: User) {
+        self.accessToken = accessToken
+        self.tokenType = tokenType
+        self.expiresIn = expiresIn
+        self.refreshToken = refreshToken
+        self.user = user
+    }
 }
+
 
 struct User: Codable {
     let id: String

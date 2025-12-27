@@ -195,7 +195,12 @@ class ChatViewModel: ObservableObject {
                 }
                 
                 print("[ChatViewModel] Sending chat message to backend...")
-                let response = try await networkService.sendChatMessage(messages: apiMessages)
+                // Pass userId and conversationId for context-aware responses
+                let response = try await networkService.sendChatMessage(
+                    messages: apiMessages,
+                    userId: userId,
+                    conversationId: conversationId
+                )
                 print("[ChatViewModel] Received response from backend")
                 
                 let assistantMessage = ChatMessage(
@@ -244,6 +249,52 @@ class ChatViewModel: ObservableObject {
     func startNewConversation() {
         messages = []
         currentConversationId = nil
+    }
+    
+    // Save feedback for a message
+    func saveFeedback(messageId: String, feedbackType: String?) async {
+        guard let authenticatedUserId = userManager.currentUser?.id else {
+            print("[ChatViewModel] Cannot save feedback: user not authenticated")
+            return
+        }
+        
+        // If feedbackType is nil, we're removing feedback (toggle off)
+        // For now, we'll just save the feedback when it's set
+        guard let feedbackType = feedbackType else {
+            print("[ChatViewModel] Feedback type is nil, skipping save")
+            return
+        }
+        
+        do {
+            print("[ChatViewModel] Saving feedback: \(feedbackType) for message: \(messageId)")
+            _ = try await networkService.saveMessageFeedback(
+                userId: authenticatedUserId,
+                messageId: messageId,
+                conversationId: currentConversationId,
+                feedbackType: feedbackType
+            )
+            
+            // Update the message's feedback type in the local array
+            await MainActor.run {
+                if let index = messages.firstIndex(where: { $0.id == messageId }) {
+                    let updatedMessage = messages[index]
+                    // Create a new message with updated feedback
+                    let newMessage = ChatMessage(
+                        id: updatedMessage.id,
+                        role: updatedMessage.role,
+                        content: updatedMessage.content,
+                        timestamp: updatedMessage.timestamp,
+                        feedbackType: feedbackType
+                    )
+                    messages[index] = newMessage
+                }
+            }
+            
+            print("[ChatViewModel] Feedback saved successfully")
+        } catch {
+            print("[ChatViewModel] Error saving feedback: \(error.localizedDescription)")
+            // Don't show error to user - feedback is non-critical
+        }
     }
 }
 

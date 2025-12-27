@@ -22,32 +22,64 @@ class SidebarViewModel: ObservableObject {
     @Published var errorMessage: String?
     
     private let networkService = NetworkService.shared
-    private let userId: String
+    private let userManager = UserManager.shared
     
     init(userId: String? = nil) {
-        self.userId = userId ?? UserManager.shared.userId
+        // Note: We don't store userId as a property anymore
+        // Instead, we always get it fresh from UserManager when loading data
+        // This ensures we use the correct authenticated user ID
+        print("[SidebarViewModel] Initialized")
+        
+        // Observe authentication changes to refresh data
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("UserDidSignIn"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.loadData()
+        }
     }
     
     func loadData() {
         isLoading = true
         errorMessage = nil
         
+        // Get the current userId (in case it changed after authentication)
+        let currentUserId = UserManager.shared.userId
+        print("[SidebarViewModel] Loading data for userId: \(currentUserId)")
+        
         Task {
             do {
                 // Load all data in parallel
-                async let metricsTask = networkService.getFinancialMetrics(userId: userId)
-                async let conversationsTask = networkService.getConversations(userId: userId)
-                async let xpStatsTask = networkService.getXPStats(userId: userId)
+                async let metricsTask = networkService.getFinancialMetrics(userId: currentUserId)
+                async let conversationsTask = networkService.getConversations(userId: currentUserId)
+                async let xpStatsTask = networkService.getXPStats(userId: currentUserId)
                 
                 let metrics = try await metricsTask
                 let conversationsResponse = try await conversationsTask
                 let xpStats = try await xpStatsTask
                 
                 await MainActor.run {
+                    print("[SidebarViewModel] Successfully loaded data:")
+                    print("  - Total Balance: \(metrics.metrics.totalBalance)")
+                    print("  - Total Income: \(metrics.metrics.totalIncome)")
+                    print("  - Total Expenses: \(metrics.metrics.totalExpenses)")
+                    print("  - Monthly Income: \(metrics.metrics.monthlyIncome)")
+                    print("  - Monthly Expenses: \(metrics.metrics.monthlyExpenses)")
+                    print("  - XP: \(xpStats.xpStats.total_xp)")
+                    print("  - Conversations: \(conversationsResponse.conversations.count)")
+                    
                     // Update financial metrics
-                    self.balance = metrics.metrics.totalBalance
-                    self.income = metrics.metrics.monthlyIncome
-                    self.expense = metrics.metrics.monthlyExpenses
+                    // Match webapp behavior: webapp shows current month values by default
+                    // If monthly values are 0 (no transactions this month), show total values as fallback
+                    // This provides more useful information to the user
+                    let displayIncome = metrics.metrics.monthlyIncome > 0 ? metrics.metrics.monthlyIncome : metrics.metrics.totalIncome
+                    let displayExpense = metrics.metrics.monthlyExpenses > 0 ? metrics.metrics.monthlyExpenses : metrics.metrics.totalExpenses
+                    
+                    // Ensure we have valid numbers (not NaN or null)
+                    self.balance = metrics.metrics.totalBalance.isNaN ? 0.0 : metrics.metrics.totalBalance
+                    self.income = displayIncome.isNaN ? 0.0 : displayIncome
+                    self.expense = displayExpense.isNaN ? 0.0 : displayExpense
                     
                     // Update XP stats
                     self.xp = xpStats.xpStats.total_xp
@@ -76,7 +108,10 @@ class SidebarViewModel: ObservableObject {
                 }
             } catch {
                 await MainActor.run {
-                    self.errorMessage = error.localizedDescription
+                    let errorMsg = error.localizedDescription
+                    print("[SidebarViewModel] Error loading data: \(errorMsg)")
+                    print("[SidebarViewModel] Error details: \(error)")
+                    self.errorMessage = errorMsg
                     self.isLoading = false
                 }
             }

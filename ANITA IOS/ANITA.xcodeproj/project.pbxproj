@@ -26,7 +26,16 @@
 		A1000045 /* CategoryAnalyticsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000046 /* CategoryAnalyticsViewModel.swift */; };
 		A1000047 /* LiquidGlassModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000048 /* LiquidGlassModifier.swift */; };
 		A1000051 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000052 /* Config.swift */; };
-/* End PBXBuildFile section */
+		Aa31fd725f3f /* TextFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = Af035dc2b2fe /* TextFormatter.swift */; };
+		A1000053 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000054 /* WelcomeView.swift */; };
+		A1000055 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000056 /* LoginView.swift */; };
+		A1000057 /* SignUpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000058 /* SignUpView.swift */; };
+		A1000059 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000060 /* AuthViewModel.swift */; };
+		A1000061 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = A1000062 /* GoogleSignIn */; };
+		A1000064 /* GoogleLogoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000065 /* GoogleLogoView.swift */; };
+		A1000066 /* UpgradeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000067 /* UpgradeView.swift */; };
+		A1000068 /* StoreKitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000069 /* StoreKitService.swift */; };
+		/* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		A0FFFFFF /* ANITA.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ANITA.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -50,13 +59,22 @@
 		A1000046 /* CategoryAnalyticsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryAnalyticsViewModel.swift; sourceTree = "<group>"; };
 		A1000048 /* LiquidGlassModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlassModifier.swift; sourceTree = "<group>"; };
 		A1000052 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
-/* End PBXFileReference section */
+		Af035dc2b2fe /* TextFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFormatter.swift; sourceTree = "<group>"; };
+		A1000054 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
+		A1000056 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		A1000058 /* SignUpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignUpView.swift; sourceTree = "<group>"; };
+		A1000060 /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
+		A1000065 /* GoogleLogoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleLogoView.swift; sourceTree = "<group>"; };
+		A1000067 /* UpgradeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpgradeView.swift; sourceTree = "<group>"; };
+		A1000069 /* StoreKitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreKitService.swift; sourceTree = "<group>"; };
+		/* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		A0FFFFFC /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1000061 /* GoogleSignIn in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -104,6 +122,11 @@
 				A1000019 /* SettingsView.swift */,
 				A1000034 /* SidebarMenu.swift */,
 				A1000044 /* CategoryAnalyticsView.swift */,
+				A1000054 /* WelcomeView.swift */,
+				A1000056 /* LoginView.swift */,
+				A1000058 /* SignUpView.swift */,
+				A1000065 /* GoogleLogoView.swift */,
+				A1000067 /* UpgradeView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -115,6 +138,7 @@
 				A1000037 /* FinanceViewModel.swift */,
 				A1000039 /* SidebarViewModel.swift */,
 				A1000046 /* CategoryAnalyticsViewModel.swift */,
+				A1000060 /* AuthViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -124,6 +148,7 @@
 			children = (
 				A1000011 /* NetworkService.swift */,
 				A1000050 /* SupabaseService.swift */,
+				A1000069 /* StoreKitService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -142,7 +167,7 @@
 				A1000041 /* UserManager.swift */,
 				A1000048 /* LiquidGlassModifier.swift */,
 				A1000052 /* Config.swift */,
-			);
+					Af035dc2b2fe /* TextFormatter.swift */,);
 			path = Utils;
 			sourceTree = "<group>";
 		};
@@ -170,6 +195,9 @@
 			dependencies = (
 			);
 			name = ANITA;
+			packageProductDependencies = (
+				A1000062 /* GoogleSignIn */,
+			);
 			productName = ANITA;
 			productReference = A0FFFFFF /* ANITA.app */;
 			productType = "com.apple.product-type.application";
@@ -198,6 +226,9 @@
 				Base,
 			);
 			mainGroup = A0FFFFF8;
+			packageReferences = (
+				A1000063 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+			);
 			productRefGroup = A0FFFFFD /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -241,7 +272,14 @@
 				A1000045 /* CategoryAnalyticsViewModel.swift in Sources */,
 				A1000047 /* LiquidGlassModifier.swift in Sources */,
 				A1000001 /* ANITAApp.swift in Sources */,
-			);
+				Aa31fd725f3f /* TextFormatter.swift in Sources */,
+				A1000053 /* WelcomeView.swift in Sources */,
+				A1000055 /* LoginView.swift in Sources */,
+				A1000057 /* SignUpView.swift in Sources */,
+				A1000059 /* AuthViewModel.swift in Sources */,
+				A1000064 /* GoogleLogoView.swift in Sources */,
+				A1000066 /* UpgradeView.swift in Sources */,
+				A1000068 /* StoreKitService.swift in Sources */,);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
@@ -450,6 +488,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A1000063 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 7.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A1000062 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1000063 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A0FFFFF6 /* Project object */;
 }
