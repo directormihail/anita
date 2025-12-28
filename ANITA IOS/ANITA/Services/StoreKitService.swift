@@ -54,6 +54,9 @@ class StoreKitService: ObservableObject {
         case .success(let verification):
             let transaction = try checkVerified(verification)
             
+            // Verify receipt with backend and update subscription status
+            await verifyAndUpdateSubscription(transaction: transaction, product: product)
+            
             // Update purchased products
             await updatePurchasedProducts()
             
@@ -67,6 +70,68 @@ class StoreKitService: ObservableObject {
             throw StoreKitError.pending
         @unknown default:
             throw StoreKitError.unknown
+        }
+    }
+    
+    /// Verify transaction with backend and update subscription status
+    private func verifyAndUpdateSubscription(transaction: StoreKit.Transaction, product: Product) async {
+        // Get user ID
+        let userId = UserManager.shared.userId
+        
+        // Check if user is authenticated
+        guard !userId.isEmpty else {
+            print("[StoreKit] User not authenticated, skipping subscription update")
+            return
+        }
+        
+        // Verify subscription with backend
+        await verifySubscriptionWithBackend(
+            userId: userId,
+            transactionId: String(transaction.id),
+            productId: product.id
+        )
+    }
+    
+    /// Verify subscription with backend API
+    private func verifySubscriptionWithBackend(userId: String, transactionId: String, productId: String) async {
+        let baseUrl = Config.backendURL.hasSuffix("/") ? String(Config.backendURL.dropLast()) : Config.backendURL
+        guard let url = URL(string: "\(baseUrl)/api/v1/verify-ios-subscription") else {
+            print("[StoreKit] Invalid backend URL: \(baseUrl)")
+            return
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 30
+        
+        do {
+            let requestBody: [String: Any] = [
+                "userId": userId,
+                "transactionId": transactionId,
+                "productId": productId
+            ]
+            
+            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            if let httpResponse = response as? HTTPURLResponse {
+                if httpResponse.statusCode == 200 {
+                    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                       let subscription = json["subscription"] as? [String: Any],
+                       let plan = subscription["plan"] as? String {
+                        print("[StoreKit] Subscription verified and updated: \(plan)")
+                    } else {
+                        print("[StoreKit] Subscription verified but response format unexpected")
+                    }
+                } else {
+                    let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+                    print("[StoreKit] Failed to verify subscription: HTTP \(httpResponse.statusCode) - \(errorMessage)")
+                }
+            }
+        } catch {
+            print("[StoreKit] Error verifying subscription with backend: \(error.localizedDescription)")
         }
     }
     
