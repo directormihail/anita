@@ -32,35 +32,86 @@ class ChatViewModel: ObservableObject {
     // Load conversations from Supabase
     func loadConversations() async {
         do {
-            let response = try await networkService.getConversations(userId: userId)
-            conversations = response.conversations
+            // Always use authenticated user ID if available, otherwise fall back to stored userId
+            let currentUserId = userManager.isAuthenticated ? (userManager.currentUser?.id ?? userId) : userId
+            print("[ChatViewModel] Loading conversations for userId: \(currentUserId)")
+            let response = try await networkService.getConversations(userId: currentUserId)
+            await MainActor.run {
+                conversations = response.conversations
+                print("[ChatViewModel] Loaded \(conversations.count) conversations")
+            }
         } catch {
-            print("Error loading conversations: \(error)")
+            print("[ChatViewModel] Error loading conversations: \(error.localizedDescription)")
         }
     }
     
     // Load messages for a conversation
     func loadMessages(conversationId: String) async {
         do {
-            let response = try await networkService.getMessages(conversationId: conversationId, userId: userId)
+            // Always use authenticated user ID if available
+            let currentUserId = userManager.isAuthenticated ? (userManager.currentUser?.id ?? userId) : userId
+            print("[ChatViewModel] Loading messages for conversation: \(conversationId), userId: \(currentUserId)")
+            let response = try await networkService.getMessages(conversationId: conversationId, userId: currentUserId)
+            
+            print("[ChatViewModel] Received \(response.messages.count) messages from backend")
             
             // Convert Supabase messages to ChatMessage format
-            let loadedMessages = response.messages.map { msg in
-                ChatMessage(
-                    id: msg.messageId ?? msg.id,
-                    role: msg.sender == "user" ? "user" : "assistant",
-                    content: msg.messageText ?? "",
-                    timestamp: ISO8601DateFormatter().date(from: msg.createdAt) ?? Date()
+            // Database uses 'anita' for assistant messages, but we support both 'anita' and 'assistant' for backwards compatibility
+            let loadedMessages = response.messages.compactMap { msg -> ChatMessage? in
+                // Log each message for debugging
+                print("[ChatViewModel] Processing message - id: \(msg.id), messageId: \(msg.messageId ?? "nil"), sender: \(msg.sender ?? "nil"), messageText length: \(msg.messageText?.count ?? 0)")
+                
+                // Skip messages with no content
+                guard let messageText = msg.messageText, !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    print("[ChatViewModel] Skipping message with empty content: \(msg.id)")
+                    return nil
+                }
+                
+                // Determine role based on sender
+                // If sender is nil or empty, try to infer from context or default to assistant
+                let role: String
+                let senderValue = msg.sender?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                
+                if senderValue == "user" {
+                    role = "user"
+                } else if senderValue == "anita" || senderValue == "assistant" || senderValue.isEmpty {
+                    // Default to assistant if sender is anita, assistant, or nil/empty
+                    role = "assistant"
+                    if senderValue.isEmpty {
+                        print("[ChatViewModel] Sender is nil/empty for message \(msg.id), defaulting to assistant")
+                    }
+                } else {
+                    // Unknown sender value - log it but still process the message
+                    print("[ChatViewModel] Unknown sender '\(msg.sender ?? "nil")' for message \(msg.id), defaulting to assistant")
+                    role = "assistant"
+                }
+                
+                let messageId = msg.messageId ?? msg.id
+                let timestamp = ISO8601DateFormatter().date(from: msg.createdAt) ?? Date()
+                
+                return ChatMessage(
+                    id: messageId,
+                    role: role,
+                    content: messageText,
+                    timestamp: timestamp
                 )
             }
+            
+            print("[ChatViewModel] Successfully loaded \(loadedMessages.count) messages")
             
             await MainActor.run {
                 messages = loadedMessages
                 currentConversationId = conversationId
+                print("[ChatViewModel] Updated messages array with \(messages.count) messages")
             }
         } catch {
-            print("Error loading messages: \(error)")
-            errorMessage = "Failed to load conversation"
+            print("[ChatViewModel] Error loading messages: \(error.localizedDescription)")
+            if let networkError = error as? NetworkError {
+                print("[ChatViewModel] Network error details: \(networkError.localizedDescription)")
+            }
+            await MainActor.run {
+                errorMessage = "Failed to load conversation: \(error.localizedDescription)"
+            }
         }
     }
     
@@ -84,7 +135,13 @@ class ChatViewModel: ObservableObject {
             let conversationId = response.conversation.id
             print("[ChatViewModel] Conversation created successfully: \(conversationId)")
             currentConversationId = conversationId
+            
+            // Reload conversations list
             await loadConversations()
+            
+            // Notify SidebarViewModel to refresh its conversation list
+            NotificationCenter.default.post(name: NSNotification.Name("ConversationCreated"), object: conversationId)
+            
             return conversationId
         } catch {
             print("[ChatViewModel] Error creating conversation: \(error.localizedDescription)")
@@ -106,12 +163,19 @@ class ChatViewModel: ObservableObject {
     func saveMessage(_ message: ChatMessage, conversationId: String) async {
         do {
             print("[ChatViewModel] Saving message: \(message.id) to conversation: \(conversationId)")
+            // Convert "assistant" role to "anita" for database compatibility
+            // Database schema only allows 'user' or 'anita' as sender values
+            let sender = message.role == "assistant" ? "anita" : message.role
+            
+            // Always use authenticated user ID if available
+            let currentUserId = userManager.isAuthenticated ? (userManager.currentUser?.id ?? userId) : userId
+            
             _ = try await networkService.saveMessage(
-                userId: userId,
+                userId: currentUserId,
                 conversationId: conversationId,
                 messageId: message.id,
                 messageText: message.content,
-                sender: message.role
+                sender: sender
             )
             print("[ChatViewModel] Message saved successfully")
         } catch {
@@ -195,10 +259,12 @@ class ChatViewModel: ObservableObject {
                 }
                 
                 print("[ChatViewModel] Sending chat message to backend...")
+                // Always use authenticated user ID if available
+                let currentUserId = userManager.isAuthenticated ? (userManager.currentUser?.id ?? userId) : userId
                 // Pass userId and conversationId for context-aware responses
                 let response = try await networkService.sendChatMessage(
                     messages: apiMessages,
-                    userId: userId,
+                    userId: currentUserId,
                     conversationId: conversationId
                 )
                 print("[ChatViewModel] Received response from backend")
@@ -217,6 +283,10 @@ class ChatViewModel: ObservableObject {
                 if let convId = conversationId {
                     print("[ChatViewModel] Saving assistant message to conversation: \(convId)")
                     await saveMessage(assistantMessage, conversationId: convId)
+                    
+                    // Notify SidebarViewModel to refresh after message is saved
+                    // This ensures the conversation list shows the updated conversation
+                    NotificationCenter.default.post(name: NSNotification.Name("ConversationUpdated"), object: convId)
                 }
             } catch {
                 print("[ChatViewModel] Error sending message: \(error)")

@@ -38,6 +38,16 @@ class SidebarViewModel: ObservableObject {
         ) { [weak self] _ in
             self?.loadData()
         }
+        
+        // Observe conversation creation to refresh conversation list
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("ConversationCreated"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            print("[SidebarViewModel] Conversation created, refreshing conversation list...")
+            self?.loadData()
+        }
     }
     
     func loadData() {

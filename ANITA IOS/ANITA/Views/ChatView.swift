@@ -63,6 +63,15 @@ struct ChatView: View {
                 }
             }
         }
+        .onAppear {
+            // If we have a current conversation but no messages loaded, try to load them
+            if let conversationId = viewModel.currentConversationId, viewModel.messages.isEmpty {
+                Task {
+                    print("[ChatView] onAppear: Loading messages for conversation: \(conversationId)")
+                    await viewModel.loadMessages(conversationId: conversationId)
+                }
+            }
+        }
         .sheet(isPresented: $showUpgradeView) {
             UpgradeView()
         }
@@ -90,6 +99,8 @@ struct ChatView: View {
                                     .frame(width: 8, height: 8)
                                     .offset(x: 6, y: -6)
                             }
+                            .frame(width: 32, height: 32)
+                            .liquidGlass(cornerRadius: 16)
                         }
                         .padding(.leading, 16)
                         
@@ -532,7 +543,8 @@ struct MessageBubble: View {
                             Image(systemName: showCopyConfirmation ? "checkmark" : "doc.on.doc")
                                 .font(.system(size: 16))
                                 .foregroundColor(showCopyConfirmation ? .white : .gray)
-                                .frame(width: 28, height: 28)
+                                .frame(width: 32, height: 32)
+                                .liquidGlass(cornerRadius: 16)
                         }
                     }
                 }
@@ -556,7 +568,8 @@ struct FeedbackButton: View {
             Image(systemName: icon)
                 .font(.system(size: 16))
                 .foregroundColor(isSelected ? .white : .gray)
-                .frame(width: 28, height: 28)
+                .frame(width: 32, height: 32)
+                .liquidGlass(cornerRadius: 16)
         }
     }
 }
