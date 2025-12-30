@@ -122,17 +122,25 @@ struct CategoryAnalyticsView: View {
 
 struct DonutChartView: View {
     let categories: [CategoryAnalytics]
+    var selectedCategory: String? = nil
     
     var body: some View {
         GeometryReader { geometry in
+            let size = min(geometry.size.width, geometry.size.height)
             let center = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
-            let radius = min(geometry.size.width, geometry.size.height) / 2 - 20
+            let radius = size / 2 - 10
             let innerRadius = radius * 0.6
             
             ZStack {
-                // Draw segments
+                // Draw segments with perfect rendering
                 ForEach(Array(categories.enumerated()), id: \.element.id) { index, category in
-                    DonutSegment(
+                    let isSelected = selectedCategory == category.name
+                    // Show original color if no selection OR if this category is selected
+                    // Show grey if a selection exists AND this is not the selected one
+                    let shouldShowColor = selectedCategory == nil || isSelected
+                    let segmentColor = shouldShowColor ? category.color : Color.white.opacity(0.15)
+                    
+                    DonutSegmentShape(
                         category: category,
                         startAngle: startAngle(for: index),
                         endAngle: endAngle(for: index),
@@ -140,6 +148,8 @@ struct DonutChartView: View {
                         radius: radius,
                         innerRadius: innerRadius
                     )
+                    .fill(segmentColor)
+                    .animation(.easeInOut(duration: 0.5), value: selectedCategory)
                 }
             }
         }
@@ -162,7 +172,8 @@ struct DonutChartView: View {
     }
 }
 
-struct DonutSegment: View {
+// Perfect donut segment using Shape protocol for smooth rendering
+struct DonutSegmentShape: Shape {
     let category: CategoryAnalytics
     let startAngle: Double
     let endAngle: Double
@@ -170,38 +181,48 @@ struct DonutSegment: View {
     let radius: CGFloat
     let innerRadius: CGFloat
     
-    var body: some View {
-        Path { path in
-            let startRad = startAngle * .pi / 180
-            let endRad = endAngle * .pi / 180
-            
-            // Outer arc
-            path.addArc(
-                center: center,
-                radius: radius,
-                startAngle: .radians(startRad),
-                endAngle: .radians(endRad),
-                clockwise: false
-            )
-            
-            // Line to inner arc
-            let innerStartX = center.x + cos(startRad) * innerRadius
-            let innerStartY = center.y + sin(startRad) * innerRadius
-            path.addLine(to: CGPoint(x: innerStartX, y: innerStartY))
-            
-            // Inner arc (reverse)
-            path.addArc(
-                center: center,
-                radius: innerRadius,
-                startAngle: .radians(endRad),
-                endAngle: .radians(startRad),
-                clockwise: true
-            )
-            
-            // Close path
-            path.closeSubpath()
-        }
-        .fill(category.color)
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        
+        let startRad = startAngle * .pi / 180
+        let endRad = endAngle * .pi / 180
+        
+        // Calculate start point for outer arc
+        let outerStartX = center.x + cos(startRad) * radius
+        let outerStartY = center.y + sin(startRad) * radius
+        
+        // Calculate end point for inner arc
+        let innerEndX = center.x + cos(endRad) * innerRadius
+        let innerEndY = center.y + sin(endRad) * innerRadius
+        
+        // Start from outer start point
+        path.move(to: CGPoint(x: outerStartX, y: outerStartY))
+        
+        // Draw outer arc (perfectly smooth)
+        path.addArc(
+            center: center,
+            radius: radius,
+            startAngle: Angle(radians: startRad),
+            endAngle: Angle(radians: endRad),
+            clockwise: false
+        )
+        
+        // Line to inner arc end point
+        path.addLine(to: CGPoint(x: innerEndX, y: innerEndY))
+        
+        // Draw inner arc (reverse direction, perfectly smooth)
+        path.addArc(
+            center: center,
+            radius: innerRadius,
+            startAngle: Angle(radians: endRad),
+            endAngle: Angle(radians: startRad),
+            clockwise: true
+        )
+        
+        // Close path back to start
+        path.closeSubpath()
+        
+        return path
     }
 }
 
@@ -233,11 +254,12 @@ struct CategoryRow: View {
     }
     
     private func formatCurrency(_ amount: Double) -> String {
+        let currency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-        formatter.currencyCode = "EUR"
+        formatter.currencyCode = currency
         formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: amount)) ?? "€0.00"
+        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
     }
 }
 

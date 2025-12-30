@@ -8,17 +8,28 @@
 import SwiftUI
 import StoreKit
 import UIKit
+import SafariServices
 
 struct UpgradeView: View {
     @StateObject private var storeKitService = StoreKitService.shared
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedProduct: Product?
-    @State private var isPurchasing = false
-    @State private var purchaseError: String?
+    @State private var isCreatingCheckout = false
+    @State private var checkoutError: String?
     @State private var showSuccessAlert = false
+    @State private var databaseSubscription: Subscription?
+    @State private var isLoadingSubscription = false
+    @State private var showSafariView = false
+    @State private var checkoutURL: URL?
     
-    // Determine current plan
+    private let networkService = NetworkService.shared
+    
+    // Determine current plan - prioritize database subscription over StoreKit
     private var currentPlan: String {
+        // First check database subscription
+        if let subscription = databaseSubscription, subscription.status == "active" {
+            return subscription.plan
+        }
+        // Fallback to StoreKit if database not loaded yet
         if storeKitService.isPurchased("com.anita.ultimate.monthly") {
             return "ultimate"
         } else if storeKitService.isPurchased("com.anita.pro.monthly") {
@@ -27,15 +38,6 @@ struct UpgradeView: View {
         return "free"
     }
     
-    // Get Pro product
-    private var proProduct: Product? {
-        storeKitService.products.first { $0.id.contains("pro") }
-    }
-    
-    // Get Ultimate product
-    private var ultimateProduct: Product? {
-        storeKitService.products.first { $0.id.contains("ultimate") }
-    }
     
     var body: some View {
         ZStack {
@@ -84,49 +86,31 @@ struct UpgradeView: View {
                             // Free Plan - Always visible
                             FreePlanCard(isCurrentPlan: currentPlan == "free")
                             
-                            // Pro Plan - Show with product or placeholder
-                            if let proProduct = proProduct {
-                                SubscriptionPlanCard(
-                                    product: proProduct,
-                                    planType: .pro,
-                                    isCurrentPlan: currentPlan == "pro",
-                                    isPurchasing: isPurchasing && selectedProduct?.id == proProduct.id,
-                                    onPurchase: {
-                                        Task {
-                                            await purchaseProduct(proProduct)
-                                        }
+                            // Pro Plan
+                            SubscriptionPlanCard(
+                                planType: .pro,
+                                isCurrentPlan: currentPlan == "pro",
+                                isCreatingCheckout: isCreatingCheckout,
+                                price: "$4.99",
+                                onCheckout: {
+                                    Task {
+                                        await createCheckoutSession(plan: "pro")
                                     }
-                                )
-                            } else {
-                                // Placeholder Pro Plan when StoreKit products not loaded
-                                SubscriptionPlanPlaceholder(
-                                    planType: .pro,
-                                    isCurrentPlan: currentPlan == "pro",
-                                    isLoading: storeKitService.isLoading
-                                )
-                            }
+                                }
+                            )
                             
-                            // Ultimate Plan - Show with product or placeholder
-                            if let ultimateProduct = ultimateProduct {
-                                SubscriptionPlanCard(
-                                    product: ultimateProduct,
-                                    planType: .ultimate,
-                                    isCurrentPlan: currentPlan == "ultimate",
-                                    isPurchasing: isPurchasing && selectedProduct?.id == ultimateProduct.id,
-                                    onPurchase: {
-                                        Task {
-                                            await purchaseProduct(ultimateProduct)
-                                        }
+                            // Ultimate Plan
+                            SubscriptionPlanCard(
+                                planType: .ultimate,
+                                isCurrentPlan: currentPlan == "ultimate",
+                                isCreatingCheckout: isCreatingCheckout,
+                                price: "$9.99",
+                                onCheckout: {
+                                    Task {
+                                        await createCheckoutSession(plan: "ultimate")
                                     }
-                                )
-                            } else {
-                                // Placeholder Ultimate Plan when StoreKit products not loaded
-                                SubscriptionPlanPlaceholder(
-                                    planType: .ultimate,
-                                    isCurrentPlan: currentPlan == "ultimate",
-                                    isLoading: storeKitService.isLoading
-                                )
-                            }
+                                }
+                            )
                         }
                         .padding(.horizontal, 20)
                         
@@ -154,7 +138,7 @@ struct UpgradeView: View {
                         .disabled(storeKitService.isLoading)
                         
                         // Error message
-                        if let error = purchaseError {
+                        if let error = checkoutError {
                             Text(error)
                                 .font(.system(size: 14))
                                 .foregroundColor(.red)
@@ -173,56 +157,72 @@ struct UpgradeView: View {
             Text("Your subscription has been activated!")
         }
         .task {
-            await storeKitService.loadProducts()
-            await storeKitService.updatePurchasedProducts()
+            await loadSubscriptionFromDatabase()
         }
-        .onChange(of: storeKitService.products) { _ in
-            // Refresh when products are loaded
-            Task {
-                await storeKitService.updatePurchasedProducts()
+        .sheet(isPresented: $showSafariView) {
+            if let url = checkoutURL {
+                SafariView(url: url)
+                    .onDisappear {
+                        // Refresh subscription when user returns from checkout
+                        Task {
+                            await loadSubscriptionFromDatabase()
+                        }
+                    }
             }
-        }
-        .onChange(of: storeKitService.purchasedProductIDs) { _ in
-            // Refresh UI when purchase status changes
         }
     }
     
-    private func purchaseProduct(_ product: Product) async {
-        isPurchasing = true
-        purchaseError = nil
-        selectedProduct = product
+    private func loadSubscriptionFromDatabase() async {
+        isLoadingSubscription = true
+        let userId = UserManager.shared.userId
         
         do {
-            let transaction = try await storeKitService.purchase(product)
-            if transaction != nil {
-                // Refresh purchased products to update UI
-                await storeKitService.updatePurchasedProducts()
-                
-                // Show success alert
+            let response = try await networkService.getSubscription(userId: userId)
+            await MainActor.run {
+                databaseSubscription = response.subscription
+                isLoadingSubscription = false
+            }
+        } catch {
+            print("[UpgradeView] Error loading subscription: \(error.localizedDescription)")
+            await MainActor.run {
+                isLoadingSubscription = false
+            }
+        }
+    }
+    
+    private func createCheckoutSession(plan: String) async {
+        await MainActor.run {
+            isCreatingCheckout = true
+            checkoutError = nil
+        }
+        
+        let userId = UserManager.shared.userId
+        let userEmail = UserManager.shared.currentUser?.email
+        
+        do {
+            let response = try await networkService.createCheckoutSession(
+                plan: plan,
+                userId: userId,
+                userEmail: userEmail
+            )
+            
+            if let urlString = response.url, let url = URL(string: urlString) {
                 await MainActor.run {
-                    showSuccessAlert = true
+                    checkoutURL = url
+                    showSafariView = true
+                    isCreatingCheckout = false
+                }
+            } else {
+                await MainActor.run {
+                    checkoutError = "Failed to create checkout session. Please try again."
+                    isCreatingCheckout = false
                 }
             }
         } catch {
             await MainActor.run {
-                if let storeKitError = error as? StoreKitError {
-                    switch storeKitError {
-                    case .userCancelled:
-                        purchaseError = nil // Don't show error for user cancellation
-                    case .pending:
-                        purchaseError = "Purchase is pending approval. You'll be notified when it's complete."
-                    case .unknown:
-                        purchaseError = "An error occurred. Please try again."
-                    }
-                } else {
-                    purchaseError = error.localizedDescription
-                }
+                checkoutError = error.localizedDescription
+                isCreatingCheckout = false
             }
-        }
-        
-        await MainActor.run {
-            isPurchasing = false
-            selectedProduct = nil
         }
     }
 }
@@ -304,11 +304,11 @@ struct FreePlanCard: View {
 }
 
 struct SubscriptionPlanCard: View {
-    let product: Product
     let planType: PlanType
     let isCurrentPlan: Bool
-    let isPurchasing: Bool
-    let onPurchase: () -> Void
+    let isCreatingCheckout: Bool
+    let price: String
+    let onCheckout: () -> Void
     
     var planName: String {
         switch planType {
@@ -404,9 +404,14 @@ struct SubscriptionPlanCard: View {
                             .foregroundColor(.white)
                     }
                     
-                    Text(product.displayPrice)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.8))
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(price)
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.8))
+                        Text("/month")
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundColor(.white.opacity(0.6))
+                    }
                 }
                 
                 Spacer()
@@ -429,18 +434,19 @@ struct SubscriptionPlanCard: View {
                 }
             }
             
-            // Purchase Button
+            // Checkout Button
             if !isCurrentPlan {
                 Button(action: {
                     // Haptic feedback for button tap
                     let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                    impactFeedback.prepare()
                     impactFeedback.impactOccurred()
                     
-                    // Trigger purchase
-                    onPurchase()
+                    // Trigger checkout
+                    onCheckout()
                 }) {
                     HStack(spacing: 8) {
-                        if isPurchasing {
+                        if isCreatingCheckout {
                             ProgressView()
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         } else {
@@ -456,19 +462,22 @@ struct SubscriptionPlanCard: View {
                 }
                 .buttonStyle(.plain)
                 .contentShape(Rectangle())
+                .allowsHitTesting(!isCreatingCheckout)
                 .liquidGlass(cornerRadius: 12)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(accentColor.opacity(0.6), lineWidth: 2)
+                        .allowsHitTesting(false)
                 )
                 .background(
                     RoundedRectangle(cornerRadius: 12)
                         .fill(accentColor.opacity(0.15))
+                        .allowsHitTesting(false)
                 )
-                .disabled(isPurchasing)
-                .opacity(isPurchasing ? 0.7 : 1.0)
-                .scaleEffect(isPurchasing ? 0.98 : 1.0)
-                .animation(.easeInOut(duration: 0.1), value: isPurchasing)
+                .disabled(isCreatingCheckout)
+                .opacity(isCreatingCheckout ? 0.7 : 1.0)
+                .scaleEffect(isCreatingCheckout ? 0.98 : 1.0)
+                .animation(.easeInOut(duration: 0.1), value: isCreatingCheckout)
             } else {
                 Button(action: {}) {
                     Text("Current Plan")
@@ -487,6 +496,7 @@ struct SubscriptionPlanCard: View {
         .overlay(
             RoundedRectangle(cornerRadius: 16)
                 .stroke(accentColor.opacity(0.4), lineWidth: planType == .ultimate ? 1.5 : 1)
+                .allowsHitTesting(false)
         )
         .background(
             RoundedRectangle(cornerRadius: 16)
@@ -500,6 +510,7 @@ struct SubscriptionPlanCard: View {
                         endPoint: .bottomTrailing
                     )
                 )
+                .allowsHitTesting(false)
         )
     }
 }
@@ -725,6 +736,22 @@ struct SubscriptionPlanPlaceholder: View {
                 )
         )
         .opacity(isLoading ? 0.7 : 1.0)
+    }
+}
+
+// MARK: - Safari View Wrapper
+
+struct SafariView: UIViewControllerRepresentable {
+    let url: URL
+    
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        let safariVC = SFSafariViewController(url: url)
+        safariVC.preferredControlTintColor = .systemBlue
+        return safariVC
+    }
+    
+    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {
+        // No updates needed
     }
 }
 

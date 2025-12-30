@@ -243,6 +243,52 @@ async function buildSystemPrompt(userId: string, conversationId: string): Promis
     return 'You are ANITA, a helpful and friendly personal finance AI assistant.';
   }
 
+  // Fetch user preferences (currency, date format)
+  let userCurrency = 'USD';
+  let dateFormat = 'MM/DD/YYYY';
+  try {
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .select('currency_code, date_format')
+      .eq('id', userId)
+      .single();
+    
+    if (!profileError && profileData) {
+      if (profileData.currency_code) {
+        userCurrency = profileData.currency_code;
+      }
+      if (profileData.date_format) {
+        dateFormat = profileData.date_format;
+      }
+    }
+  } catch (error) {
+    logger.warn('Failed to fetch user preferences', { error: error instanceof Error ? error.message : 'Unknown' });
+  }
+
+  // Get currency symbol for formatting
+  const getCurrencySymbol = (currency: string): string => {
+    const symbols: { [key: string]: string } = {
+      'USD': '$',
+      'EUR': '€',
+      'GBP': '£',
+      'JPY': '¥',
+      'CAD': 'C$',
+      'AUD': 'A$',
+      'CHF': 'CHF',
+      'CNY': '¥',
+      'INR': '₹',
+      'BRL': 'R$',
+      'MXN': 'MX$',
+      'SGD': 'S$',
+      'HKD': 'HK$',
+      'NZD': 'NZ$',
+      'ZAR': 'R'
+    };
+    return symbols[currency] || '$';
+  };
+
+  const currencySymbol = getCurrencySymbol(userCurrency);
+
   // Fetch ALL transactions (no limit) to get complete financial picture
   const { data: transactionsData, error: transactionsError } = await supabase
     .from('anita_data')
@@ -294,7 +340,7 @@ async function buildSystemPrompt(userId: string, conversationId: string): Promis
 
   const recentTransactionSummary = transactions
     .slice(0, 5)
-    .map((t: any) => `${t.type}: $${t.amount.toFixed(2)} - ${t.description} (${t.category})`)
+    .map((t: any) => `${t.type}: ${currencySymbol}${t.amount.toFixed(2)} - ${t.description} (${t.category})`)
     .join(', ');
 
   // Build recent conversation context (only if messages were fetched)
@@ -380,12 +426,12 @@ WHO YOU ARE:
 - Communication style: Helpful and engaging, with financial expertise when relevant
 
 CURRENT FINANCIAL SNAPSHOT (if relevant to the conversation):
-- Total Income: $${totalIncome.toFixed(2)}
-- Total Expenses: $${totalExpenses.toFixed(2)}
-- Net Balance: $${netBalance.toFixed(2)} ${netBalance > 0 ? '(Positive balance)' : netBalance < 0 ? '(Negative balance - needs attention)' : '(Breaking even)'}
-- Monthly Income: $${monthlyIncome.toFixed(2)}
-- Monthly Expenses: $${monthlyExpenses.toFixed(2)}
-- Monthly Balance: $${financialInsights.monthlyBalance.toFixed(2)}
+- Total Income: ${currencySymbol}${totalIncome.toFixed(2)}
+- Total Expenses: ${currencySymbol}${totalExpenses.toFixed(2)}
+- Net Balance: ${currencySymbol}${netBalance.toFixed(2)} ${netBalance > 0 ? '(Positive balance)' : netBalance < 0 ? '(Negative balance - needs attention)' : '(Breaking even)'}
+- Monthly Income: ${currencySymbol}${monthlyIncome.toFixed(2)}
+- Monthly Expenses: ${currencySymbol}${monthlyExpenses.toFixed(2)}
+- Monthly Balance: ${currencySymbol}${financialInsights.monthlyBalance.toFixed(2)}
 
 ${recentTransactionSummary ? `RECENT TRANSACTIONS:
 ${recentTransactionSummary}
@@ -395,7 +441,7 @@ FINANCIAL ANALYSIS DATA (use this for structured responses):
 ${JSON.stringify(financialInsights, null, 2)}
 
 ${topCategories.length > 0 ? `TOP SPENDING CATEGORIES:
-${topCategories.map((c: any, i: number) => `${i + 1}. ${c.category}: $${c.amount.toFixed(2)}`).join('\n')}
+${topCategories.map((c: any, i: number) => `${i + 1}. ${c.category}: ${currencySymbol}${c.amount.toFixed(2)}`).join('\n')}
 ` : ''}
 
 Use this data to provide specific numbers, percentages, and actionable recommendations in the structured format below.

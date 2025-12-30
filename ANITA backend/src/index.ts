@@ -22,11 +22,13 @@ import { handleGetFinancialMetrics } from './routes/get-financial-metrics';
 import { handleGetXPStats } from './routes/get-xp-stats';
 import { handleGetTargets } from './routes/get-targets';
 import { handleGetAssets } from './routes/get-assets';
+import { handleCreateAsset } from './routes/create-asset';
 import { handleCreateConversation } from './routes/create-conversation';
 import { handleGetMessages } from './routes/get-messages';
 import { handleSaveMessage } from './routes/save-message';
 import { handleSaveMessageFeedback } from './routes/save-message-feedback';
 import { handleVerifyIOSSubscription } from './routes/verify-ios-subscription';
+import { handleGetSubscription } from './routes/get-subscription';
 import { applySecurityHeaders } from './utils/securityHeaders';
 import { requestIdMiddleware } from './middleware/requestId';
 import * as logger from './utils/logger';
@@ -108,6 +110,7 @@ app.post('/api/v1/transcribe', handleTranscribe);
 app.post('/api/v1/analyze-file', handleAnalyzeFile);
 app.post('/api/v1/create-checkout-session', handleCreateCheckoutSession);
 app.post('/api/v1/verify-ios-subscription', handleVerifyIOSSubscription);
+app.get('/api/v1/subscription', handleGetSubscription);
 app.get('/api/v1/transactions', handleGetTransactions);
 app.get('/api/v1/conversations', handleGetConversations);
 app.post('/api/v1/create-conversation', handleCreateConversation);
@@ -118,6 +121,7 @@ app.get('/api/v1/financial-metrics', handleGetFinancialMetrics);
 app.get('/api/v1/xp-stats', handleGetXPStats);
 app.get('/api/v1/targets', handleGetTargets);
 app.get('/api/v1/assets', handleGetAssets);
+app.post('/api/v1/assets', handleCreateAsset);
 
 // Legacy routes (redirect to v1 for backward compatibility)
 app.post('/api/chat-completion', handleChatCompletion);
@@ -171,6 +175,7 @@ app.listen(PORT, () => {
   console.log('   - POST /api/v1/analyze-file');
   console.log('   - POST /api/v1/create-checkout-session');
   console.log('   - POST /api/v1/verify-ios-subscription');
+  console.log('   - GET  /api/v1/subscription');
   console.log('   - GET  /api/v1/transactions');
   console.log('   - GET  /api/v1/conversations');
   console.log('   - POST /api/v1/create-conversation');

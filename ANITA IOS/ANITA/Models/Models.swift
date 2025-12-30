@@ -125,6 +125,39 @@ struct CreateCheckoutResponse: Codable {
     let error: String?
 }
 
+// MARK: - Subscription Models
+
+struct Subscription: Codable {
+    let userId: String
+    let plan: String // "free", "pro", or "ultimate"
+    let status: String
+    let transactionId: String?
+    let updatedAt: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case userId
+        case plan
+        case status
+        case transactionId
+        case updatedAt
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        userId = try container.decode(String.self, forKey: .userId)
+        plan = try container.decode(String.self, forKey: .plan)
+        status = try container.decode(String.self, forKey: .status)
+        transactionId = try container.decodeIfPresent(String.self, forKey: .transactionId)
+        updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
+    }
+}
+
+struct GetSubscriptionResponse: Codable {
+    let success: Bool
+    let subscription: Subscription
+    let requestId: String?
+}
+
 // MARK: - Health Check Models
 
 struct HealthResponse: Codable {
@@ -308,6 +341,7 @@ struct Target: Identifiable, Codable {
 struct GetTargetsResponse: Codable {
     let success: Bool
     let targets: [Target]
+    let goals: [Target]?
     let requestId: String?
 }
 

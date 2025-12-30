@@ -552,6 +552,87 @@ class NetworkService: ObservableObject {
             throw NetworkError.httpError(httpResponse.statusCode)
         }
     }
+    
+    func createAsset(userId: String, name: String, type: String, currentValue: Double, description: String?) async throws -> Asset {
+        let url = URL(string: "\(baseURL)/api/v1/assets")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        struct CreateAssetRequest: Codable {
+            let userId: String
+            let name: String
+            let type: String
+            let currentValue: Double
+            let description: String?
+        }
+        
+        struct CreateAssetResponse: Codable {
+            let success: Bool
+            let asset: Asset
+            let requestId: String?
+            let error: String?
+        }
+        
+        let requestBody = CreateAssetRequest(
+            userId: userId,
+            name: name,
+            type: type,
+            currentValue: currentValue,
+            description: description
+        )
+        
+        request.httpBody = try JSONEncoder().encode(requestBody)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 200 || httpResponse.statusCode == 201 {
+            let decoder = JSONDecoder()
+            let createResponse = try decoder.decode(CreateAssetResponse.self, from: data)
+            if createResponse.success {
+                return createResponse.asset
+            } else {
+                throw NetworkError.apiError(createResponse.error ?? "Failed to create asset")
+            }
+        } else {
+            if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
+                throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)
+            }
+            throw NetworkError.httpError(httpResponse.statusCode)
+        }
+    }
+    
+    // MARK: - Subscription
+    
+    func getSubscription(userId: String) async throws -> GetSubscriptionResponse {
+        var urlComponents = URLComponents(string: "\(baseURL)/api/v1/subscription")!
+        urlComponents.queryItems = [URLQueryItem(name: "userId", value: userId)]
+        
+        guard let url = urlComponents.url else {
+            throw NetworkError.invalidResponse
+        }
+        
+        let request = URLRequest(url: url)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 200 {
+            let decoder = JSONDecoder()
+            return try decoder.decode(GetSubscriptionResponse.self, from: data)
+        } else {
+            if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
+                throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)
+            }
+            throw NetworkError.httpError(httpResponse.statusCode)
+        }
+    }
 }
 
 // MARK: - Network Errors

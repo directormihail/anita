@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import Combine
 
 @MainActor
 class AuthViewModel: ObservableObject {
@@ -15,8 +16,17 @@ class AuthViewModel: ObservableObject {
     @Published var errorMessage: String?
     
     private let userManager = UserManager.shared
+    private var cancellables = Set<AnyCancellable>()
     
     init() {
+        // Observe UserManager's authentication state changes
+        userManager.$isAuthenticated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isAuthenticated in
+                self?.isAuthenticated = isAuthenticated
+            }
+            .store(in: &cancellables)
+        
         // Check initial auth status
         Task {
             await checkAuthStatus()

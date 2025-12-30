@@ -50,6 +50,16 @@ class SupabaseService {
         }
     }
     
+    // Get access token (public method for other services)
+    func getAccessToken() -> String? {
+        return accessToken
+    }
+    
+    // Check if user is authenticated
+    var isAuthenticated: Bool {
+        return accessToken != nil
+    }
+    
     // Load saved token on init
     func loadSavedToken() {
         self.accessToken = UserDefaults.standard.string(forKey: "supabase_access_token")
@@ -95,7 +105,7 @@ class SupabaseService {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
-        request.setValue(supabaseAnonKey, forHTTPHeaderField: "Authorization")
+        // Don't set Authorization header for password grant - Supabase uses apikey header only
         
         let body: [String: String] = [
             "email": email,
@@ -159,7 +169,7 @@ class SupabaseService {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
-        request.setValue(supabaseAnonKey, forHTTPHeaderField: "Authorization")
+        // Don't set Authorization header for signup - Supabase uses apikey header only
         
         let body: [String: String] = [
             "email": email,

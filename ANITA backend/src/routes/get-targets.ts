@@ -59,7 +59,7 @@ export async function handleGetTargets(req: Request, res: Response): Promise<voi
       return;
     }
 
-    // Fetch targets from targets table
+    // Fetch all active targets/goals from targets table
     const { data, error } = await supabase
       .from('targets')
       .select('*')
@@ -79,7 +79,7 @@ export async function handleGetTargets(req: Request, res: Response): Promise<voi
     }
 
     // Transform data to match expected format
-    const targets = (data || []).map((item: any) => ({
+    const allItems = (data || []).map((item: any) => ({
       id: item.id,
       accountId: item.account_id,
       title: item.title,
@@ -97,9 +97,14 @@ export async function handleGetTargets(req: Request, res: Response): Promise<voi
       updatedAt: item.updated_at
     }));
 
+    // Separate targets (savings goals) and goals (budget limits)
+    const targets = allItems.filter((item: any) => item.targetType !== 'budget');
+    const goals = allItems.filter((item: any) => item.targetType === 'budget');
+
     res.status(200).json({
       success: true,
       targets,
+      goals,
       requestId
     });
   } catch (error) {

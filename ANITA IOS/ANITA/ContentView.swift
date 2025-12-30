@@ -29,6 +29,15 @@ struct ContentView: View {
         .task {
             await authViewModel.checkAuthStatus()
         }
+        .onChange(of: authViewModel.isAuthenticated) { isAuthenticated in
+            // When user signs out, reset to welcome page
+            if !isAuthenticated {
+                withAnimation {
+                    authViewState = .welcome
+                    selectedTab = 0
+                }
+            }
+        }
     }
     
     private var mainContentView: some View {
