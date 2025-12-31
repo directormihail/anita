@@ -1290,16 +1290,17 @@ struct TransactionRow: View {
 
 struct TargetRow: View {
     let target: Target
-    @State private var showAddMoneySheet = false
+    @State private var showEditGoalSheet = false
+    
+    private var isCompleted: Bool {
+        target.progressPercentage >= 100
+    }
     
     var body: some View {
         HStack(spacing: 16) {
-            // Add money button with plus icon - matching section style
-            Button(action: {
-                let impact = UIImpactFeedbackGenerator(style: .light)
-                impact.impactOccurred()
-                showAddMoneySheet = true
-            }) {
+            // Icon button - checkmark for completed, plus for incomplete
+            if isCompleted {
+                // Completed: Green checkmark icon with liquid glass style
                 VStack(spacing: 4) {
                     ZStack {
                         // Simple glass circle background matching section style
@@ -1330,13 +1331,13 @@ struct TargetRow: View {
                                     )
                             }
                         
-                        Image(systemName: "plus")
+                        Image(systemName: "checkmark")
                             .font(.system(size: 19, weight: .semibold))
                             .foregroundStyle(
                                 LinearGradient(
                                     colors: [
-                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.95),
-                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.8)
+                                        Color.green.opacity(0.95),
+                                        Color.green.opacity(0.8)
                                     ],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
@@ -1344,13 +1345,70 @@ struct TargetRow: View {
                             )
                     }
                     
-                    Text("add")
+                    Text("done")
                         .font(.system(size: 10, weight: .medium, design: .rounded))
-                        .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.8))
+                        .foregroundColor(Color.green.opacity(0.9))
                         .textCase(.lowercase)
                 }
+            } else {
+                // Incomplete: Blue pencil icon for editing
+                Button(action: {
+                    let impact = UIImpactFeedbackGenerator(style: .light)
+                    impact.impactOccurred()
+                    showEditGoalSheet = true
+                }) {
+                    VStack(spacing: 4) {
+                        ZStack {
+                            // Simple glass circle background matching section style
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color(white: 0.2).opacity(0.3),
+                                            Color(white: 0.15).opacity(0.2)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 48, height: 48)
+                                .overlay {
+                                    Circle()
+                                        .stroke(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color.white.opacity(0.2),
+                                                    Color.white.opacity(0.1)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            ),
+                                            lineWidth: 1
+                                        )
+                                }
+                            
+                            Image(systemName: "pencil")
+                                .font(.system(size: 19, weight: .semibold))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [
+                                            Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.95),
+                                            Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.8)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                        }
+                        
+                        Text("edit")
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                            .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.8))
+                            .textCase(.lowercase)
+                    }
+                }
+                .buttonStyle(PremiumSettingsButtonStyle())
             }
-            .buttonStyle(PremiumSettingsButtonStyle())
             
             // Target details
             VStack(alignment: .leading, spacing: 6) {
@@ -1361,7 +1419,7 @@ struct TargetRow: View {
                 HStack(spacing: 6) {
                     Text("\(Int(target.progressPercentage))%")
                         .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundColor(isCompleted ? Color.green.opacity(0.9) : .white.opacity(0.6))
                     
                     Text("•")
                         .foregroundColor(.white.opacity(0.4))
@@ -1390,6 +1448,15 @@ struct TargetRow: View {
                         
                         Rectangle()
                             .fill(
+                                isCompleted ?
+                                LinearGradient(
+                                    colors: [
+                                        Color.green.opacity(0.9),
+                                        Color.green.opacity(0.7)
+                                    ],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ) :
                                 LinearGradient(
                                     colors: [
                                         Color(red: 0.4, green: 0.49, blue: 0.92),
@@ -1412,8 +1479,8 @@ struct TargetRow: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
         .background(Color.clear)
-        .sheet(isPresented: $showAddMoneySheet) {
-            AddMoneyToGoalSheet(target: target)
+        .sheet(isPresented: $showEditGoalSheet) {
+            EditGoalSheet(target: target)
         }
     }
     
@@ -1686,6 +1753,1528 @@ struct AddMoneyToGoalSheet: View {
     }
 }
 
+// Edit Goal Sheet with Add, Take, and Remove options
+struct EditGoalSheet: View {
+    let target: Target
+    @Environment(\.dismiss) var dismiss
+    @State private var showAddSheet = false
+    @State private var showTakeSheet = false
+    @State private var showRemoveSheet = false
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black
+                    .ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Header
+                    VStack(spacing: 8) {
+                        Text("Edit Goal")
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                        
+                        Text(target.title)
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                    .padding(.top, 20)
+                    .padding(.bottom, 32)
+                    
+                    // Action buttons - matching FinanceView row style
+                    VStack(spacing: 12) {
+                        // Add Button
+                        Button(action: {
+                            let impact = UIImpactFeedbackGenerator(style: .light)
+                            impact.impactOccurred()
+                            showAddSheet = true
+                        }) {
+                            HStack(spacing: 16) {
+                                // Icon with premium glass circle
+                                ZStack {
+                                    Circle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color(white: 0.2).opacity(0.3),
+                                                    Color(white: 0.15).opacity(0.2)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .frame(width: 48, height: 48)
+                                        .overlay {
+                                            Circle()
+                                                .stroke(
+                                                    LinearGradient(
+                                                        colors: [
+                                                            Color.white.opacity(0.2),
+                                                            Color.white.opacity(0.1)
+                                                        ],
+                                                        startPoint: .topLeading,
+                                                        endPoint: .bottomTrailing
+                                                    ),
+                                                    lineWidth: 1
+                                                )
+                                        }
+                                    
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 19, weight: .semibold))
+                                        .foregroundStyle(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color.green.opacity(0.95),
+                                                    Color.green.opacity(0.8)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                }
+                                
+                                // Text
+                                Text("Add Money")
+                                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.95))
+                                
+                                Spacer()
+                                
+                                // Chevron
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(.white.opacity(0.4))
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 14)
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(PremiumSettingsButtonStyle())
+                        .liquidGlass(cornerRadius: 18)
+                        .padding(.horizontal, 20)
+                        
+                        // Take Button
+                        Button(action: {
+                            let impact = UIImpactFeedbackGenerator(style: .light)
+                            impact.impactOccurred()
+                            showTakeSheet = true
+                        }) {
+                            HStack(spacing: 16) {
+                                // Icon with premium glass circle
+                                ZStack {
+                                    Circle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color(white: 0.2).opacity(0.3),
+                                                    Color(white: 0.15).opacity(0.2)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .frame(width: 48, height: 48)
+                                        .overlay {
+                                            Circle()
+                                                .stroke(
+                                                    LinearGradient(
+                                                        colors: [
+                                                            Color.white.opacity(0.2),
+                                                            Color.white.opacity(0.1)
+                                                        ],
+                                                        startPoint: .topLeading,
+                                                        endPoint: .bottomTrailing
+                                                    ),
+                                                    lineWidth: 1
+                                                )
+                                        }
+                                    
+                                    Image(systemName: "minus")
+                                        .font(.system(size: 19, weight: .semibold))
+                                        .foregroundStyle(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color.orange.opacity(0.95),
+                                                    Color.orange.opacity(0.8)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                }
+                                
+                                // Text
+                                Text("Take Money")
+                                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.95))
+                                
+                                Spacer()
+                                
+                                // Chevron
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(.white.opacity(0.4))
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 14)
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(PremiumSettingsButtonStyle())
+                        .liquidGlass(cornerRadius: 18)
+                        .padding(.horizontal, 20)
+                        
+                        // Remove Button
+                        Button(action: {
+                            let impact = UIImpactFeedbackGenerator(style: .light)
+                            impact.impactOccurred()
+                            showRemoveSheet = true
+                        }) {
+                            HStack(spacing: 16) {
+                                // Icon with premium glass circle
+                                ZStack {
+                                    Circle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color(white: 0.2).opacity(0.3),
+                                                    Color(white: 0.15).opacity(0.2)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .frame(width: 48, height: 48)
+                                        .overlay {
+                                            Circle()
+                                                .stroke(
+                                                    LinearGradient(
+                                                        colors: [
+                                                            Color.white.opacity(0.2),
+                                                            Color.white.opacity(0.1)
+                                                        ],
+                                                        startPoint: .topLeading,
+                                                        endPoint: .bottomTrailing
+                                                    ),
+                                                    lineWidth: 1
+                                                )
+                                        }
+                                    
+                                    Image(systemName: "trash")
+                                        .font(.system(size: 19, weight: .semibold))
+                                        .foregroundStyle(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color.red.opacity(0.95),
+                                                    Color.red.opacity(0.8)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                }
+                                
+                                // Text
+                                Text("Remove Goal")
+                                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.95))
+                                
+                                Spacer()
+                                
+                                // Chevron
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(.white.opacity(0.4))
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 14)
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(PremiumSettingsButtonStyle())
+                        .liquidGlass(cornerRadius: 18)
+                        .padding(.horizontal, 20)
+                    }
+                    
+                    Spacer()
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.black, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                }
+            }
+            .sheet(isPresented: $showAddSheet) {
+                AddMoneyToGoalSheet(target: target)
+            }
+            .sheet(isPresented: $showTakeSheet) {
+                TakeMoneyFromGoalSheet(target: target)
+            }
+            .sheet(isPresented: $showRemoveSheet) {
+                RemoveGoalSheet(target: target)
+            }
+        }
+    }
+}
+
+// Edit Asset Sheet with Add, Take, and Remove options
+struct EditAssetSheet: View {
+    let asset: Asset
+    @Environment(\.dismiss) var dismiss
+    @State private var showAddSheet = false
+    @State private var showTakeSheet = false
+    @State private var showRemoveSheet = false
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black
+                    .ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Header
+                    VStack(spacing: 8) {
+                        Text("Edit Asset")
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                        
+                        Text(asset.name)
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                    .padding(.top, 20)
+                    .padding(.bottom, 32)
+                    
+                    // Action buttons - matching FinanceView row style
+                    VStack(spacing: 12) {
+                        // Add Button
+                        Button(action: {
+                            let impact = UIImpactFeedbackGenerator(style: .light)
+                            impact.impactOccurred()
+                            showAddSheet = true
+                        }) {
+                            HStack(spacing: 16) {
+                                // Icon with premium glass circle
+                                ZStack {
+                                    Circle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color(white: 0.2).opacity(0.3),
+                                                    Color(white: 0.15).opacity(0.2)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .frame(width: 48, height: 48)
+                                        .overlay {
+                                            Circle()
+                                                .stroke(
+                                                    LinearGradient(
+                                                        colors: [
+                                                            Color.white.opacity(0.2),
+                                                            Color.white.opacity(0.1)
+                                                        ],
+                                                        startPoint: .topLeading,
+                                                        endPoint: .bottomTrailing
+                                                    ),
+                                                    lineWidth: 1
+                                                )
+                                        }
+                                    
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 19, weight: .semibold))
+                                        .foregroundStyle(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color.green.opacity(0.95),
+                                                    Color.green.opacity(0.8)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                }
+                                
+                                // Text
+                                Text("Add Value")
+                                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.95))
+                                
+                                Spacer()
+                                
+                                // Chevron
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(.white.opacity(0.4))
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 14)
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(PremiumSettingsButtonStyle())
+                        .liquidGlass(cornerRadius: 18)
+                        .padding(.horizontal, 20)
+                        
+                        // Take Button
+                        Button(action: {
+                            let impact = UIImpactFeedbackGenerator(style: .light)
+                            impact.impactOccurred()
+                            showTakeSheet = true
+                        }) {
+                            HStack(spacing: 16) {
+                                // Icon with premium glass circle
+                                ZStack {
+                                    Circle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color(white: 0.2).opacity(0.3),
+                                                    Color(white: 0.15).opacity(0.2)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .frame(width: 48, height: 48)
+                                        .overlay {
+                                            Circle()
+                                                .stroke(
+                                                    LinearGradient(
+                                                        colors: [
+                                                            Color.white.opacity(0.2),
+                                                            Color.white.opacity(0.1)
+                                                        ],
+                                                        startPoint: .topLeading,
+                                                        endPoint: .bottomTrailing
+                                                    ),
+                                                    lineWidth: 1
+                                                )
+                                        }
+                                    
+                                    Image(systemName: "minus")
+                                        .font(.system(size: 19, weight: .semibold))
+                                        .foregroundStyle(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color.orange.opacity(0.95),
+                                                    Color.orange.opacity(0.8)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                }
+                                
+                                // Text
+                                Text("Reduce Value")
+                                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.95))
+                                
+                                Spacer()
+                                
+                                // Chevron
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(.white.opacity(0.4))
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 14)
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(PremiumSettingsButtonStyle())
+                        .liquidGlass(cornerRadius: 18)
+                        .padding(.horizontal, 20)
+                        
+                        // Remove Button
+                        Button(action: {
+                            let impact = UIImpactFeedbackGenerator(style: .light)
+                            impact.impactOccurred()
+                            showRemoveSheet = true
+                        }) {
+                            HStack(spacing: 16) {
+                                // Icon with premium glass circle
+                                ZStack {
+                                    Circle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color(white: 0.2).opacity(0.3),
+                                                    Color(white: 0.15).opacity(0.2)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .frame(width: 48, height: 48)
+                                        .overlay {
+                                            Circle()
+                                                .stroke(
+                                                    LinearGradient(
+                                                        colors: [
+                                                            Color.white.opacity(0.2),
+                                                            Color.white.opacity(0.1)
+                                                        ],
+                                                        startPoint: .topLeading,
+                                                        endPoint: .bottomTrailing
+                                                    ),
+                                                    lineWidth: 1
+                                                )
+                                        }
+                                    
+                                    Image(systemName: "trash")
+                                        .font(.system(size: 19, weight: .semibold))
+                                        .foregroundStyle(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color.red.opacity(0.95),
+                                                    Color.red.opacity(0.8)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                }
+                                
+                                // Text
+                                Text("Remove Asset")
+                                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.95))
+                                
+                                Spacer()
+                                
+                                // Chevron
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(.white.opacity(0.4))
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 14)
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(PremiumSettingsButtonStyle())
+                        .liquidGlass(cornerRadius: 18)
+                        .padding(.horizontal, 20)
+                    }
+                    
+                    Spacer()
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.black, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                }
+            }
+            .sheet(isPresented: $showAddSheet) {
+                AddValueToAssetSheet(asset: asset)
+            }
+            .sheet(isPresented: $showTakeSheet) {
+                ReduceAssetValueSheet(asset: asset)
+            }
+            .sheet(isPresented: $showRemoveSheet) {
+                RemoveAssetSheet(asset: asset)
+            }
+        }
+    }
+}
+
+// Take Money from Goal Sheet
+struct TakeMoneyFromGoalSheet: View {
+    let target: Target
+    @Environment(\.dismiss) var dismiss
+    @State private var amount: String = "0"
+    @State private var isProcessing = false
+    @State private var errorMessage: String?
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black
+                    .ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Header
+                    VStack(spacing: 8) {
+                        Text("Take Amount from Goal")
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                        
+                        Text(target.title)
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                    .padding(.top, 20)
+                    .padding(.bottom, 32)
+                    
+                    // Display amount
+                    VStack(spacing: 8) {
+                        Text(formatDisplayAmount())
+                            .font(.system(size: 56, weight: .bold, design: .rounded))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.98),
+                                        Color.white.opacity(0.9)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(height: 70)
+                            .frame(maxWidth: .infinity)
+                        
+                        if let error = errorMessage {
+                            Text(error)
+                                .font(.system(size: 14, weight: .medium, design: .rounded))
+                                .foregroundColor(.red.opacity(0.8))
+                                .padding(.top, 8)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 32)
+                    
+                    // Calculator keypad
+                    VStack(spacing: 16) {
+                        HStack(spacing: 16) {
+                            CalculatorButton(number: "1", action: { appendDigit("1") })
+                            CalculatorButton(number: "2", action: { appendDigit("2") })
+                            CalculatorButton(number: "3", action: { appendDigit("3") })
+                        }
+                        
+                        HStack(spacing: 16) {
+                            CalculatorButton(number: "4", action: { appendDigit("4") })
+                            CalculatorButton(number: "5", action: { appendDigit("5") })
+                            CalculatorButton(number: "6", action: { appendDigit("6") })
+                        }
+                        
+                        HStack(spacing: 16) {
+                            CalculatorButton(number: "7", action: { appendDigit("7") })
+                            CalculatorButton(number: "8", action: { appendDigit("8") })
+                            CalculatorButton(number: "9", action: { appendDigit("9") })
+                        }
+                        
+                        HStack(spacing: 16) {
+                            CalculatorButton(number: ".", action: { appendDecimal() })
+                            CalculatorButton(number: "0", action: { appendDigit("0") })
+                            CalculatorButton(number: "⌫", action: { deleteLastDigit() })
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    
+                    Spacer()
+                    
+                    // Take Button
+                    Button(action: {
+                        takeMoneyFromGoal()
+                    }) {
+                        HStack {
+                            Spacer()
+                            if isProcessing {
+                                ProgressView()
+                                    .tint(.white)
+                            } else {
+                                Text("Take")
+                                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                                    .foregroundColor(.white)
+                            }
+                            Spacer()
+                        }
+                        .frame(height: 56)
+                        .background {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.orange.opacity(0.9),
+                                                Color.orange.opacity(0.7)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                            }
+                        }
+                    }
+                    .disabled(isProcessing || amount == "0" || amount.isEmpty)
+                    .opacity(isProcessing || amount == "0" || amount.isEmpty ? 0.6 : 1.0)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.black, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                }
+            }
+        }
+    }
+    
+    private func appendDigit(_ digit: String) {
+        if amount == "0" {
+            amount = digit
+        } else {
+            amount += digit
+        }
+        errorMessage = nil
+    }
+    
+    private func appendDecimal() {
+        let userCurrency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+        let locale = getLocaleForCurrency(userCurrency)
+        let decimalSeparator = locale.decimalSeparator ?? "."
+        
+        if !amount.contains(".") && !amount.contains(",") {
+            amount += "."
+        }
+    }
+    
+    private func deleteLastDigit() {
+        if amount.count > 1 {
+            amount = String(amount.dropLast())
+        } else {
+            amount = "0"
+        }
+    }
+    
+    private func getLocaleForCurrency(_ currencyCode: String) -> Locale {
+        let localeMap: [String: String] = [
+            "USD": "en_US",
+            "EUR": "de_DE",
+            "GBP": "en_GB",
+            "JPY": "ja_JP",
+            "CAD": "en_CA",
+            "AUD": "en_AU",
+            "CHF": "de_CH",
+            "CNY": "zh_CN",
+            "INR": "en_IN",
+            "BRL": "pt_BR",
+            "MXN": "es_MX",
+            "KRW": "ko_KR"
+        ]
+        
+        if let localeIdentifier = localeMap[currencyCode] {
+            return Locale(identifier: localeIdentifier)
+        }
+        
+        return Locale(identifier: "en_US")
+    }
+    
+    private func formatDisplayAmount() -> String {
+        let userCurrency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+        let locale = getLocaleForCurrency(userCurrency)
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = userCurrency
+        formatter.locale = locale
+        formatter.usesGroupingSeparator = false
+        
+        if amount == "0" || amount.isEmpty {
+            formatter.minimumFractionDigits = 0
+            formatter.maximumFractionDigits = 0
+            return formatter.string(from: NSNumber(value: 0)) ?? "0"
+        }
+        
+        if let value = Double(amount) {
+            let hasDecimal = amount.contains(".") || amount.contains(",")
+            
+            if hasDecimal {
+                formatter.minimumFractionDigits = 0
+                formatter.maximumFractionDigits = 2
+            } else {
+                formatter.minimumFractionDigits = 0
+                formatter.maximumFractionDigits = 0
+            }
+            
+            return formatter.string(from: NSNumber(value: value)) ?? "0"
+        }
+        
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: 0)) ?? "0"
+    }
+    
+    private func takeMoneyFromGoal() {
+        guard let amountValue = Double(amount), amountValue > 0 else {
+            errorMessage = "Please enter a valid amount"
+            return
+        }
+        
+        if amountValue > target.currentAmount {
+            errorMessage = "Cannot take more than current amount"
+            return
+        }
+        
+        isProcessing = true
+        errorMessage = nil
+        
+        // TODO: Implement API call to take money from goal
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            isProcessing = false
+            dismiss()
+        }
+    }
+}
+
+// Remove Goal Sheet
+struct RemoveGoalSheet: View {
+    let target: Target
+    @Environment(\.dismiss) var dismiss
+    @State private var isRemoving = false
+    @State private var errorMessage: String?
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black
+                    .ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Header
+                    VStack(spacing: 8) {
+                        Text("Remove Goal")
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                        
+                        Text(target.title)
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                    .padding(.top, 20)
+                    .padding(.bottom, 32)
+                    
+                    // Warning message
+                    VStack(spacing: 16) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 48, weight: .medium))
+                            .foregroundColor(.red.opacity(0.8))
+                        
+                        Text("Are you sure you want to remove this goal?")
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white)
+                            .multilineTextAlignment(.center)
+                        
+                        Text("This action cannot be undone.")
+                            .font(.system(size: 14, weight: .regular, design: .rounded))
+                            .foregroundColor(.white.opacity(0.6))
+                            .multilineTextAlignment(.center)
+                        
+                        if let error = errorMessage {
+                            Text(error)
+                                .font(.system(size: 14, weight: .medium, design: .rounded))
+                                .foregroundColor(.red.opacity(0.8))
+                                .padding(.top, 8)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 40)
+                    
+                    Spacer()
+                    
+                    // Action buttons
+                    VStack(spacing: 12) {
+                        // Remove Button
+                        Button(action: {
+                            removeGoal()
+                        }) {
+                            HStack {
+                                Spacer()
+                                if isRemoving {
+                                    ProgressView()
+                                        .tint(.white)
+                                } else {
+                                    Text("Remove Goal")
+                                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                                        .foregroundColor(.white)
+                                }
+                                Spacer()
+                            }
+                            .frame(height: 56)
+                            .background {
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.red.opacity(0.9),
+                                                Color.red.opacity(0.7)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                            }
+                        }
+                        .disabled(isRemoving)
+                        .opacity(isRemoving ? 0.6 : 1.0)
+                        
+                        // Cancel Button
+                        Button(action: {
+                            dismiss()
+                        }) {
+                            HStack {
+                                Spacer()
+                                Text("Cancel")
+                                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.8))
+                                Spacer()
+                            }
+                            .frame(height: 56)
+                            .background {
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.white.opacity(0.15),
+                                                Color.white.opacity(0.1)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.black, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                }
+            }
+        }
+    }
+    
+    private func removeGoal() {
+        isRemoving = true
+        errorMessage = nil
+        
+        // TODO: Implement API call to remove goal
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            isRemoving = false
+            dismiss()
+        }
+    }
+}
+
+// Add Value to Asset Sheet
+struct AddValueToAssetSheet: View {
+    let asset: Asset
+    @Environment(\.dismiss) var dismiss
+    @State private var amount: String = "0"
+    @State private var isAdding = false
+    @State private var errorMessage: String?
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black
+                    .ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Header
+                    VStack(spacing: 8) {
+                        Text("Add Value to Asset")
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                        
+                        Text(asset.name)
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                    .padding(.top, 20)
+                    .padding(.bottom, 32)
+                    
+                    // Display amount
+                    VStack(spacing: 8) {
+                        Text(formatDisplayAmount())
+                            .font(.system(size: 56, weight: .bold, design: .rounded))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.98),
+                                        Color.white.opacity(0.9)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(height: 70)
+                            .frame(maxWidth: .infinity)
+                        
+                        if let error = errorMessage {
+                            Text(error)
+                                .font(.system(size: 14, weight: .medium, design: .rounded))
+                                .foregroundColor(.red.opacity(0.8))
+                                .padding(.top, 8)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 32)
+                    
+                    // Calculator keypad
+                    VStack(spacing: 16) {
+                        HStack(spacing: 16) {
+                            CalculatorButton(number: "1", action: { appendDigit("1") })
+                            CalculatorButton(number: "2", action: { appendDigit("2") })
+                            CalculatorButton(number: "3", action: { appendDigit("3") })
+                        }
+                        
+                        HStack(spacing: 16) {
+                            CalculatorButton(number: "4", action: { appendDigit("4") })
+                            CalculatorButton(number: "5", action: { appendDigit("5") })
+                            CalculatorButton(number: "6", action: { appendDigit("6") })
+                        }
+                        
+                        HStack(spacing: 16) {
+                            CalculatorButton(number: "7", action: { appendDigit("7") })
+                            CalculatorButton(number: "8", action: { appendDigit("8") })
+                            CalculatorButton(number: "9", action: { appendDigit("9") })
+                        }
+                        
+                        HStack(spacing: 16) {
+                            CalculatorButton(number: ".", action: { appendDecimal() })
+                            CalculatorButton(number: "0", action: { appendDigit("0") })
+                            CalculatorButton(number: "⌫", action: { deleteLastDigit() })
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    
+                    Spacer()
+                    
+                    // Add Button
+                    Button(action: {
+                        addValueToAsset()
+                    }) {
+                        HStack {
+                            Spacer()
+                            if isAdding {
+                                ProgressView()
+                                    .tint(.white)
+                            } else {
+                                Text("Add")
+                                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                                    .foregroundColor(.white)
+                            }
+                            Spacer()
+                        }
+                        .frame(height: 56)
+                        .background {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                Color(red: 0.4, green: 0.49, blue: 0.92),
+                                                Color(red: 0.5, green: 0.55, blue: 0.95)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                            }
+                        }
+                    }
+                    .disabled(isAdding || amount == "0" || amount.isEmpty)
+                    .opacity(isAdding || amount == "0" || amount.isEmpty ? 0.6 : 1.0)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.black, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                }
+            }
+        }
+    }
+    
+    private func appendDigit(_ digit: String) {
+        if amount == "0" {
+            amount = digit
+        } else {
+            amount += digit
+        }
+        errorMessage = nil
+    }
+    
+    private func appendDecimal() {
+        let userCurrency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+        let locale = getLocaleForCurrency(userCurrency)
+        if !amount.contains(".") && !amount.contains(",") {
+            amount += "."
+        }
+    }
+    
+    private func deleteLastDigit() {
+        if amount.count > 1 {
+            amount = String(amount.dropLast())
+        } else {
+            amount = "0"
+        }
+    }
+    
+    private func getLocaleForCurrency(_ currencyCode: String) -> Locale {
+        let localeMap: [String: String] = [
+            "USD": "en_US", "EUR": "de_DE", "GBP": "en_GB", "JPY": "ja_JP",
+            "CAD": "en_CA", "AUD": "en_AU", "CHF": "de_CH", "CNY": "zh_CN",
+            "INR": "en_IN", "BRL": "pt_BR", "MXN": "es_MX", "KRW": "ko_KR"
+        ]
+        return Locale(identifier: localeMap[currencyCode] ?? "en_US")
+    }
+    
+    private func formatDisplayAmount() -> String {
+        let userCurrency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+        let locale = getLocaleForCurrency(userCurrency)
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = userCurrency
+        formatter.locale = locale
+        formatter.usesGroupingSeparator = false
+        
+        if amount == "0" || amount.isEmpty {
+            formatter.minimumFractionDigits = 0
+            formatter.maximumFractionDigits = 0
+            return formatter.string(from: NSNumber(value: 0)) ?? "0"
+        }
+        
+        if let value = Double(amount) {
+            let hasDecimal = amount.contains(".") || amount.contains(",")
+            formatter.minimumFractionDigits = hasDecimal ? 0 : 0
+            formatter.maximumFractionDigits = hasDecimal ? 2 : 0
+            return formatter.string(from: NSNumber(value: value)) ?? "0"
+        }
+        
+        return formatter.string(from: NSNumber(value: 0)) ?? "0"
+    }
+    
+    private func addValueToAsset() {
+        guard let amountValue = Double(amount), amountValue > 0 else {
+            errorMessage = "Please enter a valid amount"
+            return
+        }
+        
+        isAdding = true
+        errorMessage = nil
+        
+        // TODO: Implement API call to add value to asset
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            isAdding = false
+            dismiss()
+        }
+    }
+}
+
+// Reduce Asset Value Sheet
+struct ReduceAssetValueSheet: View {
+    let asset: Asset
+    @Environment(\.dismiss) var dismiss
+    @State private var amount: String = "0"
+    @State private var isProcessing = false
+    @State private var errorMessage: String?
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black
+                    .ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Header
+                    VStack(spacing: 8) {
+                        Text("Reduce Asset Value")
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                        
+                        Text(asset.name)
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                    .padding(.top, 20)
+                    .padding(.bottom, 32)
+                    
+                    // Display amount
+                    VStack(spacing: 8) {
+                        Text(formatDisplayAmount())
+                            .font(.system(size: 56, weight: .bold, design: .rounded))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.98),
+                                        Color.white.opacity(0.9)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(height: 70)
+                            .frame(maxWidth: .infinity)
+                        
+                        if let error = errorMessage {
+                            Text(error)
+                                .font(.system(size: 14, weight: .medium, design: .rounded))
+                                .foregroundColor(.red.opacity(0.8))
+                                .padding(.top, 8)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 32)
+                    
+                    // Calculator keypad
+                    VStack(spacing: 16) {
+                        HStack(spacing: 16) {
+                            CalculatorButton(number: "1", action: { appendDigit("1") })
+                            CalculatorButton(number: "2", action: { appendDigit("2") })
+                            CalculatorButton(number: "3", action: { appendDigit("3") })
+                        }
+                        
+                        HStack(spacing: 16) {
+                            CalculatorButton(number: "4", action: { appendDigit("4") })
+                            CalculatorButton(number: "5", action: { appendDigit("5") })
+                            CalculatorButton(number: "6", action: { appendDigit("6") })
+                        }
+                        
+                        HStack(spacing: 16) {
+                            CalculatorButton(number: "7", action: { appendDigit("7") })
+                            CalculatorButton(number: "8", action: { appendDigit("8") })
+                            CalculatorButton(number: "9", action: { appendDigit("9") })
+                        }
+                        
+                        HStack(spacing: 16) {
+                            CalculatorButton(number: ".", action: { appendDecimal() })
+                            CalculatorButton(number: "0", action: { appendDigit("0") })
+                            CalculatorButton(number: "⌫", action: { deleteLastDigit() })
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    
+                    Spacer()
+                    
+                    // Reduce Button
+                    Button(action: {
+                        reduceAssetValue()
+                    }) {
+                        HStack {
+                            Spacer()
+                            if isProcessing {
+                                ProgressView()
+                                    .tint(.white)
+                            } else {
+                                Text("Reduce")
+                                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                                    .foregroundColor(.white)
+                            }
+                            Spacer()
+                        }
+                        .frame(height: 56)
+                        .background {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.orange.opacity(0.9),
+                                                Color.orange.opacity(0.7)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                            }
+                        }
+                    }
+                    .disabled(isProcessing || amount == "0" || amount.isEmpty)
+                    .opacity(isProcessing || amount == "0" || amount.isEmpty ? 0.6 : 1.0)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.black, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                }
+            }
+        }
+    }
+    
+    private func appendDigit(_ digit: String) {
+        if amount == "0" {
+            amount = digit
+        } else {
+            amount += digit
+        }
+        errorMessage = nil
+    }
+    
+    private func appendDecimal() {
+        let userCurrency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+        let locale = getLocaleForCurrency(userCurrency)
+        if !amount.contains(".") && !amount.contains(",") {
+            amount += "."
+        }
+    }
+    
+    private func deleteLastDigit() {
+        if amount.count > 1 {
+            amount = String(amount.dropLast())
+        } else {
+            amount = "0"
+        }
+    }
+    
+    private func getLocaleForCurrency(_ currencyCode: String) -> Locale {
+        let localeMap: [String: String] = [
+            "USD": "en_US", "EUR": "de_DE", "GBP": "en_GB", "JPY": "ja_JP",
+            "CAD": "en_CA", "AUD": "en_AU", "CHF": "de_CH", "CNY": "zh_CN",
+            "INR": "en_IN", "BRL": "pt_BR", "MXN": "es_MX", "KRW": "ko_KR"
+        ]
+        return Locale(identifier: localeMap[currencyCode] ?? "en_US")
+    }
+    
+    private func formatDisplayAmount() -> String {
+        let userCurrency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+        let locale = getLocaleForCurrency(userCurrency)
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = userCurrency
+        formatter.locale = locale
+        formatter.usesGroupingSeparator = false
+        
+        if amount == "0" || amount.isEmpty {
+            formatter.minimumFractionDigits = 0
+            formatter.maximumFractionDigits = 0
+            return formatter.string(from: NSNumber(value: 0)) ?? "0"
+        }
+        
+        if let value = Double(amount) {
+            let hasDecimal = amount.contains(".") || amount.contains(",")
+            formatter.minimumFractionDigits = hasDecimal ? 0 : 0
+            formatter.maximumFractionDigits = hasDecimal ? 2 : 0
+            return formatter.string(from: NSNumber(value: value)) ?? "0"
+        }
+        
+        return formatter.string(from: NSNumber(value: 0)) ?? "0"
+    }
+    
+    private func reduceAssetValue() {
+        guard let amountValue = Double(amount), amountValue > 0 else {
+            errorMessage = "Please enter a valid amount"
+            return
+        }
+        
+        if amountValue > asset.currentValue {
+            errorMessage = "Cannot reduce more than current value"
+            return
+        }
+        
+        isProcessing = true
+        errorMessage = nil
+        
+        // TODO: Implement API call to reduce asset value
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            isProcessing = false
+            dismiss()
+        }
+    }
+}
+
+// Remove Asset Sheet
+struct RemoveAssetSheet: View {
+    let asset: Asset
+    @Environment(\.dismiss) var dismiss
+    @State private var isRemoving = false
+    @State private var errorMessage: String?
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black
+                    .ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Header
+                    VStack(spacing: 8) {
+                        Text("Remove Asset")
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                        
+                        Text(asset.name)
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                    .padding(.top, 20)
+                    .padding(.bottom, 32)
+                    
+                    // Warning message
+                    VStack(spacing: 16) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 48, weight: .medium))
+                            .foregroundColor(.red.opacity(0.8))
+                        
+                        Text("Are you sure you want to remove this asset?")
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white)
+                            .multilineTextAlignment(.center)
+                        
+                        Text("This action cannot be undone.")
+                            .font(.system(size: 14, weight: .regular, design: .rounded))
+                            .foregroundColor(.white.opacity(0.6))
+                            .multilineTextAlignment(.center)
+                        
+                        if let error = errorMessage {
+                            Text(error)
+                                .font(.system(size: 14, weight: .medium, design: .rounded))
+                                .foregroundColor(.red.opacity(0.8))
+                                .padding(.top, 8)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 40)
+                    
+                    Spacer()
+                    
+                    // Action buttons
+                    VStack(spacing: 12) {
+                        // Remove Button
+                        Button(action: {
+                            removeAsset()
+                        }) {
+                            HStack {
+                                Spacer()
+                                if isRemoving {
+                                    ProgressView()
+                                        .tint(.white)
+                                } else {
+                                    Text("Remove Asset")
+                                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                                        .foregroundColor(.white)
+                                }
+                                Spacer()
+                            }
+                            .frame(height: 56)
+                            .background {
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.red.opacity(0.9),
+                                                Color.red.opacity(0.7)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                            }
+                        }
+                        .disabled(isRemoving)
+                        .opacity(isRemoving ? 0.6 : 1.0)
+                        
+                        // Cancel Button
+                        Button(action: {
+                            dismiss()
+                        }) {
+                            HStack {
+                                Spacer()
+                                Text("Cancel")
+                                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.8))
+                                Spacer()
+                            }
+                            .frame(height: 56)
+                            .background {
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.white.opacity(0.15),
+                                                Color.white.opacity(0.1)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.black, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                }
+            }
+        }
+    }
+    
+    private func removeAsset() {
+        isRemoving = true
+        errorMessage = nil
+        
+        // TODO: Implement API call to remove asset
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            isRemoving = false
+            dismiss()
+        }
+    }
+}
+
 // Calculator Button Component
 struct CalculatorButton: View {
     let number: String
@@ -1880,6 +3469,7 @@ struct GoalRow: View {
 struct AssetRow: View {
     let asset: Asset
     let isVirtualAsset: Bool
+    @State private var showEditAssetSheet = false
     
     init(asset: Asset, isVirtualAsset: Bool = false) {
         self.asset = asset
@@ -1980,16 +3570,71 @@ struct AssetRow: View {
                         endPoint: .bottomTrailing
                     )
                 )
+            
+            // Edit button - only show for non-virtual assets
+            if !isVirtualAsset {
+                Button(action: {
+                    let impact = UIImpactFeedbackGenerator(style: .light)
+                    impact.impactOccurred()
+                    showEditAssetSheet = true
+                }) {
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(white: 0.2).opacity(0.3),
+                                        Color(white: 0.15).opacity(0.2)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 40, height: 40)
+                            .overlay {
+                                Circle()
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.white.opacity(0.2),
+                                                Color.white.opacity(0.1)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 1
+                                    )
+                            }
+                        
+                        Image(systemName: "pencil")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.95),
+                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.8)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    }
+                }
+                .buttonStyle(PremiumSettingsButtonStyle())
+            }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
         .background(Color.clear)
+        .sheet(isPresented: $showEditAssetSheet) {
+            EditAssetSheet(asset: asset)
+        }
     }
     
     private func assetTypeIcon(_ type: String) -> String {
         switch type.lowercased() {
         case "savings":
-            return "banknote.fill"
+            return "wallet.pass.fill"
         case "investment":
             return "chart.line.uptrend.xyaxis"
         case "property":
@@ -1999,7 +3644,7 @@ struct AssetRow: View {
         case "cash":
             return "dollarsign.circle.fill"
         default:
-            return "wallet.pass.fill"
+            return "creditcard.fill"
         }
     }
     
