@@ -34,10 +34,22 @@ class SupabaseService {
         
         // Check Google Sign-In configuration
         if !Config.isGoogleSignInConfigured {
-            print("[Supabase] ⚠️ WARNING: Google Sign-In not configured! \(Config.googleSignInStatus)")
+            print("[Supabase] ⚠️ WARNING: Google Sign-In not configured!")
+            print("[Supabase] \(Config.googleSignInStatus)")
             print("[Supabase] See GOOGLE_SIGNIN_IOS_SETUP.md for setup instructions")
+            print("[Supabase]")
+            print("[Supabase] To configure:")
+            print("[Supabase] 1. Get iOS OAuth Client ID from Google Cloud Console")
+            print("[Supabase] 2. Add it to Config.swift (line ~57)")
+            print("[Supabase] 3. Add reversed Client ID to Info.plist")
+            print("[Supabase] 4. See GET_GOOGLE_CLIENT_ID_FROM_WEBAPP.md for details")
         } else {
             print("[Supabase] ✓ Google Sign-In configuration validated")
+            print("[Supabase] Client ID: \(Config.googleClientID)")
+            if let reversed = Config.googleReversedClientID {
+                print("[Supabase] Reversed Client ID: \(reversed)")
+                print("[Supabase] ⚠️  Make sure this is added to Info.plist CFBundleURLSchemes")
+            }
         }
     }
     
@@ -285,24 +297,29 @@ class SupabaseService {
     
     private func signInWithIdToken(idToken: String, accessToken: String) async throws -> AuthResponse {
         let baseUrl = supabaseUrl.hasSuffix("/") ? String(supabaseUrl.dropLast()) : supabaseUrl
+        // Use the correct endpoint for ID token exchange - Supabase expects this format
         let url = URL(string: "\(baseUrl)/auth/v1/token?grant_type=id_token")!
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
-        request.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
         
-        // Use form-encoded data as per OAuth2 standards
+        // Build form data properly - URL encode each parameter value
         var components = URLComponents()
         components.queryItems = [
             URLQueryItem(name: "provider", value: "google"),
             URLQueryItem(name: "id_token", value: idToken),
             URLQueryItem(name: "access_token", value: accessToken)
         ]
-        request.httpBody = components.query?.data(using: .utf8)
+        
+        // Convert to form-encoded string (without the leading ?)
+        let formBody = components.query ?? ""
+        request.httpBody = formBody.data(using: .utf8)
         
         print("[Supabase] Exchanging Google ID token with Supabase")
+        print("[Supabase] URL: \(url.absoluteString)")
+        print("[Supabase] Provider: google")
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
@@ -321,19 +338,35 @@ class SupabaseService {
             do {
                 let authResponse = try decoder.decode(AuthResponse.self, from: data)
                 setAccessToken(authResponse.accessToken)
-                print("[Supabase] Google sign-in successful, user ID: \(authResponse.user.id)")
+                print("[Supabase] ✅ Google sign-in successful, user ID: \(authResponse.user.id)")
                 return authResponse
             } catch {
-                print("[Supabase] Decode error: \(error)")
+                print("[Supabase] ❌ Decode error: \(error)")
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    print("[Supabase] Response JSON: \(json)")
+                }
                 throw SupabaseError.authFailed("Failed to decode response: \(error.localizedDescription)")
             }
         } else {
             let errorString = String(data: data, encoding: .utf8) ?? "Unknown error"
-            print("[Supabase] Google sign-in failed with status \(httpResponse.statusCode): \(errorString)")
+            print("[Supabase] ❌ Google sign-in failed with status \(httpResponse.statusCode)")
+            print("[Supabase] Full error response: \(errorString)")
             
+            // Try to parse error message
             if let error = try? JSONDecoder().decode(SupabaseAuthError.self, from: data) {
                 let errorMsg = error.message ?? error.error ?? "Authentication failed"
                 throw SupabaseError.authFailed(errorMsg)
+            } else if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                // Try to extract error message from JSON
+                if let msg = json["error_description"] as? String {
+                    throw SupabaseError.authFailed(msg)
+                } else if let msg = json["message"] as? String {
+                    throw SupabaseError.authFailed(msg)
+                } else if let msg = json["error"] as? String {
+                    throw SupabaseError.authFailed(msg)
+                } else {
+                    throw SupabaseError.authFailed("Authentication failed: \(errorString)")
+                }
             } else {
                 throw SupabaseError.authFailed("Authentication failed: \(errorString)")
             }

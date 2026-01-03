@@ -26,6 +26,19 @@ class FinanceViewModel: ObservableObject {
     
     init(userId: String? = nil) {
         self.userId = userId ?? UserManager.shared.userId
+        
+        // Listen for transaction added notifications
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("TransactionAdded"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.refresh()
+        }
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
     
     func loadData() {

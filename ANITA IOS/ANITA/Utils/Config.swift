@@ -54,7 +54,7 @@ struct Config {
         }
         // Add your iOS OAuth Client ID here
         // Example: "123456789-abc123def456.apps.googleusercontent.com"
-        return ""
+        return "730448941091-ckogfhc8vjhgce8l2bf7l2mpnjaku0i9.apps.googleusercontent.com"
     }()
     
     // Validate Google Client ID format
@@ -69,9 +69,17 @@ struct Config {
     // Get reversed client ID for URL scheme (required for Google Sign-In)
     static var googleReversedClientID: String? {
         guard !googleClientID.isEmpty else { return nil }
-        // Reverse the client ID: com.googleusercontent.apps.xxx -> com.googleusercontent.apps.xxx
-        // Actually, it's the full client ID reversed
+        // Reverse the client ID domain parts
+        // Example: "123456789-abc.apps.googleusercontent.com" 
+        // Becomes: "com.googleusercontent.apps.123456789-abc"
         let components = googleClientID.components(separatedBy: ".")
+        return components.reversed().joined(separator: ".")
+    }
+    
+    /// Helper to calculate reversed client ID from any client ID string
+    static func calculateReversedClientID(from clientID: String) -> String? {
+        guard !clientID.isEmpty else { return nil }
+        let components = clientID.components(separatedBy: ".")
         return components.reversed().joined(separator: ".")
     }
     

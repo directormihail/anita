@@ -75,19 +75,7 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>anita</string>
-				<!-- 
-				IMPORTANT: Add your reversed Google Client ID here for Google Sign-In
-				Example: If your Client ID is "123456789-abc123def456.apps.googleusercontent.com"
-				Add: "com.googleusercontent.apps.123456789-abc123def456"
-				
-				To get the reversed client ID:
-				1. Take your iOS OAuth Client ID from Google Cloud Console
-				2. Reverse the domain parts: com.googleusercontent.apps.xxx
-				3. Add it as a new string in CFBundleURLSchemes array above
-				
-				See GOOGLE_SIGNIN_IOS_SETUP.md for detailed instructions
-				-->
-				<!-- Add your reversed client ID here, e.g.: <string>com.googleusercontent.apps.123456789-abc123def456</string> -->
+				<string>com.googleusercontent.apps.730448941091-ckogfhc8vjhgce8l2bf7l2mpnjaku0i9</string>
 			</array>
 			<key>CFBundleURLName</key>
 			<string>com.anita.app</string>

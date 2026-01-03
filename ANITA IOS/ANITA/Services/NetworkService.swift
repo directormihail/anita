@@ -273,6 +273,68 @@ class NetworkService: ObservableObject {
         }
     }
     
+    func createTransaction(userId: String, type: String, amount: Double, category: String?, description: String, date: String?) async throws -> TransactionItem {
+        let url = URL(string: "\(baseURL)/api/v1/save-transaction")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        struct CreateTransactionRequest: Codable {
+            let userId: String
+            let transactionId: String?
+            let type: String
+            let amount: Double
+            let category: String?
+            let description: String
+            let date: String?
+        }
+        
+        struct CreateTransactionResponse: Codable {
+            let success: Bool
+            let transaction: TransactionItem?
+            let duplicate: Bool?
+            let requestId: String?
+            let error: String?
+        }
+        
+        let transactionId = "txn_\(Date().timeIntervalSince1970)_\(UUID().uuidString.prefix(8))"
+        let requestBody = CreateTransactionRequest(
+            userId: userId,
+            transactionId: transactionId,
+            type: type,
+            amount: amount,
+            category: category,
+            description: description,
+            date: date
+        )
+        
+        request.httpBody = try JSONEncoder().encode(requestBody)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 200 {
+            let decoder = JSONDecoder()
+            let createResponse = try decoder.decode(CreateTransactionResponse.self, from: data)
+            if createResponse.success, let transaction = createResponse.transaction {
+                return transaction
+            } else if createResponse.duplicate == true {
+                // Duplicate transaction - return the existing one if available, or throw
+                throw NetworkError.apiError("Duplicate transaction - already exists")
+            } else {
+                throw NetworkError.apiError(createResponse.error ?? "Failed to create transaction")
+            }
+        } else {
+            if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
+                throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)
+            }
+            throw NetworkError.httpError(httpResponse.statusCode)
+        }
+    }
+    
     // MARK: - Conversations
     
     func getConversations(userId: String) async throws -> GetConversationsResponse {

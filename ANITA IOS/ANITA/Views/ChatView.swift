@@ -88,19 +88,11 @@ struct ChatView: View {
                                 isSidebarPresented.toggle()
                             }
                         }) {
-                            ZStack {
-                                Image(systemName: "line.3.horizontal")
-                                    .font(.system(size: 20))
-                                    .foregroundColor(.white)
-                                
-                                // Notification dot
-                                Circle()
-                                    .fill(Color.yellow)
-                                    .frame(width: 8, height: 8)
-                                    .offset(x: 6, y: -6)
-                            }
-                            .frame(width: 32, height: 32)
-                            .liquidGlass(cornerRadius: 16)
+                            Image(systemName: "line.3.horizontal")
+                                .font(.system(size: 20))
+                                .foregroundColor(.white)
+                                .frame(width: 32, height: 32)
+                                .liquidGlass(cornerRadius: 16)
                         }
                         .padding(.leading, 16)
                         
@@ -122,11 +114,42 @@ struct ChatView: View {
                         Button(action: {
                             showUpgradeView = true
                         }) {
-                            Text("Upgrade")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
+                            ZStack(alignment: .topTrailing) {
+                                Text("Upgrade")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                
+                                // Beautiful yellow notification badge
+                                ZStack {
+                                    // Outer glow
+                                    Circle()
+                                        .fill(Color.yellow.opacity(0.4))
+                                        .frame(width: 10, height: 10)
+                                        .blur(radius: 2)
+                                    
+                                    // Main badge
+                                    Circle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color(red: 1.0, green: 0.85, blue: 0.1),
+                                                    Color(red: 1.0, green: 0.75, blue: 0.0)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .frame(width: 8, height: 8)
+                                        .overlay {
+                                            Circle()
+                                                .stroke(Color.white.opacity(0.3), lineWidth: 0.5)
+                                        }
+                                        .shadow(color: Color.yellow.opacity(0.6), radius: 2, x: 0, y: 1)
+                                }
+                                .offset(x: 2, y: -2)
+                            }
                         }
                         .liquidGlass(cornerRadius: 8)
                     }
