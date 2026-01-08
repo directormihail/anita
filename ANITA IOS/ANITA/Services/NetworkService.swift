@@ -247,15 +247,15 @@ class NetworkService: ObservableObject {
     
     // MARK: - Transactions
     
-    func getTransactions(userId: String, month: String? = nil, year: String? = nil) async throws -> GetTransactionsResponse {
+    func getTransactions(userId: String, month: Int? = nil, year: Int? = nil) async throws -> GetTransactionsResponse {
         var urlComponents = URLComponents(string: "\(baseURL)/api/v1/transactions")!
         var queryItems = [URLQueryItem(name: "userId", value: userId)]
         
         if let month = month {
-            queryItems.append(URLQueryItem(name: "month", value: month))
+            queryItems.append(URLQueryItem(name: "month", value: String(month)))
         }
         if let year = year {
-            queryItems.append(URLQueryItem(name: "year", value: year))
+            queryItems.append(URLQueryItem(name: "year", value: String(year)))
         }
         
         urlComponents.queryItems = queryItems
@@ -374,15 +374,15 @@ class NetworkService: ObservableObject {
     
     // MARK: - Financial Metrics
     
-    func getFinancialMetrics(userId: String, month: String? = nil, year: String? = nil) async throws -> GetFinancialMetricsResponse {
+    func getFinancialMetrics(userId: String, month: Int? = nil, year: Int? = nil) async throws -> GetFinancialMetricsResponse {
         var urlComponents = URLComponents(string: "\(baseURL)/api/v1/financial-metrics")!
         var queryItems = [URLQueryItem(name: "userId", value: userId)]
         
         if let month = month {
-            queryItems.append(URLQueryItem(name: "month", value: month))
+            queryItems.append(URLQueryItem(name: "month", value: String(month)))
         }
         if let year = year {
-            queryItems.append(URLQueryItem(name: "year", value: year))
+            queryItems.append(URLQueryItem(name: "year", value: String(year)))
         }
         
         urlComponents.queryItems = queryItems

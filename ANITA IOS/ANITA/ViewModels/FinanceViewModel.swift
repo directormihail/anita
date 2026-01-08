@@ -20,7 +20,13 @@ class FinanceViewModel: ObservableObject {
     @Published var xpStats: XPStats?
     @Published var isLoading = false
     @Published var errorMessage: String?
-    @Published var selectedMonth: Date = Date() // Current month by default
+    @Published var selectedMonth: Date = {
+        // Set to first day of current month to avoid timezone issues
+        let calendar = Calendar.current
+        let now = Date()
+        let components = calendar.dateComponents([.year, .month], from: now)
+        return calendar.date(from: components) ?? now
+    }()
     
     private let networkService = NetworkService.shared
     let userId: String
@@ -42,31 +48,19 @@ class FinanceViewModel: ObservableObject {
         NotificationCenter.default.removeObserver(self)
     }
     
-    private func getMonthString(from date: Date) -> String {
-        let calendar = Calendar.current
-        let year = calendar.component(.year, from: date)
-        let month = calendar.component(.month, from: date)
-        return String(format: "%04d-%02d", year, month)
-    }
-    
-    private func getYearString(from date: Date) -> String {
-        let calendar = Calendar.current
-        let year = calendar.component(.year, from: date)
-        return String(year)
-    }
-    
     func loadData() {
         isLoading = true
         errorMessage = nil
         
         Task {
             do {
-                let monthStr = getMonthString(from: selectedMonth)
-                let yearStr = getYearString(from: selectedMonth)
+                let calendar = Calendar.current
+                let month = calendar.component(.month, from: selectedMonth)
+                let year = calendar.component(.year, from: selectedMonth)
                 
                 // Load all data in parallel with month filtering
-                async let metricsTask = networkService.getFinancialMetrics(userId: userId, month: monthStr, year: yearStr)
-                async let transactionsTask = networkService.getTransactions(userId: userId, month: monthStr, year: yearStr)
+                async let metricsTask = networkService.getFinancialMetrics(userId: userId, month: month, year: year)
+                async let transactionsTask = networkService.getTransactions(userId: userId, month: month, year: year)
                 async let targetsTask = networkService.getTargets(userId: userId)
                 async let assetsTask = networkService.getAssets(userId: userId)
                 async let xpStatsTask = networkService.getXPStats(userId: userId)

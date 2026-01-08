@@ -61,16 +61,16 @@ export async function handleGetFinancialMetrics(req: Request, res: Response): Pr
       return;
     }
 
-    // Fetch all transactions
-    const { data, error } = await supabase
+    // First, fetch ALL transactions for total balance calculation (all-time)
+    const { data: allTransactionsData, error: allError } = await supabase
       .from('anita_data')
       .select('*')
       .eq('account_id', userId)
       .eq('data_type', 'transaction')
       .order('created_at', { ascending: true });
 
-    if (error) {
-      logger.error('Error fetching transactions for metrics', { error: error.message, requestId, userId });
+    if (allError) {
+      logger.error('Error fetching all transactions for metrics', { error: allError.message, requestId, userId });
       res.status(500).json({
         error: 'Database error',
         message: 'Failed to fetch transactions',
@@ -79,52 +79,63 @@ export async function handleGetFinancialMetrics(req: Request, res: Response): Pr
       return;
     }
 
-    // Calculate metrics
-    const transactions = (data || []).map((item: any) => ({
+    // Build query for monthly transactions (filtered by month/year if provided)
+    let monthlyQuery = supabase
+      .from('anita_data')
+      .select('*')
+      .eq('account_id', userId)
+      .eq('data_type', 'transaction');
+    
+    // Filter by month if provided
+    if (month && year) {
+      const monthNum = parseInt(month as string) - 1; // JavaScript months are 0-indexed
+      const yearNum = parseInt(year as string);
+      const monthStart = new Date(yearNum, monthNum, 1).toISOString();
+      const monthEnd = new Date(yearNum, monthNum + 1, 0, 23, 59, 59, 999).toISOString();
+      monthlyQuery = monthlyQuery.gte('created_at', monthStart).lte('created_at', monthEnd);
+    } else {
+      // Default to current month if no month/year specified
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).toISOString();
+      monthlyQuery = monthlyQuery.gte('created_at', monthStart).lte('created_at', monthEnd);
+    }
+    
+    const { data: monthlyTransactionsData, error: monthlyError } = await monthlyQuery.order('created_at', { ascending: true });
+
+    if (monthlyError) {
+      logger.error('Error fetching monthly transactions for metrics', { error: monthlyError.message, requestId, userId });
+      res.status(500).json({
+        error: 'Database error',
+        message: 'Failed to fetch monthly transactions',
+        requestId
+      });
+      return;
+    }
+
+    // Calculate ALL-TIME metrics (total balance)
+    const allTransactions = (allTransactionsData || []).map((item: any) => ({
       type: item.transaction_type || 'expense',
       amount: Number(item.transaction_amount) || 0,
       date: item.transaction_date || item.created_at
     }));
 
-    // Calculate total balance (all income - all expenses)
-    const totalIncome = transactions
+    const totalIncome = allTransactions
       .filter(t => t.type === 'income')
       .reduce((sum, t) => sum + t.amount, 0);
     
-    const totalExpenses = transactions
+    const totalExpenses = allTransactions
       .filter(t => t.type === 'expense')
       .reduce((sum, t) => sum + t.amount, 0);
     
     const totalBalance = totalIncome - totalExpenses;
 
-    // Calculate monthly metrics (current month or specified month)
-    let monthStart: Date;
-    let monthEnd: Date;
-    
-    if (month && year) {
-      // Use specified month
-      const monthNum = parseInt(month) - 1; // JavaScript months are 0-indexed
-      const yearNum = parseInt(year);
-      monthStart = new Date(yearNum, monthNum, 1);
-      monthEnd = new Date(yearNum, monthNum + 1, 0, 23, 59, 59, 999);
-    } else if (month) {
-      // Format: "2024-01"
-      const [yearStr, monthStr] = month.split('-');
-      const monthNum = parseInt(monthStr) - 1;
-      const yearNum = parseInt(yearStr);
-      monthStart = new Date(yearNum, monthNum, 1);
-      monthEnd = new Date(yearNum, monthNum + 1, 0, 23, 59, 59, 999);
-    } else {
-      // Default to current month
-      const now = new Date();
-      monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-    }
-    
-    const monthlyTransactions = transactions.filter(t => {
-      const transactionDate = new Date(t.date);
-      return transactionDate >= monthStart && transactionDate <= monthEnd;
-    });
+    // Calculate MONTHLY metrics (for selected month)
+    const monthlyTransactions = (monthlyTransactionsData || []).map((item: any) => ({
+      type: item.transaction_type || 'expense',
+      amount: Number(item.transaction_amount) || 0,
+      date: item.transaction_date || item.created_at
+    }));
 
     const monthlyIncome = monthlyTransactions
       .filter(t => t.type === 'income')
@@ -137,12 +148,12 @@ export async function handleGetFinancialMetrics(req: Request, res: Response): Pr
     res.status(200).json({
       success: true,
       metrics: {
-        totalBalance,
-        totalIncome,
-        totalExpenses,
-        monthlyIncome,
-        monthlyExpenses,
-        monthlyBalance: monthlyIncome - monthlyExpenses
+        totalBalance, // All-time balance
+        totalIncome, // All-time income
+        totalExpenses, // All-time expenses
+        monthlyIncome, // Income for selected month
+        monthlyExpenses, // Expenses for selected month
+        monthlyBalance: monthlyIncome - monthlyExpenses // Balance for selected month
       },
       requestId
     });

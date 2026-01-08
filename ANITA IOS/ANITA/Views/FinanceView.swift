@@ -1718,7 +1718,7 @@ struct AddMoneyToGoalSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Cancel") {
+                    Button("Done") {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -2015,7 +2015,7 @@ struct ChangeAmountSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Cancel") {
+                    Button("Done") {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -2488,7 +2488,7 @@ struct EditGoalSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Cancel") {
+                    Button("Done") {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -2764,7 +2764,7 @@ struct EditAssetSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Cancel") {
+                    Button("Done") {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -2914,7 +2914,7 @@ struct TakeMoneyFromGoalSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Cancel") {
+                    Button("Done") {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -3184,7 +3184,7 @@ struct RemoveGoalSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Cancel") {
+                    Button("Done") {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -3355,7 +3355,7 @@ struct RemoveTargetSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Cancel") {
+                    Button("Done") {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -3516,7 +3516,7 @@ struct AddValueToAssetSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Cancel") {
+                    Button("Done") {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -3754,7 +3754,7 @@ struct ReduceAssetValueSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Cancel") {
+                    Button("Done") {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -3995,7 +3995,7 @@ struct RemoveAssetSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Cancel") {
+                    Button("Done") {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -4951,7 +4951,7 @@ struct AddAssetSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Cancel") {
+                    Button("Done") {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
