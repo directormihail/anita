@@ -373,6 +373,95 @@ class SupabaseService {
         }
     }
     
+    // MARK: - Apple Sign-In
+    
+    func signInWithApple(idToken: String, nonce: String? = nil) async throws -> AuthResponse {
+        guard !supabaseUrl.isEmpty, !supabaseAnonKey.isEmpty else {
+            throw SupabaseError.notConfigured
+        }
+        
+        let baseUrl = supabaseUrl.hasSuffix("/") ? String(supabaseUrl.dropLast()) : supabaseUrl
+        let url = URL(string: "\(baseUrl)/auth/v1/token?grant_type=id_token")!
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        
+        // Build form data for Apple Sign-In
+        var components = URLComponents()
+        var queryItems = [
+            URLQueryItem(name: "provider", value: "apple"),
+            URLQueryItem(name: "id_token", value: idToken)
+        ]
+        
+        // Add nonce if provided
+        if let nonce = nonce {
+            queryItems.append(URLQueryItem(name: "nonce", value: nonce))
+        }
+        
+        components.queryItems = queryItems
+        
+        // Convert to form-encoded string
+        let formBody = components.query ?? ""
+        request.httpBody = formBody.data(using: .utf8)
+        
+        print("[Supabase] Exchanging Apple ID token with Supabase")
+        print("[Supabase] URL: \(url.absoluteString)")
+        print("[Supabase] Provider: apple")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SupabaseError.invalidResponse
+        }
+        
+        print("[Supabase] Apple ID token exchange response status: \(httpResponse.statusCode)")
+        
+        if let responseString = String(data: data, encoding: .utf8) {
+            print("[Supabase] Response body: \(responseString)")
+        }
+        
+        if httpResponse.statusCode == 200 {
+            let decoder = JSONDecoder()
+            do {
+                let authResponse = try decoder.decode(AuthResponse.self, from: data)
+                setAccessToken(authResponse.accessToken)
+                print("[Supabase] ✅ Apple sign-in successful, user ID: \(authResponse.user.id)")
+                return authResponse
+            } catch {
+                print("[Supabase] ❌ Decode error: \(error)")
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    print("[Supabase] Response JSON: \(json)")
+                }
+                throw SupabaseError.authFailed("Failed to decode response: \(error.localizedDescription)")
+            }
+        } else {
+            let errorString = String(data: data, encoding: .utf8) ?? "Unknown error"
+            print("[Supabase] ❌ Apple sign-in failed with status \(httpResponse.statusCode)")
+            print("[Supabase] Full error response: \(errorString)")
+            
+            // Try to parse error message
+            if let error = try? JSONDecoder().decode(SupabaseAuthError.self, from: data) {
+                let errorMsg = error.message ?? error.error ?? "Authentication failed"
+                throw SupabaseError.authFailed(errorMsg)
+            } else if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                // Try to extract error message from JSON
+                if let msg = json["error_description"] as? String {
+                    throw SupabaseError.authFailed(msg)
+                } else if let msg = json["message"] as? String {
+                    throw SupabaseError.authFailed(msg)
+                } else if let msg = json["error"] as? String {
+                    throw SupabaseError.authFailed(msg)
+                } else {
+                    throw SupabaseError.authFailed("Authentication failed: \(errorString)")
+                }
+            } else {
+                throw SupabaseError.authFailed("Authentication failed: \(errorString)")
+            }
+        }
+    }
+    
     func getCurrentUser() async throws -> User? {
         guard let token = accessToken else {
             return nil

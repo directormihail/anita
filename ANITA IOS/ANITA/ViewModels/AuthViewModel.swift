@@ -83,6 +83,21 @@ class AuthViewModel: ObservableObject {
         isLoading = false
     }
     
+    func signInWithApple(idToken: String, nonce: String? = nil) async {
+        isLoading = true
+        errorMessage = nil
+        
+        do {
+            try await userManager.signInWithApple(idToken: idToken, nonce: nonce)
+            isAuthenticated = userManager.isAuthenticated
+        } catch {
+            errorMessage = error.localizedDescription
+            isAuthenticated = false
+        }
+        
+        isLoading = false
+    }
+    
     func signOut() {
         userManager.signOut()
         isAuthenticated = false

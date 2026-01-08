@@ -21,8 +21,12 @@ import { handleGetConversations } from './routes/get-conversations';
 import { handleGetFinancialMetrics } from './routes/get-financial-metrics';
 import { handleGetXPStats } from './routes/get-xp-stats';
 import { handleGetTargets } from './routes/get-targets';
+import { handleUpdateTarget } from './routes/update-target';
+import { handleDeleteTarget } from './routes/delete-target';
 import { handleGetAssets } from './routes/get-assets';
 import { handleCreateAsset } from './routes/create-asset';
+import { handleUpdateAsset } from './routes/update-asset';
+import { handleDeleteAsset } from './routes/delete-asset';
 import { handleCreateConversation } from './routes/create-conversation';
 import { handleGetMessages } from './routes/get-messages';
 import { handleSaveMessage } from './routes/save-message';
@@ -122,8 +126,12 @@ app.post('/api/v1/save-transaction', handleSaveTransaction);
 app.get('/api/v1/financial-metrics', handleGetFinancialMetrics);
 app.get('/api/v1/xp-stats', handleGetXPStats);
 app.get('/api/v1/targets', handleGetTargets);
+app.post('/api/v1/update-target', handleUpdateTarget);
+app.post('/api/v1/delete-target', handleDeleteTarget);
 app.get('/api/v1/assets', handleGetAssets);
 app.post('/api/v1/assets', handleCreateAsset);
+app.post('/api/v1/update-asset', handleUpdateAsset);
+app.post('/api/v1/delete-asset', handleDeleteAsset);
 
 // Legacy routes (redirect to v1 for backward compatibility)
 app.post('/api/chat-completion', handleChatCompletion);
@@ -188,7 +196,12 @@ app.listen(PORT, () => {
   console.log('   - GET  /api/v1/financial-metrics');
   console.log('   - GET  /api/v1/xp-stats');
   console.log('   - GET  /api/v1/targets');
+  console.log('   - POST /api/v1/update-target');
+  console.log('   - POST /api/v1/delete-target');
   console.log('   - GET  /api/v1/assets');
+  console.log('   - POST /api/v1/assets');
+  console.log('   - POST /api/v1/update-asset');
+  console.log('   - POST /api/v1/delete-asset');
   console.log('   - GET  /health');
   console.log('   - GET  /privacy');
   console.log('\n   ✅ Ready for iOS app!\n');

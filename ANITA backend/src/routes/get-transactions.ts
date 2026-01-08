@@ -38,6 +38,8 @@ export async function handleGetTransactions(req: Request, res: Response): Promis
   try {
     const requestId = req.requestId || 'unknown';
     const userId = req.query.userId as string;
+    const month = req.query.month as string; // Format: "2024-01" (YYYY-MM)
+    const year = req.query.year as string;
 
     if (!userId) {
       res.status(400).json({
@@ -59,13 +61,31 @@ export async function handleGetTransactions(req: Request, res: Response): Promis
       return;
     }
 
-    // Fetch transactions from anita_data table
-    const { data, error } = await supabase
+    // Build query
+    let query = supabase
       .from('anita_data')
       .select('*')
       .eq('account_id', userId)
-      .eq('data_type', 'transaction')
-      .order('created_at', { ascending: false });
+      .eq('data_type', 'transaction');
+    
+    // Filter by month if provided
+    if (month && year) {
+      const monthNum = parseInt(month) - 1;
+      const yearNum = parseInt(year);
+      const monthStart = new Date(yearNum, monthNum, 1).toISOString();
+      const monthEnd = new Date(yearNum, monthNum + 1, 0, 23, 59, 59, 999).toISOString();
+      query = query.gte('created_at', monthStart).lte('created_at', monthEnd);
+    } else if (month) {
+      // Format: "2024-01"
+      const [yearStr, monthStr] = month.split('-');
+      const monthNum = parseInt(monthStr) - 1;
+      const yearNum = parseInt(yearStr);
+      const monthStart = new Date(yearNum, monthNum, 1).toISOString();
+      const monthEnd = new Date(yearNum, monthNum + 1, 0, 23, 59, 59, 999).toISOString();
+      query = query.gte('created_at', monthStart).lte('created_at', monthEnd);
+    }
+    
+    const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) {
       logger.error('Error fetching transactions', { error: error.message, requestId, userId });

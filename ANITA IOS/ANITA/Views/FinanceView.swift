@@ -99,6 +99,85 @@ struct FinanceView: View {
             NavigationView {
                 ScrollView {
                     VStack(spacing: 24) {
+                        // Month Picker - Premium iOS Design
+                        HStack {
+                            Button(action: {
+                                let calendar = Calendar.current
+                                if let previousMonth = calendar.date(byAdding: .month, value: -1, to: viewModel.selectedMonth) {
+                                    viewModel.changeMonth(to: previousMonth)
+                                }
+                            }) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.white.opacity(0.7))
+                                    .frame(width: 44, height: 44)
+                                    .background {
+                                        Circle()
+                                            .fill(Color.white.opacity(0.1))
+                                    }
+                            }
+                            
+                            Spacer()
+                            
+                            // Month Display
+                            Button(action: {
+                                // Could add date picker here in future
+                            }) {
+                                VStack(spacing: 4) {
+                                    Text(monthYearString(from: viewModel.selectedMonth))
+                                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                                        .foregroundColor(.white)
+                                    
+                                    Text("Tap to change")
+                                        .font(.system(size: 11, weight: .regular, design: .rounded))
+                                        .foregroundColor(.white.opacity(0.5))
+                                }
+                            }
+                            
+                            Spacer()
+                            
+                            Button(action: {
+                                let calendar = Calendar.current
+                                if let nextMonth = calendar.date(byAdding: .month, value: 1, to: viewModel.selectedMonth) {
+                                    // Don't allow future months
+                                    let now = Date()
+                                    let currentMonth = calendar.dateInterval(of: .month, for: now)?.start ?? now
+                                    if nextMonth <= currentMonth {
+                                        viewModel.changeMonth(to: nextMonth)
+                                    }
+                                }
+                            }) {
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.white.opacity(0.7))
+                                    .frame(width: 44, height: 44)
+                                    .background {
+                                        Circle()
+                                            .fill(Color.white.opacity(0.1))
+                                    }
+                            }
+                            .disabled({
+                                let calendar = Calendar.current
+                                let now = Date()
+                                let currentMonth = calendar.dateInterval(of: .month, for: now)?.start ?? now
+                                if let nextMonth = calendar.date(byAdding: .month, value: 1, to: viewModel.selectedMonth) {
+                                    return nextMonth > currentMonth
+                                }
+                                return true
+                            }())
+                            .opacity({
+                                let calendar = Calendar.current
+                                let now = Date()
+                                let currentMonth = calendar.dateInterval(of: .month, for: now)?.start ?? now
+                                if let nextMonth = calendar.date(byAdding: .month, value: 1, to: viewModel.selectedMonth) {
+                                    return nextMonth > currentMonth ? 0.3 : 1.0
+                                }
+                                return 0.3
+                            }())
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
+                        
                         // Balance Card - Premium iOS Design
                         VStack(spacing: 28) {
                             VStack(spacing: 12) {
@@ -513,7 +592,7 @@ struct FinanceView: View {
                                     ScrollView {
                                         VStack(spacing: 0) {
                                             ForEach(Array(viewModel.goals.enumerated()), id: \.element.id) { index, goal in
-                                                GoalRow(goal: goal)
+                                                GoalRow(goal: goal, viewModel: viewModel)
                                                     .opacity(isSpendingLimitsExpanded ? 1 : 0)
                                                     .animation(
                                                         .spring(response: 0.4, dampingFraction: 0.8)
@@ -648,7 +727,7 @@ struct FinanceView: View {
                                     ScrollView {
                                         VStack(spacing: 0) {
                                             ForEach(Array(viewModel.targets.enumerated()), id: \.element.id) { index, target in
-                                                TargetRow(target: target)
+                                                TargetRow(target: target, viewModel: viewModel)
                                                     .opacity(isSavingGoalsExpanded ? 1 : 0)
                                                     .animation(
                                                         .spring(response: 0.4, dampingFraction: 0.8)
@@ -927,7 +1006,7 @@ struct FinanceView: View {
                                             
                                             // Asset list
                                             ForEach(Array(comprehensiveAssets.enumerated()), id: \.element.id) { index, asset in
-                                                AssetRow(asset: asset, isVirtualAsset: asset.id.hasPrefix("target-"))
+                                                AssetRow(asset: asset, isVirtualAsset: asset.id.hasPrefix("target-"), viewModel: viewModel)
                                                     .opacity(isAssetsExpanded ? 1 : 0)
                                                     .animation(
                                                         .spring(response: 0.4, dampingFraction: 0.8)
@@ -1103,7 +1182,9 @@ struct FinanceView: View {
             viewModel.loadData()
         }
         .refreshable {
-            viewModel.refresh()
+            Task { @MainActor in
+                viewModel.refresh()
+            }
         }
         .sheet(isPresented: $showAddAssetSheet) {
             AddAssetSheet(viewModel: viewModel)
@@ -1116,6 +1197,12 @@ struct FinanceView: View {
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
         return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+    }
+    
+    private func monthYearString(from date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter.string(from: date)
     }
 }
 
@@ -1291,6 +1378,12 @@ struct TransactionRow: View {
 struct TargetRow: View {
     let target: Target
     @State private var showEditGoalSheet = false
+    @ObservedObject var viewModel: FinanceViewModel
+    
+    init(target: Target, viewModel: FinanceViewModel) {
+        self.target = target
+        self.viewModel = viewModel
+    }
     
     private var isCompleted: Bool {
         target.progressPercentage >= 100
@@ -1298,116 +1391,62 @@ struct TargetRow: View {
     
     var body: some View {
         HStack(spacing: 16) {
-            // Icon button - checkmark for completed, plus for incomplete
-            if isCompleted {
-                // Completed: Green checkmark icon with liquid glass style
-                VStack(spacing: 4) {
-                    ZStack {
-                        // Simple glass circle background matching section style
+            // Status icon - checkmark for completed, or arrow for incomplete
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(white: 0.2).opacity(0.3),
+                                Color(white: 0.15).opacity(0.2)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 48, height: 48)
+                    .overlay {
                         Circle()
-                            .fill(
+                            .stroke(
                                 LinearGradient(
                                     colors: [
-                                        Color(white: 0.2).opacity(0.3),
-                                        Color(white: 0.15).opacity(0.2)
+                                        Color.white.opacity(0.2),
+                                        Color.white.opacity(0.1)
                                     ],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 48, height: 48)
-                            .overlay {
-                                Circle()
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [
-                                                Color.white.opacity(0.2),
-                                                Color.white.opacity(0.1)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 1
-                                    )
-                            }
-                        
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 19, weight: .semibold))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [
-                                        Color.green.opacity(0.95),
-                                        Color.green.opacity(0.8)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
+                                ),
+                                lineWidth: 1
                             )
                     }
-                    
-                    Text("done")
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
-                        .foregroundColor(Color.green.opacity(0.9))
-                        .textCase(.lowercase)
+                
+                if isCompleted {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [
+                                    Color.green.opacity(0.95),
+                                    Color.green.opacity(0.8)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                } else {
+                    Image(systemName: "arrow.down.right")
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.95),
+                                    Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.8)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                 }
-            } else {
-                // Incomplete: Blue pencil icon for editing
-                Button(action: {
-                    let impact = UIImpactFeedbackGenerator(style: .light)
-                    impact.impactOccurred()
-                    showEditGoalSheet = true
-                }) {
-                    VStack(spacing: 4) {
-                        ZStack {
-                            // Simple glass circle background matching section style
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            Color(white: 0.2).opacity(0.3),
-                                            Color(white: 0.15).opacity(0.2)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .frame(width: 48, height: 48)
-                                .overlay {
-                                    Circle()
-                                        .stroke(
-                                            LinearGradient(
-                                                colors: [
-                                                    Color.white.opacity(0.2),
-                                                    Color.white.opacity(0.1)
-                                                ],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            ),
-                                            lineWidth: 1
-                                        )
-                                }
-                            
-                            Image(systemName: "pencil")
-                                .font(.system(size: 19, weight: .semibold))
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [
-                                            Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.95),
-                                            Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.8)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                        }
-                        
-                        Text("edit")
-                            .font(.system(size: 10, weight: .medium, design: .rounded))
-                            .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.8))
-                            .textCase(.lowercase)
-                    }
-                }
-                .buttonStyle(PremiumSettingsButtonStyle())
             }
             
             // Target details
@@ -1475,12 +1514,62 @@ struct TargetRow: View {
             }
             
             Spacer()
+            
+            // Edit button - opens menu with options
+            Button(action: {
+                let impact = UIImpactFeedbackGenerator(style: .light)
+                impact.impactOccurred()
+                showEditGoalSheet = true
+            }) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(white: 0.2).opacity(0.3),
+                                    Color(white: 0.15).opacity(0.2)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 40, height: 40)
+                        .overlay {
+                            Circle()
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(0.2),
+                                            Color.white.opacity(0.1)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1
+                                )
+                        }
+                    
+                    Image(systemName: "pencil")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.95),
+                                    Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.8)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                }
+            }
+            .buttonStyle(PremiumSettingsButtonStyle())
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
         .background(Color.clear)
         .sheet(isPresented: $showEditGoalSheet) {
-            EditGoalSheet(target: target)
+            EditGoalSheet(target: target, viewModel: viewModel)
         }
     }
     
@@ -1497,6 +1586,7 @@ struct TargetRow: View {
 // Add Money to Goal Sheet with Calculator Interface
 struct AddMoneyToGoalSheet: View {
     let target: Target
+    @ObservedObject var viewModel: FinanceViewModel
     @Environment(\.dismiss) var dismiss
     @State private var amount: String = "0"
     @State private var isAdding = false
@@ -1647,11 +1737,6 @@ struct AddMoneyToGoalSheet: View {
     }
     
     private func appendDecimal() {
-        // Get the correct decimal separator for the user's preferred currency
-        let userCurrency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
-        let locale = getLocaleForCurrency(userCurrency)
-        let decimalSeparator = locale.decimalSeparator ?? "."
-        
         // Check if decimal separator already exists
         // Store internally as "." for Double parsing, but display will use correct separator
         if !amount.contains(".") && !amount.contains(",") {
@@ -1743,23 +1828,357 @@ struct AddMoneyToGoalSheet: View {
         isAdding = true
         errorMessage = nil
         
-        // TODO: Implement API call to add money to goal
-        // This should call the backend to update the target's currentAmount
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            isAdding = false
-            dismiss()
-            // Refresh the goals list
+        Task {
+            do {
+                let userId = viewModel.userId
+                let newCurrentAmount = target.currentAmount + amountValue
+                
+                print("[AddMoneyToGoalSheet] Adding \(amountValue) to goal \(target.id). New amount: \(newCurrentAmount)")
+                
+                // Update target's currentAmount
+                let updatedTarget = try await NetworkService.shared.updateTarget(
+                    userId: userId,
+                    targetId: target.id,
+                    currentAmount: newCurrentAmount
+                )
+                
+                print("[AddMoneyToGoalSheet] Successfully updated goal. New current amount: \(updatedTarget.target.currentAmount)")
+                
+                await MainActor.run {
+                    isAdding = false
+                    dismiss()
+                    // Refresh the goals list
+                    viewModel.refresh()
+                }
+            } catch {
+                print("[AddMoneyToGoalSheet] Error updating goal: \(error.localizedDescription)")
+                await MainActor.run {
+                    isAdding = false
+                    let errorDesc = error.localizedDescription
+                    if errorDesc.contains("cannot connect") || errorDesc.contains("timed out") {
+                        errorMessage = "Could not connect to server. Please check:\n1. Backend is running\n2. Backend URL is correct"
+                    } else {
+                        errorMessage = "Failed to add money: \(errorDesc)"
+                    }
+                }
+            }
         }
     }
 }
 
-// Edit Goal Sheet with Add, Take, and Remove options
+// Change Amount Sheet with Calculator Interface
+struct ChangeAmountSheet: View {
+    let target: Target
+    @ObservedObject var viewModel: FinanceViewModel
+    @Environment(\.dismiss) var dismiss
+    @State private var amount: String
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+    
+    init(target: Target, viewModel: FinanceViewModel) {
+        self.target = target
+        self.viewModel = viewModel
+        // Initialize with current target amount, remove trailing zeros
+        let amountValue = target.targetAmount
+        if amountValue.truncatingRemainder(dividingBy: 1) == 0 {
+            // Whole number, no decimals
+            _amount = State(initialValue: String(format: "%.0f", amountValue))
+        } else {
+            // Has decimals, show up to 2 decimal places
+            _amount = State(initialValue: String(format: "%.2f", amountValue))
+        }
+    }
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black
+                    .ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Header
+                    VStack(spacing: 8) {
+                        Text("Change Amount")
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                        
+                        Text(target.title)
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                    .padding(.top, 20)
+                    .padding(.bottom, 32)
+                    
+                    // Display amount
+                    VStack(spacing: 8) {
+                        Text(formatDisplayAmount())
+                            .font(.system(size: 56, weight: .bold, design: .rounded))
+                            .foregroundStyle(
+                                            LinearGradient(
+                                                colors: [
+                                        Color.white.opacity(0.98),
+                                        Color.white.opacity(0.9)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                            .frame(height: 70)
+                            .frame(maxWidth: .infinity)
+                        
+                        if let error = errorMessage {
+                            Text(error)
+                                .font(.system(size: 14, weight: .medium, design: .rounded))
+                                .foregroundColor(.red.opacity(0.8))
+                                .padding(.top, 8)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 32)
+                    
+                    // Calculator keypad
+                    VStack(spacing: 16) {
+                        // Row 1: 1, 2, 3
+                        HStack(spacing: 16) {
+                            CalculatorButton(number: "1", action: { appendDigit("1") })
+                            CalculatorButton(number: "2", action: { appendDigit("2") })
+                            CalculatorButton(number: "3", action: { appendDigit("3") })
+                        }
+                        
+                        // Row 2: 4, 5, 6
+                        HStack(spacing: 16) {
+                            CalculatorButton(number: "4", action: { appendDigit("4") })
+                            CalculatorButton(number: "5", action: { appendDigit("5") })
+                            CalculatorButton(number: "6", action: { appendDigit("6") })
+                        }
+                        
+                        // Row 3: 7, 8, 9
+                        HStack(spacing: 16) {
+                            CalculatorButton(number: "7", action: { appendDigit("7") })
+                            CalculatorButton(number: "8", action: { appendDigit("8") })
+                            CalculatorButton(number: "9", action: { appendDigit("9") })
+                        }
+                        
+                        // Row 4: ., 0, ⌫
+                        HStack(spacing: 16) {
+                            CalculatorButton(number: ".", action: { appendDecimal() })
+                            CalculatorButton(number: "0", action: { appendDigit("0") })
+                            CalculatorButton(number: "⌫", action: { deleteLastDigit() })
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    
+                    Spacer()
+                    
+                    // Save Button
+                    Button(action: {
+                        changeAmount()
+                    }) {
+                        HStack {
+                            Spacer()
+                            if isSaving {
+                                ProgressView()
+                                    .tint(.white)
+                            } else {
+                                Text("Save")
+                                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                                    .foregroundColor(.white)
+                            }
+                            Spacer()
+                        }
+                        .frame(height: 56)
+                        .background {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(
+                                            LinearGradient(
+                                                colors: [
+                                                Color(red: 0.4, green: 0.49, blue: 0.92),
+                                                Color(red: 0.5, green: 0.55, blue: 0.95)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                            }
+                        }
+                    }
+                    .disabled(isSaving || amount == "0" || amount.isEmpty)
+                    .opacity(isSaving || amount == "0" || amount.isEmpty ? 0.6 : 1.0)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.black, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                }
+            }
+        }
+    }
+    
+    private func appendDigit(_ digit: String) {
+        if amount == "0" {
+            amount = digit
+        } else {
+            amount += digit
+        }
+        errorMessage = nil
+    }
+    
+    private func appendDecimal() {
+        // Check if decimal separator already exists
+        if !amount.contains(".") && !amount.contains(",") {
+            // Always use "." internally for parsing, formatter will display correctly
+            amount += "."
+        }
+    }
+    
+    private func deleteLastDigit() {
+        if amount.count > 1 {
+            amount = String(amount.dropLast())
+        } else {
+            amount = "0"
+        }
+    }
+    
+    private func getLocaleForCurrency(_ currencyCode: String) -> Locale {
+        // Map currency codes to appropriate locales for correct formatting
+        let localeMap: [String: String] = [
+            "USD": "en_US",
+            "EUR": "de_DE", // Uses comma as decimal separator
+            "GBP": "en_GB",
+            "JPY": "ja_JP",
+            "CAD": "en_CA",
+            "AUD": "en_AU",
+            "CHF": "de_CH",
+            "CNY": "zh_CN",
+            "INR": "en_IN",
+            "BRL": "pt_BR", // Uses comma as decimal separator
+            "MXN": "es_MX",
+            "KRW": "ko_KR"
+        ]
+        
+        if let localeIdentifier = localeMap[currencyCode] {
+            return Locale(identifier: localeIdentifier)
+        }
+        
+        // Default to US locale if currency not found
+        return Locale(identifier: "en_US")
+    }
+    
+    private func formatDisplayAmount() -> String {
+        // Use user's preferred currency from settings
+        let userCurrency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+        let locale = getLocaleForCurrency(userCurrency)
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = userCurrency
+        formatter.locale = locale
+        formatter.usesGroupingSeparator = false // No thousand separators
+        
+        // If amount is "0" or empty, show just "0" with currency
+        if amount == "0" || amount.isEmpty {
+            formatter.minimumFractionDigits = 0
+            formatter.maximumFractionDigits = 0
+            return formatter.string(from: NSNumber(value: 0)) ?? "0"
+        }
+        
+        // Parse the amount value
+        if let value = Double(amount) {
+            // Check if user has entered decimal part
+            let hasDecimal = amount.contains(".") || amount.contains(",")
+            
+            if hasDecimal {
+                // Show decimals if user entered them
+                formatter.minimumFractionDigits = 0
+                formatter.maximumFractionDigits = 2
+            } else {
+                // No decimals if user hasn't entered them
+                formatter.minimumFractionDigits = 0
+                formatter.maximumFractionDigits = 0
+            }
+            
+            return formatter.string(from: NSNumber(value: value)) ?? "0"
+        }
+        
+        // Fallback
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: 0)) ?? "0"
+    }
+    
+    private func changeAmount() {
+        guard let amountValue = Double(amount), amountValue > 0 else {
+            errorMessage = "Please enter a valid amount"
+            return
+        }
+        
+        // Don't update if amount hasn't changed
+        if amountValue == target.targetAmount {
+            dismiss()
+            return
+        }
+        
+        isSaving = true
+        errorMessage = nil
+        
+        Task {
+            do {
+                let userId = viewModel.userId
+                print("[ChangeAmountSheet] Updating target \(target.id) with new amount: \(amountValue)")
+                
+                let updatedTarget = try await NetworkService.shared.updateTarget(
+                    userId: userId,
+                    targetId: target.id,
+                    targetAmount: amountValue
+                )
+                
+                print("[ChangeAmountSheet] Successfully updated target. New amount: \(updatedTarget.target.targetAmount)")
+                
+                await MainActor.run {
+                    isSaving = false
+                    dismiss()
+                    // Refresh the goals list to show updated data
+                    viewModel.refresh()
+                }
+            } catch {
+                print("[ChangeAmountSheet] Error updating target: \(error.localizedDescription)")
+                await MainActor.run {
+                    isSaving = false
+                    let errorDesc = error.localizedDescription
+                    if errorDesc.contains("cannot connect") || errorDesc.contains("timed out") {
+                        errorMessage = "Could not connect to server. Please check:\n1. Backend is running\n2. Backend URL is correct"
+                    } else {
+                        errorMessage = "Failed to update amount: \(errorDesc)"
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Edit Goal Sheet - Different options for savings goals vs budgets
 struct EditGoalSheet: View {
     let target: Target
+    @ObservedObject var viewModel: FinanceViewModel
     @Environment(\.dismiss) var dismiss
     @State private var showAddSheet = false
     @State private var showTakeSheet = false
+    @State private var showChangeAmountSheet = false
     @State private var showRemoveSheet = false
+    
+    // Check if this is a savings goal (not a budget)
+    private var isSavingsGoal: Bool {
+        target.targetType.lowercased() != "budget"
+    }
     
     var body: some View {
         NavigationView {
@@ -1781,158 +2200,223 @@ struct EditGoalSheet: View {
                     .padding(.top, 20)
                     .padding(.bottom, 32)
                     
-                    // Action buttons - matching FinanceView row style
+                    // Action buttons - different for savings goals vs budgets
                     VStack(spacing: 12) {
-                        // Add Button
-                        Button(action: {
-                            let impact = UIImpactFeedbackGenerator(style: .light)
-                            impact.impactOccurred()
-                            showAddSheet = true
-                        }) {
-                            HStack(spacing: 16) {
-                                // Icon with premium glass circle
-                                ZStack {
-                                    Circle()
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [
-                                                    Color(white: 0.2).opacity(0.3),
-                                                    Color(white: 0.15).opacity(0.2)
-                                                ],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
-                                        )
-                                        .frame(width: 48, height: 48)
-                                        .overlay {
-                                            Circle()
-                                                .stroke(
-                                                    LinearGradient(
-                                                        colors: [
-                                                            Color.white.opacity(0.2),
-                                                            Color.white.opacity(0.1)
-                                                        ],
-                                                        startPoint: .topLeading,
-                                                        endPoint: .bottomTrailing
-                                                    ),
-                                                    lineWidth: 1
+                        if isSavingsGoal {
+                            // Savings Goal: Add Money, Take Money, Remove (like assets)
+                            // Add Money Button
+                            Button(action: {
+                                let impact = UIImpactFeedbackGenerator(style: .light)
+                                impact.impactOccurred()
+                                showAddSheet = true
+                            }) {
+                                HStack(spacing: 16) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(
+                                                LinearGradient(
+                                                    colors: [
+                                                        Color(white: 0.2).opacity(0.3),
+                                                        Color(white: 0.15).opacity(0.2)
+                                                    ],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
                                                 )
-                                        }
-                                    
-                                    Image(systemName: "plus")
-                                        .font(.system(size: 19, weight: .semibold))
-                                        .foregroundStyle(
-                                            LinearGradient(
-                                                colors: [
-                                                    Color.green.opacity(0.95),
-                                                    Color.green.opacity(0.8)
-                                                ],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
                                             )
-                                        )
-                                }
-                                
-                                // Text
-                                Text("Add Money")
-                                    .font(.system(size: 16, weight: .medium, design: .rounded))
-                                    .foregroundColor(.white.opacity(0.95))
-                                
-                                Spacer()
-                                
-                                // Chevron
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(.white.opacity(0.4))
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 14)
-                            .frame(maxWidth: .infinity)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(PremiumSettingsButtonStyle())
-                        .liquidGlass(cornerRadius: 18)
-                        .padding(.horizontal, 20)
-                        
-                        // Take Button
-                        Button(action: {
-                            let impact = UIImpactFeedbackGenerator(style: .light)
-                            impact.impactOccurred()
-                            showTakeSheet = true
-                        }) {
-                            HStack(spacing: 16) {
-                                // Icon with premium glass circle
-                                ZStack {
-                                    Circle()
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [
-                                                    Color(white: 0.2).opacity(0.3),
-                                                    Color(white: 0.15).opacity(0.2)
-                                                ],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
-                                        )
-                                        .frame(width: 48, height: 48)
-                                        .overlay {
-                                            Circle()
-                                                .stroke(
-                                                    LinearGradient(
-                                                        colors: [
-                                                            Color.white.opacity(0.2),
-                                                            Color.white.opacity(0.1)
-                                                        ],
-                                                        startPoint: .topLeading,
-                                                        endPoint: .bottomTrailing
-                                                    ),
-                                                    lineWidth: 1
+                                            .frame(width: 48, height: 48)
+                                            .overlay {
+                                                Circle()
+                                                    .stroke(
+                                                        LinearGradient(
+                                                            colors: [
+                                                                Color.white.opacity(0.2),
+                                                                Color.white.opacity(0.1)
+                                                            ],
+                                                            startPoint: .topLeading,
+                                                            endPoint: .bottomTrailing
+                                                        ),
+                                                        lineWidth: 1
+                                                    )
+                                            }
+                                        
+                                        Image(systemName: "plus")
+                                            .font(.system(size: 19, weight: .semibold))
+                                            .foregroundStyle(
+                                                LinearGradient(
+                                                    colors: [
+                                                        Color.green.opacity(0.95),
+                                                        Color.green.opacity(0.8)
+                                                    ],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
                                                 )
-                                        }
-                                    
-                                    Image(systemName: "minus")
-                                        .font(.system(size: 19, weight: .semibold))
-                                        .foregroundStyle(
-                                            LinearGradient(
-                                                colors: [
-                                                    Color.orange.opacity(0.95),
-                                                    Color.orange.opacity(0.8)
-                                                ],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
                                             )
-                                        )
+                                    }
+                                    
+                                    Text("Add Money")
+                                        .font(.system(size: 16, weight: .medium, design: .rounded))
+                                        .foregroundColor(.white.opacity(0.95))
+                                    
+                                    Spacer()
+                                    
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(.white.opacity(0.4))
                                 }
-                                
-                                // Text
-                                Text("Take Money")
-                                    .font(.system(size: 16, weight: .medium, design: .rounded))
-                                    .foregroundColor(.white.opacity(0.95))
-                                
-                                Spacer()
-                                
-                                // Chevron
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(.white.opacity(0.4))
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 14)
+                                .frame(maxWidth: .infinity)
+                                .contentShape(Rectangle())
                             }
+                            .buttonStyle(PremiumSettingsButtonStyle())
+                            .liquidGlass(cornerRadius: 18)
                             .padding(.horizontal, 20)
-                            .padding(.vertical, 14)
-                            .frame(maxWidth: .infinity)
-                            .contentShape(Rectangle())
+                            
+                            // Take Money Button
+                            Button(action: {
+                                let impact = UIImpactFeedbackGenerator(style: .light)
+                                impact.impactOccurred()
+                                showTakeSheet = true
+                            }) {
+                                HStack(spacing: 16) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(
+                                                LinearGradient(
+                                                    colors: [
+                                                        Color(white: 0.2).opacity(0.3),
+                                                        Color(white: 0.15).opacity(0.2)
+                                                    ],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                )
+                                            )
+                                            .frame(width: 48, height: 48)
+                                            .overlay {
+                                                Circle()
+                                                    .stroke(
+                                                        LinearGradient(
+                                                            colors: [
+                                                                Color.white.opacity(0.2),
+                                                                Color.white.opacity(0.1)
+                                                            ],
+                                                            startPoint: .topLeading,
+                                                            endPoint: .bottomTrailing
+                                                        ),
+                                                        lineWidth: 1
+                                                    )
+                                            }
+                                        
+                                        Image(systemName: "minus")
+                                            .font(.system(size: 19, weight: .semibold))
+                                            .foregroundStyle(
+                                                LinearGradient(
+                                                    colors: [
+                                                        Color.orange.opacity(0.95),
+                                                        Color.orange.opacity(0.8)
+                                                    ],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                )
+                                            )
+                                    }
+                                    
+                                    Text("Take Money")
+                                        .font(.system(size: 16, weight: .medium, design: .rounded))
+                                        .foregroundColor(.white.opacity(0.95))
+                                    
+                                    Spacer()
+                                    
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(.white.opacity(0.4))
+                                }
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 14)
+                                .frame(maxWidth: .infinity)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(PremiumSettingsButtonStyle())
+                            .liquidGlass(cornerRadius: 18)
+                            .padding(.horizontal, 20)
+                        } else {
+                            // Budget: Change Amount, Remove
+                            // Change Amount Button
+                            Button(action: {
+                                let impact = UIImpactFeedbackGenerator(style: .light)
+                                impact.impactOccurred()
+                                showChangeAmountSheet = true
+                            }) {
+                                HStack(spacing: 16) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(
+                                                LinearGradient(
+                                                    colors: [
+                                                        Color(white: 0.2).opacity(0.3),
+                                                        Color(white: 0.15).opacity(0.2)
+                                                    ],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                )
+                                            )
+                                            .frame(width: 48, height: 48)
+                                            .overlay {
+                                                Circle()
+                                                    .stroke(
+                                                        LinearGradient(
+                                                            colors: [
+                                                                Color.white.opacity(0.2),
+                                                                Color.white.opacity(0.1)
+                                                            ],
+                                                            startPoint: .topLeading,
+                                                            endPoint: .bottomTrailing
+                                                        ),
+                                                        lineWidth: 1
+                                                    )
+                                            }
+                                        
+                                        Image(systemName: "pencil")
+                                            .font(.system(size: 19, weight: .semibold))
+                                            .foregroundStyle(
+                                                LinearGradient(
+                                                    colors: [
+                                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.95),
+                                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.8)
+                                                    ],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                )
+                                            )
+                                    }
+                                    
+                                    Text("Change Amount")
+                                        .font(.system(size: 16, weight: .medium, design: .rounded))
+                                        .foregroundColor(.white.opacity(0.95))
+                                    
+                                    Spacer()
+                                    
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(.white.opacity(0.4))
+                                }
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 14)
+                                .frame(maxWidth: .infinity)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(PremiumSettingsButtonStyle())
+                            .liquidGlass(cornerRadius: 18)
+                            .padding(.horizontal, 20)
                         }
-                        .buttonStyle(PremiumSettingsButtonStyle())
-                        .liquidGlass(cornerRadius: 18)
-                        .padding(.horizontal, 20)
                         
-                        // Remove Button
+                        // Remove Button (for both)
                         Button(action: {
                             let impact = UIImpactFeedbackGenerator(style: .light)
                             impact.impactOccurred()
                             showRemoveSheet = true
                         }) {
                             HStack(spacing: 16) {
-                                // Icon with premium glass circle
                                 ZStack {
                                     Circle()
                                         .fill(
@@ -1975,14 +2459,12 @@ struct EditGoalSheet: View {
                                         )
                                 }
                                 
-                                // Text
-                                Text("Remove Goal")
+                                Text("Remove")
                                     .font(.system(size: 16, weight: .medium, design: .rounded))
                                     .foregroundColor(.white.opacity(0.95))
                                 
                                 Spacer()
                                 
-                                // Chevron
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundColor(.white.opacity(0.4))
@@ -2013,13 +2495,16 @@ struct EditGoalSheet: View {
                 }
             }
             .sheet(isPresented: $showAddSheet) {
-                AddMoneyToGoalSheet(target: target)
+                AddMoneyToGoalSheet(target: target, viewModel: viewModel)
             }
             .sheet(isPresented: $showTakeSheet) {
-                TakeMoneyFromGoalSheet(target: target)
+                TakeMoneyFromGoalSheet(target: target, viewModel: viewModel)
+            }
+            .sheet(isPresented: $showChangeAmountSheet) {
+                ChangeAmountSheet(target: target, viewModel: viewModel)
             }
             .sheet(isPresented: $showRemoveSheet) {
-                RemoveGoalSheet(target: target)
+                RemoveGoalSheet(target: target, viewModel: viewModel)
             }
         }
     }
@@ -2028,6 +2513,7 @@ struct EditGoalSheet: View {
 // Edit Asset Sheet with Add, Take, and Remove options
 struct EditAssetSheet: View {
     let asset: Asset
+    @ObservedObject var viewModel: FinanceViewModel
     @Environment(\.dismiss) var dismiss
     @State private var showAddSheet = false
     @State private var showTakeSheet = false
@@ -2285,13 +2771,13 @@ struct EditAssetSheet: View {
                 }
             }
             .sheet(isPresented: $showAddSheet) {
-                AddValueToAssetSheet(asset: asset)
+                AddValueToAssetSheet(asset: asset, viewModel: viewModel)
             }
             .sheet(isPresented: $showTakeSheet) {
-                ReduceAssetValueSheet(asset: asset)
+                ReduceAssetValueSheet(asset: asset, viewModel: viewModel)
             }
             .sheet(isPresented: $showRemoveSheet) {
-                RemoveAssetSheet(asset: asset)
+                RemoveAssetSheet(asset: asset, viewModel: viewModel)
             }
         }
     }
@@ -2300,6 +2786,7 @@ struct EditAssetSheet: View {
 // Take Money from Goal Sheet
 struct TakeMoneyFromGoalSheet: View {
     let target: Target
+    @ObservedObject var viewModel: FinanceViewModel
     @Environment(\.dismiss) var dismiss
     @State private var amount: String = "0"
     @State private var isProcessing = false
@@ -2446,10 +2933,6 @@ struct TakeMoneyFromGoalSheet: View {
     }
     
     private func appendDecimal() {
-        let userCurrency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
-        let locale = getLocaleForCurrency(userCurrency)
-        let decimalSeparator = locale.decimalSeparator ?? "."
-        
         if !amount.contains(".") && !amount.contains(",") {
             amount += "."
         }
@@ -2534,10 +3017,40 @@ struct TakeMoneyFromGoalSheet: View {
         isProcessing = true
         errorMessage = nil
         
-        // TODO: Implement API call to take money from goal
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            isProcessing = false
-            dismiss()
+        Task {
+            do {
+                let userId = viewModel.userId
+                let newCurrentAmount = target.currentAmount - amountValue
+                
+                print("[TakeMoneyFromGoalSheet] Taking \(amountValue) from goal \(target.id). New amount: \(newCurrentAmount)")
+                
+                // Update target's currentAmount
+                let updatedTarget = try await NetworkService.shared.updateTarget(
+                    userId: userId,
+                    targetId: target.id,
+                    currentAmount: newCurrentAmount
+                )
+                
+                print("[TakeMoneyFromGoalSheet] Successfully updated goal. New current amount: \(updatedTarget.target.currentAmount)")
+                
+                await MainActor.run {
+                    isProcessing = false
+                    dismiss()
+                    // Refresh the goals list
+                    viewModel.refresh()
+                }
+            } catch {
+                print("[TakeMoneyFromGoalSheet] Error updating goal: \(error.localizedDescription)")
+                await MainActor.run {
+                    isProcessing = false
+                    let errorDesc = error.localizedDescription
+                    if errorDesc.contains("cannot connect") || errorDesc.contains("timed out") {
+                        errorMessage = "Could not connect to server. Please check:\n1. Backend is running\n2. Backend URL is correct"
+                    } else {
+                        errorMessage = "Failed to take money: \(errorDesc)"
+                    }
+                }
+            }
         }
     }
 }
@@ -2545,6 +3058,7 @@ struct TakeMoneyFromGoalSheet: View {
 // Remove Goal Sheet
 struct RemoveGoalSheet: View {
     let target: Target
+    @ObservedObject var viewModel: FinanceViewModel
     @Environment(\.dismiss) var dismiss
     @State private var isRemoving = false
     @State private var errorMessage: String?
@@ -2683,10 +3197,190 @@ struct RemoveGoalSheet: View {
         isRemoving = true
         errorMessage = nil
         
-        // TODO: Implement API call to remove goal
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            isRemoving = false
-            dismiss()
+        Task {
+            do {
+                print("[RemoveGoalSheet] Deleting target: \(target.id)")
+                try await viewModel.deleteTarget(targetId: target.id)
+                
+                print("[RemoveGoalSheet] Target deleted successfully")
+                
+                await MainActor.run {
+                    isRemoving = false
+                    dismiss()
+                    // ViewModel already refreshes in deleteTarget, but ensure UI updates
+                    viewModel.refresh()
+                }
+            } catch {
+                print("[RemoveGoalSheet] Error deleting target: \(error.localizedDescription)")
+                await MainActor.run {
+                    isRemoving = false
+                    let errorDesc = error.localizedDescription
+                    if errorDesc.contains("cannot connect") || errorDesc.contains("timed out") {
+                        errorMessage = "Could not connect to server. Please check:\n1. Backend is running\n2. Backend URL is correct"
+                    } else {
+                        errorMessage = "Failed to remove goal: \(errorDesc)"
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Remove Target Sheet
+struct RemoveTargetSheet: View {
+    let target: Target
+    @ObservedObject var viewModel: FinanceViewModel
+    @Environment(\.dismiss) var dismiss
+    @State private var isRemoving = false
+    @State private var errorMessage: String?
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black
+                    .ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Header
+                    VStack(spacing: 8) {
+                        Text("Remove Budget")
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                        
+                        Text(target.title)
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                    .padding(.top, 20)
+                    .padding(.bottom, 32)
+                    
+                    // Warning message
+                    VStack(spacing: 16) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 48, weight: .medium))
+                            .foregroundColor(.red.opacity(0.8))
+                        
+                        Text("Are you sure you want to remove this budget?")
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white)
+                            .multilineTextAlignment(.center)
+                        
+                        Text("This action cannot be undone.")
+                            .font(.system(size: 14, weight: .regular, design: .rounded))
+                            .foregroundColor(.white.opacity(0.6))
+                            .multilineTextAlignment(.center)
+                        
+                        if let error = errorMessage {
+                            Text(error)
+                                .font(.system(size: 14, weight: .medium, design: .rounded))
+                                .foregroundColor(.red.opacity(0.8))
+                                .padding(.top, 8)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 40)
+                    
+                    Spacer()
+                    
+                    // Action buttons
+                    VStack(spacing: 12) {
+                        // Remove Button
+                        Button(action: {
+                            removeTarget()
+                        }) {
+                            HStack {
+                                Spacer()
+                                if isRemoving {
+                                    ProgressView()
+                                        .tint(.white)
+                                } else {
+                                    Text("Remove Budget")
+                                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                                        .foregroundColor(.white)
+                                }
+                                Spacer()
+                            }
+                            .frame(height: 56)
+                            .background {
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.red.opacity(0.9),
+                                                Color.red.opacity(0.7)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                            }
+                        }
+                        .disabled(isRemoving)
+                        .opacity(isRemoving ? 0.6 : 1.0)
+                        
+                        // Cancel Button
+                        Button(action: {
+                            dismiss()
+                        }) {
+                            HStack {
+                                Spacer()
+                                Text("Cancel")
+                                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.8))
+                                Spacer()
+                            }
+                            .frame(height: 56)
+                            .background {
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.white.opacity(0.15),
+                                                Color.white.opacity(0.1)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.black, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                }
+            }
+        }
+    }
+    
+    private func removeTarget() {
+        isRemoving = true
+        errorMessage = nil
+        
+        Task {
+            do {
+                try await viewModel.deleteTarget(targetId: target.id)
+                await MainActor.run {
+                    isRemoving = false
+                    dismiss()
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                    isRemoving = false
+                }
+            }
         }
     }
 }
@@ -2694,6 +3388,7 @@ struct RemoveGoalSheet: View {
 // Add Value to Asset Sheet
 struct AddValueToAssetSheet: View {
     let asset: Asset
+    @ObservedObject var viewModel: FinanceViewModel
     @Environment(\.dismiss) var dismiss
     @State private var amount: String = "0"
     @State private var isAdding = false
@@ -2898,10 +3593,32 @@ struct AddValueToAssetSheet: View {
         isAdding = true
         errorMessage = nil
         
-        // TODO: Implement API call to add value to asset
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            isAdding = false
-            dismiss()
+        Task {
+            do {
+                let newValue = asset.currentValue + amountValue
+                
+                print("[AddValueToAssetSheet] Adding \(amountValue) to asset \(asset.id). New value: \(newValue)")
+                
+                try await viewModel.updateAsset(assetId: asset.id, currentValue: newValue)
+                
+                print("[AddValueToAssetSheet] Successfully updated asset")
+                
+                await MainActor.run {
+                    isAdding = false
+                    dismiss()
+                }
+            } catch {
+                print("[AddValueToAssetSheet] Error updating asset: \(error.localizedDescription)")
+                await MainActor.run {
+                    isAdding = false
+                    let errorDesc = error.localizedDescription
+                    if errorDesc.contains("cannot connect") || errorDesc.contains("timed out") {
+                        errorMessage = "Could not connect to server. Please check:\n1. Backend is running\n2. Backend URL is correct"
+                    } else {
+                        errorMessage = "Failed to add value: \(errorDesc)"
+                    }
+                }
+            }
         }
     }
 }
@@ -2909,6 +3626,7 @@ struct AddValueToAssetSheet: View {
 // Reduce Asset Value Sheet
 struct ReduceAssetValueSheet: View {
     let asset: Asset
+    @ObservedObject var viewModel: FinanceViewModel
     @Environment(\.dismiss) var dismiss
     @State private var amount: String = "0"
     @State private var isProcessing = false
@@ -3118,10 +3836,32 @@ struct ReduceAssetValueSheet: View {
         isProcessing = true
         errorMessage = nil
         
-        // TODO: Implement API call to reduce asset value
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            isProcessing = false
-            dismiss()
+        Task {
+            do {
+                let newValue = asset.currentValue - amountValue
+                
+                print("[ReduceAssetValueSheet] Reducing \(amountValue) from asset \(asset.id). New value: \(newValue)")
+                
+                try await viewModel.updateAsset(assetId: asset.id, currentValue: newValue)
+                
+                print("[ReduceAssetValueSheet] Successfully updated asset")
+                
+                await MainActor.run {
+                    isProcessing = false
+                    dismiss()
+                }
+            } catch {
+                print("[ReduceAssetValueSheet] Error updating asset: \(error.localizedDescription)")
+                await MainActor.run {
+                    isProcessing = false
+                    let errorDesc = error.localizedDescription
+                    if errorDesc.contains("cannot connect") || errorDesc.contains("timed out") {
+                        errorMessage = "Could not connect to server. Please check:\n1. Backend is running\n2. Backend URL is correct"
+                    } else {
+                        errorMessage = "Failed to reduce value: \(errorDesc)"
+                    }
+                }
+            }
         }
     }
 }
@@ -3129,6 +3869,7 @@ struct ReduceAssetValueSheet: View {
 // Remove Asset Sheet
 struct RemoveAssetSheet: View {
     let asset: Asset
+    @ObservedObject var viewModel: FinanceViewModel
     @Environment(\.dismiss) var dismiss
     @State private var isRemoving = false
     @State private var errorMessage: String?
@@ -3267,10 +4008,29 @@ struct RemoveAssetSheet: View {
         isRemoving = true
         errorMessage = nil
         
-        // TODO: Implement API call to remove asset
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            isRemoving = false
-            dismiss()
+        Task {
+            do {
+                print("[RemoveAssetSheet] Deleting asset: \(asset.id)")
+                try await viewModel.deleteAsset(assetId: asset.id)
+                
+                print("[RemoveAssetSheet] Asset deleted successfully")
+                
+                await MainActor.run {
+                    isRemoving = false
+                    dismiss()
+                }
+            } catch {
+                print("[RemoveAssetSheet] Error deleting asset: \(error.localizedDescription)")
+                await MainActor.run {
+                    isRemoving = false
+                    let errorDesc = error.localizedDescription
+                    if errorDesc.contains("cannot connect") || errorDesc.contains("timed out") {
+                        errorMessage = "Could not connect to server. Please check:\n1. Backend is running\n2. Backend URL is correct"
+                    } else {
+                        errorMessage = "Failed to remove asset: \(errorDesc)"
+                    }
+                }
+            }
         }
     }
 }
@@ -3348,6 +4108,13 @@ struct CalculatorButtonStyle: ButtonStyle {
 
 struct GoalRow: View {
     let goal: Target
+    @State private var showEditGoalSheet = false
+    @ObservedObject var viewModel: FinanceViewModel
+    
+    init(goal: Target, viewModel: FinanceViewModel) {
+        self.goal = goal
+        self.viewModel = viewModel
+    }
     
     var body: some View {
         HStack(spacing: 16) {
@@ -3450,10 +4217,63 @@ struct GoalRow: View {
             }
             
             Spacer()
+            
+            // Edit button - opens menu with options
+            Button(action: {
+                let impact = UIImpactFeedbackGenerator(style: .light)
+                impact.impactOccurred()
+                showEditGoalSheet = true
+            }) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(white: 0.2).opacity(0.3),
+                                    Color(white: 0.15).opacity(0.2)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 40, height: 40)
+                        .overlay {
+                            Circle()
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(0.2),
+                                            Color.white.opacity(0.1)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1
+                                )
+                        }
+                    
+                    Image(systemName: "pencil")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.95),
+                                    Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.8)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                }
+            }
+            .buttonStyle(PremiumSettingsButtonStyle())
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
         .background(Color.clear)
+        .sheet(isPresented: $showEditGoalSheet) {
+            EditGoalSheet(target: goal, viewModel: viewModel)
+        }
     }
     
     private func formatCurrency(_ amount: Double) -> String {
@@ -3469,11 +4289,13 @@ struct GoalRow: View {
 struct AssetRow: View {
     let asset: Asset
     let isVirtualAsset: Bool
+    @ObservedObject var viewModel: FinanceViewModel
     @State private var showEditAssetSheet = false
     
-    init(asset: Asset, isVirtualAsset: Bool = false) {
+    init(asset: Asset, isVirtualAsset: Bool = false, viewModel: FinanceViewModel) {
         self.asset = asset
         self.isVirtualAsset = isVirtualAsset
+        self.viewModel = viewModel
     }
     
     var body: some View {
@@ -3627,7 +4449,7 @@ struct AssetRow: View {
         .padding(.vertical, 14)
         .background(Color.clear)
         .sheet(isPresented: $showEditAssetSheet) {
-            EditAssetSheet(asset: asset)
+            EditAssetSheet(asset: asset, viewModel: viewModel)
         }
     }
     

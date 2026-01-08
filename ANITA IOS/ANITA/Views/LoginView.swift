@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AuthenticationServices
 
 struct LoginView: View {
     @StateObject private var viewModel = AuthViewModel()
@@ -235,6 +236,46 @@ struct LoginView: View {
                         .background(Color(white: 0.15).opacity(0.3))
                         .cornerRadius(12)
                     }
+                    .disabled(viewModel.isLoading)
+                    .opacity(viewModel.isLoading ? 0.5 : 1.0)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 12)
+                    
+                    // Apple Sign In Button
+                    SignInWithAppleButton(
+                        onRequest: { request in
+                            request.requestedScopes = [.fullName, .email]
+                        },
+                        onCompletion: { result in
+                            let impact = UIImpactFeedbackGenerator(style: .light)
+                            impact.impactOccurred()
+                            
+                            switch result {
+                            case .success(let authorization):
+                                if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
+                                    guard let identityToken = appleIDCredential.identityToken,
+                                          let idTokenString = String(data: identityToken, encoding: .utf8) else {
+                                        print("Apple Sign-In: Failed to get identity token")
+                                        return
+                                    }
+                                    
+                                    Task {
+                                        await viewModel.signInWithApple(idToken: idTokenString, nonce: nil)
+                                        if viewModel.isAuthenticated {
+                                            onAuthSuccess()
+                                        }
+                                    }
+                                } else {
+                                    print("Apple Sign-In: Failed to get Apple ID credential")
+                                }
+                            case .failure(let error):
+                                print("Apple Sign-In failed: \(error.localizedDescription)")
+                            }
+                        }
+                    )
+                    .signInWithAppleButtonStyle(.white)
+                    .frame(height: 50)
+                    .cornerRadius(12)
                     .disabled(viewModel.isLoading)
                     .opacity(viewModel.isLoading ? 0.5 : 1.0)
                     .padding(.horizontal, 24)

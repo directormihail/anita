@@ -64,6 +64,14 @@ class UserManager: ObservableObject {
         }
     }
     
+    func signInWithApple(idToken: String, nonce: String? = nil) async throws {
+        let authResponse = try await supabaseService.signInWithApple(idToken: idToken, nonce: nonce)
+        await MainActor.run {
+            self.currentUser = authResponse.user
+            self.isAuthenticated = true
+        }
+    }
+    
     func signOut() {
         supabaseService.signOut()
         Task { @MainActor in

@@ -345,6 +345,35 @@ struct GetTargetsResponse: Codable {
     let requestId: String?
 }
 
+struct UpdateTargetRequest: Codable {
+    let targetId: String
+    let userId: String
+    let targetAmount: Double?
+    let currentAmount: Double?
+    let title: String?
+    let description: String?
+    let targetDate: String?
+    let status: String?
+    let priority: String?
+}
+
+struct UpdateTargetResponse: Codable {
+    let success: Bool
+    let target: Target
+    let requestId: String?
+}
+
+struct DeleteTargetRequest: Codable {
+    let targetId: String
+    let userId: String
+}
+
+struct DeleteTargetResponse: Codable {
+    let success: Bool
+    let message: String?
+    let requestId: String?
+}
+
 // MARK: - Asset Models
 
 struct Asset: Identifiable, Codable {
@@ -374,6 +403,32 @@ struct Asset: Identifiable, Codable {
 struct GetAssetsResponse: Codable {
     let success: Bool
     let assets: [Asset]
+    let requestId: String?
+}
+
+struct UpdateAssetRequest: Codable {
+    let assetId: String
+    let userId: String
+    let currentValue: Double?
+    let name: String?
+    let type: String?
+    let description: String?
+}
+
+struct UpdateAssetResponse: Codable {
+    let success: Bool
+    let asset: Asset
+    let requestId: String?
+}
+
+struct DeleteAssetRequest: Codable {
+    let assetId: String
+    let userId: String
+}
+
+struct DeleteAssetResponse: Codable {
+    let success: Bool
+    let message: String?
     let requestId: String?
 }
 

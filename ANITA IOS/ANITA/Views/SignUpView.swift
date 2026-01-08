@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AuthenticationServices
 
 enum SignUpStep {
     case credentials
@@ -395,6 +396,26 @@ struct SignUpView: View {
             .disabled(viewModel.isLoading)
             .opacity(viewModel.isLoading ? 0.5 : 1.0)
             .padding(.horizontal, 24)
+            .padding(.bottom, 12)
+            
+            // Apple Sign Up Button
+            AppleSignInButton(
+                onSignIn: { idToken in
+                    Task {
+                        await viewModel.signInWithApple(idToken: idToken, nonce: nil)
+                        if viewModel.isAuthenticated {
+                            onAuthSuccess()
+                        }
+                    }
+                },
+                onError: { error in
+                    viewModel.errorMessage = error
+                }
+            )
+            .frame(height: 50)
+            .disabled(viewModel.isLoading)
+            .opacity(viewModel.isLoading ? 0.5 : 1.0)
+            .padding(.horizontal, 24)
         }
     }
     
@@ -527,6 +548,114 @@ struct StepIndicatorItem: View {
             Text(label)
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundColor(isActive ? .white.opacity(0.95) : .white.opacity(0.5))
+        }
+    }
+}
+
+// MARK: - Apple Sign In Button
+
+struct AppleSignInButton: UIViewRepresentable {
+    let onSignIn: (String) -> Void
+    let onError: (String) -> Void
+    
+    func makeUIView(context: Context) -> UIButton {
+        let button = UIButton(type: .system)
+        button.backgroundColor = UIColor(white: 0.15, alpha: 0.3)
+        button.layer.cornerRadius = 12
+        button.clipsToBounds = true
+        
+        // Create horizontal stack with Apple logo and text
+        let stackView = UIStackView()
+        stackView.axis = .horizontal
+        stackView.spacing = 10
+        stackView.alignment = .center
+        stackView.isUserInteractionEnabled = false
+        
+        // Apple logo
+        let appleLogo = UIImageView(image: UIImage(systemName: "apple.logo"))
+        appleLogo.tintColor = .white
+        appleLogo.contentMode = .scaleAspectFit
+        appleLogo.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            appleLogo.widthAnchor.constraint(equalToConstant: 20),
+            appleLogo.heightAnchor.constraint(equalToConstant: 20)
+        ])
+        
+        // Text label
+        let label = UILabel()
+        label.text = "Sign in with Apple"
+        label.font = UIFont.systemFont(ofSize: 17, weight: .medium)
+        label.textColor = .white
+        
+        stackView.addArrangedSubview(appleLogo)
+        stackView.addArrangedSubview(label)
+        
+        button.addSubview(stackView)
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stackView.centerXAnchor.constraint(equalTo: button.centerXAnchor),
+            stackView.centerYAnchor.constraint(equalTo: button.centerYAnchor)
+        ])
+        
+        button.addTarget(context.coordinator, action: #selector(Coordinator.buttonTapped), for: .touchUpInside)
+        
+        return button
+    }
+    
+    func updateUIView(_ uiView: UIButton, context: Context) {
+        // No updates needed
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onSignIn: onSignIn, onError: onError)
+    }
+    
+    class Coordinator: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+        let onSignIn: (String) -> Void
+        let onError: (String) -> Void
+        
+        init(onSignIn: @escaping (String) -> Void, onError: @escaping (String) -> Void) {
+            self.onSignIn = onSignIn
+            self.onError = onError
+        }
+        
+        @objc func buttonTapped() {
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+            
+            let request = ASAuthorizationAppleIDProvider().createRequest()
+            request.requestedScopes = [.fullName, .email]
+            
+            let controller = ASAuthorizationController(authorizationRequests: [request])
+            controller.delegate = self
+            controller.presentationContextProvider = self
+            controller.performRequests()
+        }
+        
+        func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+            if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
+                guard let identityToken = appleIDCredential.identityToken,
+                      let idTokenString = String(data: identityToken, encoding: .utf8) else {
+                    onError("Failed to get identity token")
+                    return
+                }
+                onSignIn(idTokenString)
+            } else {
+                onError("Failed to get Apple ID credential")
+            }
+        }
+        
+        func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+            onError("Apple Sign-In failed: \(error.localizedDescription)")
+        }
+        
+        func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let window = windowScene.windows.first(where: { $0.isKeyWindow }) {
+                return window
+            }
+            // Fallback - create a temporary window
+            return UIWindow(frame: UIScreen.main.bounds)
         }
     }
 }

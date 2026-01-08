@@ -247,9 +247,18 @@ class NetworkService: ObservableObject {
     
     // MARK: - Transactions
     
-    func getTransactions(userId: String) async throws -> GetTransactionsResponse {
+    func getTransactions(userId: String, month: String? = nil, year: String? = nil) async throws -> GetTransactionsResponse {
         var urlComponents = URLComponents(string: "\(baseURL)/api/v1/transactions")!
-        urlComponents.queryItems = [URLQueryItem(name: "userId", value: userId)]
+        var queryItems = [URLQueryItem(name: "userId", value: userId)]
+        
+        if let month = month {
+            queryItems.append(URLQueryItem(name: "month", value: month))
+        }
+        if let year = year {
+            queryItems.append(URLQueryItem(name: "year", value: year))
+        }
+        
+        urlComponents.queryItems = queryItems
         
         guard let url = urlComponents.url else {
             throw NetworkError.invalidResponse
@@ -365,9 +374,18 @@ class NetworkService: ObservableObject {
     
     // MARK: - Financial Metrics
     
-    func getFinancialMetrics(userId: String) async throws -> GetFinancialMetricsResponse {
+    func getFinancialMetrics(userId: String, month: String? = nil, year: String? = nil) async throws -> GetFinancialMetricsResponse {
         var urlComponents = URLComponents(string: "\(baseURL)/api/v1/financial-metrics")!
-        urlComponents.queryItems = [URLQueryItem(name: "userId", value: userId)]
+        var queryItems = [URLQueryItem(name: "userId", value: userId)]
+        
+        if let month = month {
+            queryItems.append(URLQueryItem(name: "month", value: month))
+        }
+        if let year = year {
+            queryItems.append(URLQueryItem(name: "year", value: year))
+        }
+        
+        urlComponents.queryItems = queryItems
         
         guard let url = urlComponents.url else {
             throw NetworkError.invalidResponse
@@ -439,6 +457,73 @@ class NetworkService: ObservableObject {
         if httpResponse.statusCode == 200 {
             let decoder = JSONDecoder()
             return try decoder.decode(GetTargetsResponse.self, from: data)
+        } else {
+            if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
+                throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)
+            }
+            throw NetworkError.httpError(httpResponse.statusCode)
+        }
+    }
+    
+    func updateTarget(userId: String, targetId: String, targetAmount: Double? = nil, currentAmount: Double? = nil, title: String? = nil, description: String? = nil, targetDate: String? = nil, status: String? = nil, priority: String? = nil) async throws -> UpdateTargetResponse {
+        let url = URL(string: "\(baseURL)/api/v1/update-target")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let requestBody = UpdateTargetRequest(
+            targetId: targetId,
+            userId: userId,
+            targetAmount: targetAmount,
+            currentAmount: currentAmount,
+            title: title,
+            description: description,
+            targetDate: targetDate,
+            status: status,
+            priority: priority
+        )
+        
+        request.httpBody = try JSONEncoder().encode(requestBody)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 200 {
+            let decoder = JSONDecoder()
+            return try decoder.decode(UpdateTargetResponse.self, from: data)
+        } else {
+            if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
+                throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)
+            }
+            throw NetworkError.httpError(httpResponse.statusCode)
+        }
+    }
+    
+    func deleteTarget(userId: String, targetId: String) async throws -> DeleteTargetResponse {
+        let url = URL(string: "\(baseURL)/api/v1/delete-target")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let requestBody = DeleteTargetRequest(
+            targetId: targetId,
+            userId: userId
+        )
+        
+        request.httpBody = try JSONEncoder().encode(requestBody)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 200 {
+            let decoder = JSONDecoder()
+            return try decoder.decode(DeleteTargetResponse.self, from: data)
         } else {
             if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
                 throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)
@@ -607,6 +692,70 @@ class NetworkService: ObservableObject {
         if httpResponse.statusCode == 200 {
             let decoder = JSONDecoder()
             return try decoder.decode(GetAssetsResponse.self, from: data)
+        } else {
+            if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
+                throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)
+            }
+            throw NetworkError.httpError(httpResponse.statusCode)
+        }
+    }
+    
+    func updateAsset(userId: String, assetId: String, currentValue: Double? = nil, name: String? = nil, type: String? = nil, description: String? = nil) async throws -> UpdateAssetResponse {
+        let url = URL(string: "\(baseURL)/api/v1/update-asset")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let requestBody = UpdateAssetRequest(
+            assetId: assetId,
+            userId: userId,
+            currentValue: currentValue,
+            name: name,
+            type: type,
+            description: description
+        )
+        
+        request.httpBody = try JSONEncoder().encode(requestBody)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 200 {
+            let decoder = JSONDecoder()
+            return try decoder.decode(UpdateAssetResponse.self, from: data)
+        } else {
+            if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
+                throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)
+            }
+            throw NetworkError.httpError(httpResponse.statusCode)
+        }
+    }
+    
+    func deleteAsset(userId: String, assetId: String) async throws -> DeleteAssetResponse {
+        let url = URL(string: "\(baseURL)/api/v1/delete-asset")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let requestBody = DeleteAssetRequest(
+            assetId: assetId,
+            userId: userId
+        )
+        
+        request.httpBody = try JSONEncoder().encode(requestBody)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 200 {
+            let decoder = JSONDecoder()
+            return try decoder.decode(DeleteAssetResponse.self, from: data)
         } else {
             if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
                 throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)

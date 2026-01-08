@@ -7,6 +7,7 @@
 
 import SwiftUI
 import UniformTypeIdentifiers
+import AuthenticationServices
 
 struct SettingsView: View {
     @ObservedObject private var userManager = UserManager.shared
@@ -484,6 +485,24 @@ struct SettingsView: View {
                     Task {
                         do {
                             try await userManager.signUp(email: authEmail, password: authPassword)
+                            await MainActor.run {
+                                showAuthSheet = false
+                                authEmail = ""
+                                authPassword = ""
+                                authError = nil
+                                loadProfile()
+                            }
+                        } catch {
+                            await MainActor.run {
+                                authError = error.localizedDescription
+                            }
+                        }
+                    }
+                },
+                onSignInWithApple: { idToken, nonce in
+                    Task {
+                        do {
+                            try await userManager.signInWithApple(idToken: idToken, nonce: nonce)
                             await MainActor.run {
                                 showAuthSheet = false
                                 authEmail = ""
@@ -1126,6 +1145,7 @@ struct AuthSheet: View {
     @Binding var error: String?
     let onSignIn: () -> Void
     let onSignUp: () -> Void
+    let onSignInWithApple: (String, String?) -> Void
     @Environment(\.dismiss) var dismiss
     
     var body: some View {
@@ -1165,6 +1185,49 @@ struct AuthSheet: View {
                             .background(Color(red: 0.4, green: 0.49, blue: 0.92))
                             .cornerRadius(12)
                     }
+                    
+                    // Divider with "or"
+                    HStack {
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.3))
+                            .frame(height: 1)
+                        Text("or")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                            .padding(.horizontal, 8)
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.3))
+                            .frame(height: 1)
+                    }
+                    
+                    // Apple Sign-In Button
+                    SignInWithAppleButton(
+                        onRequest: { request in
+                            request.requestedScopes = [.fullName, .email]
+                        },
+                        onCompletion: { result in
+                            switch result {
+                            case .success(let authorization):
+                                if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
+                                    guard let identityToken = appleIDCredential.identityToken,
+                                          let idTokenString = String(data: identityToken, encoding: .utf8) else {
+                                        print("Apple Sign-In: Failed to get identity token")
+                                        return
+                                    }
+                                    
+                                    // Nonce is optional for Supabase - pass nil for native iOS Sign-In
+                                    onSignInWithApple(idTokenString, nil)
+                                } else {
+                                    print("Apple Sign-In: Failed to get Apple ID credential")
+                                }
+                            case .failure(let error):
+                                print("Apple Sign-In failed: \(error.localizedDescription)")
+                            }
+                        }
+                    )
+                    .signInWithAppleButtonStyle(.white)
+                    .frame(height: 50)
+                    .cornerRadius(12)
                     
                     Button(action: {
                         isSignUp.toggle()

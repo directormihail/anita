@@ -36,7 +36,9 @@ class SidebarViewModel: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.loadData()
+            Task { @MainActor in
+                self?.loadData()
+            }
         }
         
         // Observe conversation creation to refresh conversation list
@@ -46,7 +48,9 @@ class SidebarViewModel: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             print("[SidebarViewModel] Conversation created, refreshing conversation list...")
-            self?.loadData()
+            Task { @MainActor in
+                self?.loadData()
+            }
         }
     }
     

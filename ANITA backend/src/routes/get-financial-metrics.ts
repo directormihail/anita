@@ -38,6 +38,8 @@ export async function handleGetFinancialMetrics(req: Request, res: Response): Pr
   try {
     const requestId = req.requestId || 'unknown';
     const userId = req.query.userId as string;
+    const month = req.query.month as string; // Format: "2024-01" (YYYY-MM)
+    const year = req.query.year as string;
 
     if (!userId) {
       res.status(400).json({
@@ -95,13 +97,33 @@ export async function handleGetFinancialMetrics(req: Request, res: Response): Pr
     
     const totalBalance = totalIncome - totalExpenses;
 
-    // Calculate monthly metrics (current month)
-    const now = new Date();
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    // Calculate monthly metrics (current month or specified month)
+    let monthStart: Date;
+    let monthEnd: Date;
+    
+    if (month && year) {
+      // Use specified month
+      const monthNum = parseInt(month) - 1; // JavaScript months are 0-indexed
+      const yearNum = parseInt(year);
+      monthStart = new Date(yearNum, monthNum, 1);
+      monthEnd = new Date(yearNum, monthNum + 1, 0, 23, 59, 59, 999);
+    } else if (month) {
+      // Format: "2024-01"
+      const [yearStr, monthStr] = month.split('-');
+      const monthNum = parseInt(monthStr) - 1;
+      const yearNum = parseInt(yearStr);
+      monthStart = new Date(yearNum, monthNum, 1);
+      monthEnd = new Date(yearNum, monthNum + 1, 0, 23, 59, 59, 999);
+    } else {
+      // Default to current month
+      const now = new Date();
+      monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    }
     
     const monthlyTransactions = transactions.filter(t => {
       const transactionDate = new Date(t.date);
-      return transactionDate >= currentMonthStart;
+      return transactionDate >= monthStart && transactionDate <= monthEnd;
     });
 
     const monthlyIncome = monthlyTransactions
