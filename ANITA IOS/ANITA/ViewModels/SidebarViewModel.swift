@@ -63,7 +63,38 @@ class SidebarViewModel: ObservableObject {
         print("[SidebarViewModel] Loading data for userId: \(currentUserId)")
         
         Task {
+            // First, check if backend is reachable
             do {
+                print("[SidebarViewModel] Checking backend health...")
+                _ = try await networkService.checkHealth()
+                print("[SidebarViewModel] Backend health check passed")
+            } catch {
+                await MainActor.run {
+                    let errorMsg = error.localizedDescription
+                    print("[SidebarViewModel] Backend health check failed: \(errorMsg)")
+                    
+                    // Provide helpful error message
+                    var userFriendlyError = "Could not connect to the server.\n\n"
+                    
+                    if errorMsg.contains("timed out") || errorMsg.contains("timeout") {
+                        userFriendlyError += "Request timed out.\n\nPlease check:\n1. Backend is running: cd 'ANITA backend' && npm run dev\n2. Backend URL is correct in Settings\n3. Device and backend are on same network"
+                    } else if errorMsg.contains("cannot find host") || errorMsg.contains("cannot connect") {
+                        userFriendlyError += "Cannot reach backend server.\n\nPlease check:\n1. Backend is running: cd 'ANITA backend' && npm run dev\n2. Backend URL in Settings:\n   - Simulator: http://localhost:3001\n   - Physical device: http://YOUR_MAC_IP:3001\n3. Both devices on same Wi-Fi network"
+                    } else if errorMsg.contains("No internet connection") {
+                        userFriendlyError = "No internet connection. Please check your network settings."
+                    } else {
+                        userFriendlyError += "Error: \(errorMsg)\n\nPlease check:\n1. Backend is running\n2. Backend URL is correct in Settings"
+                    }
+                    
+                    self.errorMessage = userFriendlyError
+                    self.isLoading = false
+                }
+                return
+            }
+            
+            // If health check passes, load all data
+            do {
+                print("[SidebarViewModel] Loading data from backend...")
                 // Load all data in parallel
                 async let metricsTask = networkService.getFinancialMetrics(userId: currentUserId)
                 async let conversationsTask = networkService.getConversations(userId: currentUserId)
@@ -119,13 +150,25 @@ class SidebarViewModel: ObservableObject {
                     }
                     
                     self.isLoading = false
+                    self.errorMessage = nil // Clear any previous errors
                 }
             } catch {
                 await MainActor.run {
                     let errorMsg = error.localizedDescription
                     print("[SidebarViewModel] Error loading data: \(errorMsg)")
                     print("[SidebarViewModel] Error details: \(error)")
-                    self.errorMessage = errorMsg
+                    
+                    // Provide more helpful error messages
+                    var userFriendlyError = errorMsg
+                    if errorMsg.contains("timed out") || errorMsg.contains("timeout") {
+                        userFriendlyError = "Request timed out. Please check:\n1. Backend is running (cd 'ANITA backend' && npm run dev)\n2. Backend URL is correct in Settings\n3. Device and backend are on same network"
+                    } else if errorMsg.contains("cannot find host") || errorMsg.contains("cannot connect") || errorMsg.contains("Could not connect") {
+                        userFriendlyError = "Could not connect to the server.\n\nPlease check:\n1. Backend is running: cd 'ANITA backend' && npm run dev\n2. Backend URL in Settings is: http://localhost:3001\n3. For physical device: Use your Mac's IP address (e.g., http://192.168.1.100:3001)"
+                    } else if errorMsg.contains("The Internet connection appears to be offline") || errorMsg.contains("No internet connection") {
+                        userFriendlyError = "No internet connection. Please check your network settings."
+                    }
+                    
+                    self.errorMessage = userFriendlyError
                     self.isLoading = false
                 }
             }

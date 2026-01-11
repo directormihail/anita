@@ -30,6 +30,19 @@ class ChatViewModel: ObservableObject {
         Task {
             await loadConversations()
         }
+        
+        // Listen for backend URL updates from Settings
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("BackendURLUpdated"),
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            if let newURL = notification.object as? String {
+                print("[ChatViewModel] Backend URL updated to: \(newURL)")
+                // NetworkService.shared will automatically use the new URL
+                // since it reads from UserDefaults on each request
+            }
+        }
     }
     
     // Load conversations from Supabase
@@ -187,8 +200,40 @@ class ChatViewModel: ObservableObject {
         }
     }
     
+    // Detect currency from user input
+    private func detectCurrency(from text: String) -> String? {
+        let lowercased = text.lowercased()
+        
+        // Currency detection patterns
+        let currencyPatterns: [String: [String]] = [
+            "EUR": ["euro", "euros", "€", "eur"],
+            "USD": ["dollar", "dollars", "$", "usd", "us dollar"],
+            "GBP": ["pound", "pounds", "£", "gbp", "sterling"],
+            "JPY": ["yen", "¥", "jpy"],
+            "CAD": ["canadian dollar", "cad", "c$"],
+            "AUD": ["australian dollar", "aud", "a$"],
+            "CHF": ["swiss franc", "chf"],
+            "CNY": ["yuan", "cny", "renminbi"],
+            "INR": ["rupee", "rupees", "₹", "inr"],
+            "BRL": ["real", "reais", "r$", "brl"],
+            "MXN": ["peso", "pesos", "mx$", "mxn"],
+            "SGD": ["singapore dollar", "sgd", "s$"],
+            "HKD": ["hong kong dollar", "hkd", "hk$"],
+            "NZD": ["new zealand dollar", "nzd", "nz$"],
+            "ZAR": ["rand", "zar"]
+        ]
+        
+        for (currency, patterns) in currencyPatterns {
+            if patterns.contains(where: { lowercased.contains($0) }) {
+                return currency
+            }
+        }
+        
+        return nil
+    }
+    
     // Parse transaction from user message
-    private func parseTransaction(from text: String) -> (type: String, amount: Double, category: String?, description: String)? {
+    private func parseTransaction(from text: String) -> (type: String, amount: Double, category: String?, description: String, currency: String?)? {
         let lowercased = text.lowercased()
         
         // Skip if this looks like a goal/target message
@@ -310,7 +355,10 @@ class ChatViewModel: ObservableObject {
             }
         }
         
-        return (type: type, amount: amount, category: category, description: text)
+        // Detect currency from user input
+        let detectedCurrency = detectCurrency(from: text)
+        
+        return (type: type, amount: amount, category: category, description: text, currency: detectedCurrency)
     }
     
     // Extract just the amount from a message (simpler version for pending transactions)
@@ -356,13 +404,78 @@ class ChatViewModel: ObservableObject {
         return Double(amountString)
     }
     
-    // Format currency for display
-    private func formatCurrency(_ amount: Double) -> String {
+    // Format currency for display - uses user's currency preference from Settings
+    private func formatCurrency(_ amount: Double, currencyCode: String? = nil) -> String {
+        // Get user's preferred currency from Settings
+        let userCurrency = currencyCode ?? (UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD")
+        
+        // Get locale for proper currency formatting (EUR uses comma, USD uses period, etc.)
+        let locale = getLocaleForCurrency(userCurrency)
+        
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
-        formatter.currencySymbol = "$"
-        return formatter.string(from: NSNumber(value: amount)) ?? "$\(String(format: "%.2f", amount))"
+        formatter.currencyCode = userCurrency
+        formatter.locale = locale
+        
+        return formatter.string(from: NSNumber(value: amount)) ?? "\(getCurrencySymbol(userCurrency))\(String(format: "%.2f", amount))"
+    }
+    
+    // Get locale for currency formatting
+    private func getLocaleForCurrency(_ currency: String) -> Locale {
+        switch currency {
+        case "EUR":
+            return Locale(identifier: "de_DE") // German locale uses comma for decimals
+        case "GBP":
+            return Locale(identifier: "en_GB")
+        case "JPY":
+            return Locale(identifier: "ja_JP")
+        case "CAD":
+            return Locale(identifier: "en_CA")
+        case "AUD":
+            return Locale(identifier: "en_AU")
+        case "CHF":
+            return Locale(identifier: "de_CH")
+        case "CNY":
+            return Locale(identifier: "zh_CN")
+        case "INR":
+            return Locale(identifier: "en_IN")
+        case "BRL":
+            return Locale(identifier: "pt_BR")
+        case "MXN":
+            return Locale(identifier: "es_MX")
+        case "SGD":
+            return Locale(identifier: "en_SG")
+        case "HKD":
+            return Locale(identifier: "zh_HK")
+        case "NZD":
+            return Locale(identifier: "en_NZ")
+        case "ZAR":
+            return Locale(identifier: "en_ZA")
+        default:
+            return Locale(identifier: "en_US") // USD default
+        }
+    }
+    
+    // Get currency symbol
+    private func getCurrencySymbol(_ currency: String) -> String {
+        switch currency {
+        case "USD": return "$"
+        case "EUR": return "€"
+        case "GBP": return "£"
+        case "JPY": return "¥"
+        case "CAD": return "C$"
+        case "AUD": return "A$"
+        case "CHF": return "CHF"
+        case "CNY": return "¥"
+        case "INR": return "₹"
+        case "BRL": return "R$"
+        case "MXN": return "MX$"
+        case "SGD": return "S$"
+        case "HKD": return "HK$"
+        case "NZD": return "NZ$"
+        case "ZAR": return "R"
+        default: return "$"
+        }
     }
     
     // Send a quick AI response without full chat flow
@@ -466,6 +579,10 @@ class ChatViewModel: ObservableObject {
                     
                     // Try to extract amount from the message
                     if let amount = extractAmount(from: messageText) {
+                        // Detect currency from user input
+                        let detectedCurrency = detectCurrency(from: messageText)
+                        let currencyToUse = detectedCurrency ?? (UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD")
+                        
                         // User provided an amount - save the transaction
                         let currentUserId = userManager.isAuthenticated ? (userManager.currentUser?.id ?? userId) : userId
                         do {
@@ -485,8 +602,8 @@ class ChatViewModel: ObservableObject {
                             // Clear pending transaction
                             pendingTransactionType = nil
                             
-                            // Send confirmation
-                            await sendAIResponse("Got it! I've noted your \(formatCurrency(amount)) \(pendingType == "income" ? "income" : "expense").")
+                            // Send confirmation with correct currency
+                            await sendAIResponse("Got it! I've noted your \(formatCurrency(amount, currencyCode: currencyToUse)) \(pendingType == "income" ? "income" : "expense").")
                             return
                         } catch {
                             print("[ChatViewModel] Error saving transaction: \(error.localizedDescription)")
@@ -503,7 +620,23 @@ class ChatViewModel: ObservableObject {
                 
                 // Try to parse transaction from user message (only if not in pending state)
                 if let transaction = parseTransaction(from: messageText) {
-                    print("[ChatViewModel] Detected transaction: \(transaction.type) - $\(transaction.amount)")
+                    let currencyToUse = transaction.currency ?? (UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD")
+                    print("[ChatViewModel] Detected transaction: \(transaction.type) - \(formatCurrency(transaction.amount, currencyCode: currencyToUse))")
+                    
+                    // Create conversation if needed
+                    var conversationId = currentConversationId
+                    if conversationId == nil {
+                        do {
+                            conversationId = try await createConversation(title: "New Conversation")
+                        } catch {
+                            print("[ChatViewModel] Error creating conversation: \(error.localizedDescription)")
+                        }
+                    }
+                    
+                    // Save user message first
+                    if let convId = conversationId {
+                        await saveMessage(userMessage, conversationId: convId)
+                    }
                     
                     // Save transaction to database
                     let currentUserId = userManager.isAuthenticated ? (userManager.currentUser?.id ?? userId) : userId
@@ -520,6 +653,16 @@ class ChatViewModel: ObservableObject {
                         
                         // Notify FinanceViewModel to refresh
                         NotificationCenter.default.post(name: NSNotification.Name("TransactionAdded"), object: nil)
+                        
+                        // Send confirmation with correct currency
+                        let confirmationMessage = "Got it! I've noted your \(formatCurrency(transaction.amount, currencyCode: currencyToUse)) \(transaction.type)."
+                        await sendAIResponse(confirmationMessage)
+                        
+                        // Return early - transaction handled, don't send to AI backend
+                        await MainActor.run {
+                            isLoading = false
+                        }
+                        return
                     } catch {
                         print("[ChatViewModel] Error saving transaction: \(error.localizedDescription)")
                         // Continue with chat even if transaction save fails

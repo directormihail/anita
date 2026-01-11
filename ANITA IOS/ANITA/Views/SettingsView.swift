@@ -49,6 +49,13 @@ struct SettingsView: View {
     @State private var showImportPicker = false
     @State private var showClearDataConfirm = false
     
+    // Backend connection
+    @State private var backendURL: String = UserDefaults.standard.string(forKey: "backendURL") ?? Config.backendURL
+    @State private var isTestingConnection = false
+    @State private var connectionStatus: String? = nil
+    @State private var showBackendURLAlert = false
+    @State private var backendURLError: String? = nil
+    
     private let networkService = NetworkService.shared
     private let supabaseService = SupabaseService.shared
     
@@ -228,6 +235,14 @@ struct SettingsView: View {
                         loadProfile()
                         loadSubscription()
                         loadPreferences()
+                        // Load backend URL from UserDefaults
+                        if let savedURL = UserDefaults.standard.string(forKey: "backendURL"), !savedURL.isEmpty {
+                            backendURL = savedURL
+                        } else {
+                            backendURL = Config.backendURL
+                        }
+                        // Test connection on appear
+                        testBackendConnection()
                     }
                     
                     // Preferences Section
@@ -416,6 +431,156 @@ struct SettingsView: View {
                                 ) {}
                             }
                             .buttonStyle(PremiumSettingsButtonStyle())
+                        }
+                    }
+                    
+                    // Backend Connection Section
+                    SettingsCategorySection(title: "BACKEND CONNECTION", icon: "server.rack") {
+                        VStack(spacing: 0) {
+                            // Backend URL Input
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    SettingsRowWithIcon(
+                                        icon: "link",
+                                        iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
+                                        title: "Backend URL",
+                                        value: nil,
+                                        showChevron: false
+                                    ) {}
+                                    
+                                    Spacer()
+                                    
+                                    if let status = connectionStatus {
+                                        Image(systemName: status == "Connected" ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                            .foregroundColor(status == "Connected" ? .green : .red)
+                                            .font(.system(size: 18))
+                                    }
+                                }
+                                
+                                TextField("http://localhost:3001", text: $backendURL)
+                                    .textFieldStyle(.plain)
+                                    .font(.system(size: 14, design: .monospaced))
+                                    .foregroundColor(.white.opacity(0.8))
+                                    .padding(.horizontal, 20)
+                                    .padding(.vertical, 10)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(Color.white.opacity(0.1))
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                    )
+                                    .padding(.horizontal, 20)
+                                    .padding(.bottom, 8)
+                                    .autocapitalization(.none)
+                                    .disableAutocorrection(true)
+                                    .keyboardType(.URL)
+                                
+                                if let error = backendURLError {
+                                    Text(error)
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.red.opacity(0.8))
+                                        .padding(.horizontal, 20)
+                                        .padding(.bottom, 4)
+                                }
+                                
+                                // Connection Status
+                                if let status = connectionStatus {
+                                    Text(status)
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundColor(status == "Connected" ? .green : .red)
+                                        .padding(.horizontal, 20)
+                                        .padding(.bottom, 8)
+                                }
+                            }
+                            .padding(.vertical, 8)
+                            
+                            PremiumDivider()
+                                .padding(.leading, 76)
+                            
+                            // Test Connection Button
+                            Button(action: {
+                                testBackendConnection()
+                            }) {
+                                HStack {
+                                    if isTestingConnection {
+                                        ProgressView()
+                                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                            .scaleEffect(0.8)
+                                    } else {
+                                        Image(systemName: "arrow.clockwise")
+                                            .font(.system(size: 16, weight: .semibold))
+                                    }
+                                    Text(isTestingConnection ? "Testing..." : "Test Connection")
+                                        .font(.system(size: 15, weight: .medium))
+                                }
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(
+                                    LinearGradient(
+                                        colors: [
+                                            Color(red: 0.4, green: 0.49, blue: 0.92),
+                                            Color(red: 0.35, green: 0.44, blue: 0.88)
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .cornerRadius(10)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 8)
+                            }
+                            .disabled(isTestingConnection)
+                            .buttonStyle(PremiumSettingsButtonStyle())
+                            
+                            // Save URL Button
+                            Button(action: {
+                                saveBackendURL()
+                            }) {
+                                HStack {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 16, weight: .semibold))
+                                    Text("Save URL")
+                                        .font(.system(size: 15, weight: .medium))
+                                }
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(
+                                    LinearGradient(
+                                        colors: [
+                                            Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.6),
+                                            Color(red: 0.35, green: 0.44, blue: 0.88).opacity(0.6)
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .cornerRadius(10)
+                                .padding(.horizontal, 20)
+                                .padding(.bottom, 8)
+                            }
+                            .buttonStyle(PremiumSettingsButtonStyle())
+                            
+                            // Help Text
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("💡 Tips:")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(.white.opacity(0.7))
+                                Text("• Simulator: Use http://localhost:3001")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.white.opacity(0.5))
+                                Text("• Physical Device: Use your Mac's IP (e.g., http://192.168.1.100:3001)")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.white.opacity(0.5))
+                                Text("• Make sure backend is running: cd 'ANITA backend' && npm run dev")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.white.opacity(0.5))
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 8)
                         }
                     }
                     
@@ -774,6 +939,77 @@ struct SettingsView: View {
         }
     }
     
+    func saveBackendURL() {
+        // Validate URL format
+        guard !backendURL.isEmpty else {
+            backendURLError = "Backend URL cannot be empty"
+            return
+        }
+        
+        // Basic URL validation
+        guard backendURL.hasPrefix("http://") || backendURL.hasPrefix("https://") else {
+            backendURLError = "URL must start with http:// or https://"
+            return
+        }
+        
+        // Save to UserDefaults
+        UserDefaults.standard.set(backendURL, forKey: "backendURL")
+        
+        // Update NetworkService (this will sync with all views using NetworkService.shared)
+        networkService.updateBaseURL(backendURL)
+        
+        // Notify all views that backend URL has changed
+        NotificationCenter.default.post(name: NSNotification.Name("BackendURLUpdated"), object: backendURL)
+        
+        // Clear error
+        backendURLError = nil
+        
+        // Test connection after saving
+        testBackendConnection()
+    }
+    
+    func testBackendConnection() {
+        isTestingConnection = true
+        connectionStatus = nil
+        backendURLError = nil
+        
+        // Temporarily update NetworkService with the current URL
+        let currentURL = backendURL.isEmpty ? Config.backendURL : backendURL
+        networkService.updateBaseURL(currentURL)
+        
+        Task {
+            do {
+                let healthResponse = try await networkService.checkHealth()
+                await MainActor.run {
+                    connectionStatus = "Connected"
+                    backendURLError = nil
+                    isTestingConnection = false
+                    print("[SettingsView] ✅ Backend connection successful: \(healthResponse.status)")
+                }
+            } catch {
+                await MainActor.run {
+                    isTestingConnection = false
+                    let errorMsg = error.localizedDescription
+                    
+                    if errorMsg.contains("timed out") || errorMsg.contains("timeout") {
+                        connectionStatus = "Connection Timeout"
+                        backendURLError = "Backend is not responding. Make sure it's running: cd 'ANITA backend' && npm run dev"
+                    } else if errorMsg.contains("cannot find host") || errorMsg.contains("cannot connect") {
+                        connectionStatus = "Cannot Connect"
+                        backendURLError = "Cannot reach backend. Check:\n1. Backend is running\n2. URL is correct\n3. Same network (for physical devices)"
+                    } else if errorMsg.contains("No internet connection") {
+                        connectionStatus = "No Internet"
+                        backendURLError = "No internet connection"
+                    } else {
+                        connectionStatus = "Connection Failed"
+                        backendURLError = errorMsg
+                    }
+                    
+                    print("[SettingsView] ❌ Backend connection failed: \(errorMsg)")
+                }
+            }
+        }
+    }
     
     func clearAllData() {
         // Clear local data

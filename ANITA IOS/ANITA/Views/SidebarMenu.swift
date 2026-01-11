@@ -168,11 +168,22 @@ struct SidebarMenu: View {
                             }
                             
                             if let errorMessage = viewModel.errorMessage {
-                                Text(errorMessage)
-                                    .font(.caption)
-                                    .foregroundColor(.red)
-                                    .padding(.horizontal, 16)
-                                    .padding(.top, 8)
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("⚠️ Connection Error")
+                                        .font(.headline)
+                                        .foregroundColor(.red)
+                                    
+                                    Text(errorMessage)
+                                        .font(.subheadline)
+                                        .foregroundColor(.red.opacity(0.9))
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                .padding(16)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.red.opacity(0.1))
+                                .cornerRadius(12)
+                                .padding(.horizontal, 16)
+                                .padding(.top, 12)
                             }
                         }
                         .padding(.horizontal, 16)
