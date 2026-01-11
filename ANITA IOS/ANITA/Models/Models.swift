@@ -16,13 +16,19 @@ struct ChatMessage: Identifiable, Codable {
     let content: String
     let timestamp: Date
     var feedbackType: String? // "like" or "dislike"
+    var targetId: String? // ID of target created in this message
+    var targetType: String? // "savings" or "budget" - type of target created
+    var category: String? // Category for budget targets (spending limits)
     
-    init(id: String = UUID().uuidString, role: String, content: String, timestamp: Date = Date(), feedbackType: String? = nil) {
+    init(id: String = UUID().uuidString, role: String, content: String, timestamp: Date = Date(), feedbackType: String? = nil, targetId: String? = nil, targetType: String? = nil, category: String? = nil) {
         self.id = id
         self.role = role
         self.content = content
         self.timestamp = timestamp
         self.feedbackType = feedbackType
+        self.targetId = targetId
+        self.targetType = targetType
+        self.category = category
     }
 }
 
@@ -50,6 +56,10 @@ struct ChatMessageRequest: Codable {
 struct ChatCompletionResponse: Codable {
     let response: String
     let requestId: String?
+    let targetId: String? // ID of target created during this conversation
+    let targetType: String? // "savings" or "budget" - type of target created
+    let budgetTargetIds: [String]? // Array of budget target IDs if multiple limits were created
+    let category: String? // Category for budget targets (spending limits)
 }
 
 struct APIError: Codable {

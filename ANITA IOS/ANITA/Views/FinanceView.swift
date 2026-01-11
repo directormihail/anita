@@ -43,6 +43,23 @@ struct FinanceView: View {
     @State private var showAddAssetSheet = false
     @State private var showMonthPicker = false
     @State private var tempSelectedMonth: Date = Date()
+    @State private var targetToScrollTo: String? = nil
+    
+    // MARK: - Helper Functions
+    private func formatCurrency(_ amount: Double) -> String {
+        let currency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currency
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: amount)) ?? "$0"
+    }
+    
+    func monthYearString(from date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter.string(from: date)
+    }
     
     // Comprehensive assets including goals (matching webapp behavior)
     private var comprehensiveAssets: [Asset] {
@@ -92,195 +109,843 @@ struct FinanceView: View {
         comprehensiveAssets.reduce(0) { $0 + $1.currentValue }
     }
     
-    var body: some View {
-        ZStack {
-            // Black background
-            Color.black
-                .ignoresSafeArea()
+    // MARK: - View Components
+    private var monthPickerView: some View {
+        HStack {
+            Button(action: {
+                let calendar = Calendar.current
+                if let previousMonth = calendar.date(byAdding: .month, value: -1, to: viewModel.selectedMonth) {
+                    viewModel.changeMonth(to: previousMonth)
+                }
+            }) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.7))
+                    .frame(width: 44, height: 44)
+                    .background {
+                        Circle()
+                            .fill(Color.white.opacity(0.1))
+                    }
+            }
             
-            NavigationView {
-                ScrollView {
-                    VStack(spacing: 24) {
-                        // Month Picker - Premium iOS Design
-                        HStack {
-                            Button(action: {
-                                let calendar = Calendar.current
-                                if let previousMonth = calendar.date(byAdding: .month, value: -1, to: viewModel.selectedMonth) {
-                                    viewModel.changeMonth(to: previousMonth)
-                                }
-                            }) {
-                                Image(systemName: "chevron.left")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(.white.opacity(0.7))
-                                    .frame(width: 44, height: 44)
-                                    .background {
-                                        Circle()
-                                            .fill(Color.white.opacity(0.1))
-                                    }
-                            }
-                            
-                            Spacer()
-                            
-                            // Month Display
-                            Button(action: {
-                                tempSelectedMonth = viewModel.selectedMonth
-                                showMonthPicker = true
-                            }) {
-                                VStack(spacing: 4) {
-                                    Text(monthYearString(from: viewModel.selectedMonth))
-                                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                                        .foregroundColor(.white)
-                                    
-                                    Text("Tap to change")
-                                        .font(.system(size: 11, weight: .regular, design: .rounded))
-                                        .foregroundColor(.white.opacity(0.5))
-                                }
-                            }
-                            
-                            Spacer()
-                            
-                            Button(action: {
-                                let calendar = Calendar.current
-                                if let nextMonth = calendar.date(byAdding: .month, value: 1, to: viewModel.selectedMonth) {
-                                    // Don't allow future months
-                                    let now = Date()
-                                    let currentMonth = calendar.dateInterval(of: .month, for: now)?.start ?? now
-                                    if nextMonth <= currentMonth {
-                                        viewModel.changeMonth(to: nextMonth)
-                                    }
-                                }
-                            }) {
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(.white.opacity(0.7))
-                                    .frame(width: 44, height: 44)
-                                    .background {
-                                        Circle()
-                                            .fill(Color.white.opacity(0.1))
-                                    }
-                            }
-                            .disabled({
-                                let calendar = Calendar.current
-                                let now = Date()
-                                let currentMonth = calendar.dateInterval(of: .month, for: now)?.start ?? now
-                                if let nextMonth = calendar.date(byAdding: .month, value: 1, to: viewModel.selectedMonth) {
-                                    return nextMonth > currentMonth
-                                }
-                                return true
-                            }())
-                            .opacity({
-                                let calendar = Calendar.current
-                                let now = Date()
-                                let currentMonth = calendar.dateInterval(of: .month, for: now)?.start ?? now
-                                if let nextMonth = calendar.date(byAdding: .month, value: 1, to: viewModel.selectedMonth) {
-                                    return nextMonth > currentMonth ? 0.3 : 1.0
-                                }
-                                return 0.3
-                            }())
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 8)
-                        
-                        // Balance Card - Premium iOS Design
-                        VStack(spacing: 28) {
-                            VStack(spacing: 12) {
-                                Text("Total Balance")
-                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                                    .foregroundColor(.white.opacity(0.5))
-                                    .textCase(.uppercase)
-                                    .tracking(0.8)
-                                
-                                Text(formatCurrency(viewModel.totalBalance))
-                                    .font(.system(size: 48, weight: .bold, design: .rounded))
-                                    .foregroundStyle(
+            Spacer()
+            
+            // Month Display
+            Button(action: {
+                tempSelectedMonth = viewModel.selectedMonth
+                showMonthPicker = true
+            }) {
+                VStack(spacing: 4) {
+                    Text(monthYearString(from: viewModel.selectedMonth))
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                    
+                    Text("Tap to change")
+                        .font(.system(size: 11, weight: .regular, design: .rounded))
+                        .foregroundColor(.white.opacity(0.5))
+                }
+            }
+            
+            Spacer()
+            
+            Button(action: {
+                let calendar = Calendar.current
+                if let nextMonth = calendar.date(byAdding: .month, value: 1, to: viewModel.selectedMonth) {
+                    // Don't allow future months
+                    let now = Date()
+                    let currentMonth = calendar.dateInterval(of: .month, for: now)?.start ?? now
+                    if nextMonth <= currentMonth {
+                        viewModel.changeMonth(to: nextMonth)
+                    }
+                }
+            }) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.7))
+                    .frame(width: 44, height: 44)
+                    .background {
+                        Circle()
+                            .fill(Color.white.opacity(0.1))
+                    }
+            }
+            .disabled({
+                let calendar = Calendar.current
+                let now = Date()
+                let currentMonth = calendar.dateInterval(of: .month, for: now)?.start ?? now
+                if let nextMonth = calendar.date(byAdding: .month, value: 1, to: viewModel.selectedMonth) {
+                    return nextMonth > currentMonth
+                }
+                return true
+            }())
+            .opacity({
+                let calendar = Calendar.current
+                let now = Date()
+                let currentMonth = calendar.dateInterval(of: .month, for: now)?.start ?? now
+                if let nextMonth = calendar.date(byAdding: .month, value: 1, to: viewModel.selectedMonth) {
+                    return nextMonth > currentMonth ? 0.3 : 1.0
+                }
+                return 0.3
+            }())
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+    }
+    
+    private var balanceCardView: some View {
+        VStack(spacing: 28) {
+            VStack(spacing: 12) {
+                Text("Total Balance")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundColor(.white.opacity(0.5))
+                    .textCase(.uppercase)
+                    .tracking(0.8)
+                
+                Text(formatCurrency(viewModel.totalBalance))
+                    .font(.system(size: 48, weight: .bold, design: .rounded))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.98),
+                                Color.white.opacity(0.9)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .shadow(color: Color.white.opacity(0.1), radius: 2, x: 0, y: 1)
+            }
+            
+            HStack(spacing: 48) {
+                VStack(spacing: 8) {
+                    Text("Income")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white.opacity(0.5))
+                        .textCase(.uppercase)
+                        .tracking(0.8)
+                    Text(formatCurrency(viewModel.monthlyIncome))
+                        .font(.system(size: 20, weight: .semibold, design: .rounded))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [
+                                    Color.green.opacity(0.98),
+                                    Color.green.opacity(0.85)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                }
+                
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.15),
+                                Color.white.opacity(0.08),
+                                Color.white.opacity(0.15)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(width: 1, height: 44)
+                
+                VStack(spacing: 8) {
+                    Text("Expenses")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white.opacity(0.5))
+                        .textCase(.uppercase)
+                        .tracking(0.8)
+                    Text(formatCurrency(viewModel.monthlyExpenses))
+                        .font(.system(size: 20, weight: .semibold, design: .rounded))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [
+                                    Color.red.opacity(0.98),
+                                    Color.red.opacity(0.85)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
+        .padding(.horizontal, 32)
+        .liquidGlass(cornerRadius: 24)
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+    }
+    
+    private var categoryAnalysisView: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Button(action: {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.75, blendDuration: 0.25)) {
+                    isCategoryAnalysisExpanded.toggle()
+                    if isCategoryAnalysisExpanded {
+                        // Load category data filtered by selected month
+                        let calendar = Calendar.current
+                        let month = calendar.component(.month, from: viewModel.selectedMonth)
+                        let year = calendar.component(.year, from: viewModel.selectedMonth)
+                        categoryViewModel.loadData(month: month, year: year)
+                    }
+                }
+            }) {
+                HStack(spacing: 16) {
+                    ZStack {
+                        // Premium glass circle background with gradient
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(white: 0.2).opacity(0.3),
+                                        Color(white: 0.15).opacity(0.2)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 44, height: 44)
+                            .overlay {
+                                Circle()
+                                    .stroke(
                                         LinearGradient(
                                             colors: [
-                                                Color.white.opacity(0.98),
-                                                Color.white.opacity(0.9)
+                                                Color.white.opacity(0.2),
+                                                Color.white.opacity(0.1)
                                             ],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
-                                        )
+                                        ),
+                                        lineWidth: 1
                                     )
-                                    .shadow(color: Color.white.opacity(0.1), radius: 2, x: 0, y: 1)
                             }
+                        
+                        Image(systemName: "chart.pie.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.95),
+                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.8)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    }
+                    
+                    Text("Category Analysis")
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white.opacity(0.95))
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.4))
+                        .rotationEffect(.degrees(isCategoryAnalysisExpanded ? 90 : 0))
+                        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isCategoryAnalysisExpanded)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 18)
+                .liquidGlass(cornerRadius: 18)
+                .padding(.horizontal, 20)
+            }
+            .buttonStyle(PremiumSettingsButtonStyle())
+            
+            if isCategoryAnalysisExpanded {
+                if categoryViewModel.isLoading {
+                    ProgressView()
+                        .tint(Color(red: 0.4, green: 0.49, blue: 0.92))
+                        .frame(height: 200)
+                        .frame(maxWidth: .infinity)
+                        .liquidGlass(cornerRadius: 14)
+                        .padding(.horizontal, 20)
+                        .transition(.expandSection)
+                } else if let data = categoryViewModel.categoryData {
+                    VStack(spacing: 20) {
+                        // Perfect Donut Chart - iOS style with smooth rendering
+                        GeometryReader { geometry in
+                            let chartSize = min(geometry.size.width, geometry.size.height)
+                            let radius = chartSize / 2 - 10
+                            let innerRadius = radius * 0.6
+                            let innerCircleDiameter = innerRadius * 2
                             
-                            HStack(spacing: 48) {
-                                VStack(spacing: 8) {
-                                    Text("Income")
-                                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                        .foregroundColor(.white.opacity(0.5))
-                                        .textCase(.uppercase)
-                                        .tracking(0.8)
-                                    Text(formatCurrency(viewModel.monthlyIncome))
-                                        .font(.system(size: 20, weight: .semibold, design: .rounded))
-                                        .foregroundStyle(
-                                            LinearGradient(
-                                                colors: [
-                                                    Color.green.opacity(0.98),
-                                                    Color.green.opacity(0.85)
-                                                ],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
-                                        )
-                                }
+                            ZStack {
+                                DonutChartView(categories: data.categories, selectedCategory: selectedCategory)
+                                    .drawingGroup() // Ensures smooth rendering
                                 
-                                Rectangle()
-                                    .fill(
+                                // Center text - shows selected category or total count, constrained to inner circle
+                                VStack(spacing: 6) {
+                                    if let selectedCategory = selectedCategory,
+                                       let category = data.categories.first(where: { $0.name == selectedCategory }) {
+                                        Text(String(format: "%.1f%%", category.percentage))
+                                            .font(.system(size: min(36, innerCircleDiameter * 0.3), weight: .bold, design: .rounded))
+                                            .foregroundStyle(
+                                                LinearGradient(
+                                                    colors: [
+                                                        Color.white.opacity(0.98),
+                                                        Color.white.opacity(0.9)
+                                                    ],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                )
+                                            )
+                                            .lineLimit(1)
+                                            .minimumScaleFactor(0.5)
+                                        
+                                        Text(category.name) // Display with proper case, not all caps
+                                            .font(.system(size: min(10, innerCircleDiameter * 0.08), weight: .semibold, design: .rounded))
+                                            .foregroundColor(.white.opacity(0.5))
+                                            .tracking(0.8)
+                                            .lineLimit(1)
+                                            .minimumScaleFactor(0.6)
+                                    } else {
+                                        Text("\(data.categoryCount)")
+                                            .font(.system(size: min(36, innerCircleDiameter * 0.3), weight: .bold, design: .rounded))
+                                            .foregroundStyle(
+                                                LinearGradient(
+                                                    colors: [
+                                                        Color.white.opacity(0.98),
+                                                        Color.white.opacity(0.9)
+                                                    ],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                )
+                                            )
+                                            .lineLimit(1)
+                                            .minimumScaleFactor(0.5)
+                                        
+                                        Text("CATEGORIES")
+                                            .font(.system(size: min(10, innerCircleDiameter * 0.08), weight: .semibold, design: .rounded))
+                                            .foregroundColor(.white.opacity(0.5))
+                                            .tracking(0.8)
+                                            .textCase(.uppercase)
+                                            .lineLimit(1)
+                                            .minimumScaleFactor(0.6)
+                                    }
+                                }
+                                .frame(width: innerCircleDiameter * 0.9, height: innerCircleDiameter * 0.9)
+                                .clipped()
+                            }
+                        }
+                        .frame(height: 220)
+                        .padding(.vertical, 24)
+                        .opacity(isCategoryAnalysisExpanded ? 1 : 0)
+                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: isCategoryAnalysisExpanded)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedCategory)
+                        
+                        // Category List with scrollable behavior
+                        if !data.categories.isEmpty {
+                            let rowHeight: CGFloat = 68 // Clean iOS spacing (14px padding top/bottom + 40px content)
+                            let dividerHeight: CGFloat = 1
+                            let maxVisibleRows: CGFloat = 3.5
+                            let itemCount = CGFloat(data.categories.count)
+                            let calculatedHeight: CGFloat = {
+                                if itemCount <= maxVisibleRows {
+                                    let fullRows = floor(itemCount)
+                                    let partialRow = itemCount - fullRows
+                                    let dividers = max(0, fullRows - 1)
+                                    return fullRows * rowHeight + partialRow * rowHeight + CGFloat(dividers) * dividerHeight
+                                } else {
+                                    return 3 * rowHeight + 0.5 * rowHeight + 2 * dividerHeight
+                                }
+                            }()
+                            
+                            ScrollView {
+                                VStack(spacing: 8) {
+                                    ForEach(Array(data.categories.enumerated()), id: \.element.id) { index, category in
+                                        Button(action: {
+                                            let impact = UIImpactFeedbackGenerator(style: .light)
+                                            impact.impactOccurred()
+                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                                selectedCategory = selectedCategory == category.name ? nil : category.name
+                                            }
+                                        }) {
+                                            FinanceCategoryRow(
+                                                category: category,
+                                                isSelected: selectedCategory == category.name
+                                            )
+                                        }
+                                        .buttonStyle(PlainButtonStyle())
+                                        .opacity(isCategoryAnalysisExpanded ? 1 : 0)
+                                        .animation(
+                                            .spring(response: 0.4, dampingFraction: 0.8)
+                                                .delay(Double(index) * 0.025),
+                                            value: isCategoryAnalysisExpanded
+                                        )
+                                    }
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 4)
+                            }
+                            .frame(height: calculatedHeight)
+                            .clipped()
+                        }
+                    }
+                    .liquidGlass(cornerRadius: 18)
+                    .padding(.horizontal, 20)
+                    .transition(.expandSection)
+                } else {
+                    VStack(spacing: 8) {
+                        Text("No category data available")
+                            .font(.system(size: 15, weight: .medium, design: .rounded))
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 36)
+                    .liquidGlass(cornerRadius: 18)
+                    .padding(.horizontal, 20)
+                    .transition(.expandSection)
+                }
+            }
+        }
+    }
+    
+    private var spendingLimitsView: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Button(action: {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.75, blendDuration: 0.25)) {
+                    isSpendingLimitsExpanded.toggle()
+                }
+            }) {
+                HStack(spacing: 16) {
+                    ZStack {
+                        // Premium glass circle background with gradient
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(white: 0.2).opacity(0.3),
+                                        Color(white: 0.15).opacity(0.2)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 44, height: 44)
+                            .overlay {
+                                Circle()
+                                    .stroke(
                                         LinearGradient(
                                             colors: [
-                                                Color.white.opacity(0.15),
-                                                Color.white.opacity(0.08),
-                                                Color.white.opacity(0.15)
+                                                Color.white.opacity(0.2),
+                                                Color.white.opacity(0.1)
                                             ],
-                                            startPoint: .top,
-                                            endPoint: .bottom
-                                        )
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 1
                                     )
-                                    .frame(width: 1, height: 44)
+                            }
+                        
+                        Image(systemName: "arrow.down.right")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color.red.opacity(0.95),
+                                        Color.red.opacity(0.8)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    }
+                    
+                    Text("Spending Limits")
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white.opacity(0.95))
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.4))
+                        .rotationEffect(.degrees(isSpendingLimitsExpanded ? 90 : 0))
+                        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isSpendingLimitsExpanded)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 18)
+                .liquidGlass(cornerRadius: 18)
+                .padding(.horizontal, 20)
+            }
+            .buttonStyle(PremiumSettingsButtonStyle())
+            
+            if isSpendingLimitsExpanded {
+                if viewModel.goals.isEmpty {
+                    VStack(spacing: 8) {
+                        Text("No spending limits set")
+                            .font(.system(size: 15, weight: .medium, design: .rounded))
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 36)
+                    .liquidGlass(cornerRadius: 18)
+                    .padding(.horizontal, 20)
+                    .transition(.expandSection)
+                } else {
+                    // Row height: ~85px (28px vertical padding + ~57px content height)
+                    let rowHeight: CGFloat = 85
+                    let dividerHeight: CGFloat = 1
+                    let maxVisibleRows: CGFloat = 3.5
+                    let itemCount = CGFloat(viewModel.goals.count)
+                    let calculatedHeight: CGFloat = {
+                        if itemCount <= maxVisibleRows {
+                            // Show all items with dividers
+                            let fullRows = floor(itemCount)
+                            let partialRow = itemCount - fullRows
+                            let dividers = max(0, fullRows - 1)
+                            return fullRows * rowHeight + partialRow * rowHeight + CGFloat(dividers) * dividerHeight
+                        } else {
+                            // Show exactly 3.5 rows (3 full + 0.5 partial = 297.5px + 2px dividers)
+                            // This ensures the 4th row is only partially visible
+                            return 3 * rowHeight + 0.5 * rowHeight + 2 * dividerHeight
+                        }
+                    }()
+                    
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            ForEach(Array(viewModel.goals.enumerated()), id: \.element.id) { index, goal in
+                                GoalRow(goal: goal, viewModel: viewModel)
+                                    .opacity(isSpendingLimitsExpanded ? 1 : 0)
+                                    .animation(
+                                        .spring(response: 0.4, dampingFraction: 0.8)
+                                            .delay(Double(index) * 0.025),
+                                        value: isSpendingLimitsExpanded
+                                    )
                                 
-                                VStack(spacing: 8) {
-                                    Text("Expenses")
-                                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                        .foregroundColor(.white.opacity(0.5))
-                                        .textCase(.uppercase)
-                                        .tracking(0.8)
-                                    Text(formatCurrency(viewModel.monthlyExpenses))
-                                        .font(.system(size: 20, weight: .semibold, design: .rounded))
-                                        .foregroundStyle(
-                                            LinearGradient(
-                                                colors: [
-                                                    Color.red.opacity(0.98),
-                                                    Color.red.opacity(0.85)
-                                                ],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
+                                if index < viewModel.goals.count - 1 {
+                                    PremiumDivider()
+                                        .padding(.leading, 76)
+                                        .opacity(isSpendingLimitsExpanded ? 1 : 0)
+                                        .animation(
+                                            .spring(response: 0.4, dampingFraction: 0.8)
+                                                .delay(Double(index) * 0.025 + 0.01),
+                                            value: isSpendingLimitsExpanded
                                         )
                                 }
                             }
+                        }
+                    }
+                    .frame(height: calculatedHeight)
+                    .clipped()
+                    .liquidGlass(cornerRadius: 18)
+                    .padding(.horizontal, 20)
+                    .transition(.expandSection)
+                }
+            }
+        }
+    }
+    
+    private var savingGoalsView: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Button(action: {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.75, blendDuration: 0.25)) {
+                    isSavingGoalsExpanded.toggle()
+                }
+            }) {
+                HStack(spacing: 16) {
+                    ZStack {
+                        // Premium glass circle background with gradient
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(white: 0.2).opacity(0.3),
+                                        Color(white: 0.15).opacity(0.2)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 44, height: 44)
+                            .overlay {
+                                Circle()
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.white.opacity(0.2),
+                                                Color.white.opacity(0.1)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 1
+                                    )
+                            }
+                        
+                        Image(systemName: "target")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.95),
+                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.8)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    }
+                    
+                    Text("Saving Goals")
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white.opacity(0.95))
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.4))
+                        .rotationEffect(.degrees(isSavingGoalsExpanded ? 90 : 0))
+                        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isSavingGoalsExpanded)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 18)
+                .liquidGlass(cornerRadius: 18)
+                .padding(.horizontal, 20)
+            }
+            .buttonStyle(PremiumSettingsButtonStyle())
+            
+            if isSavingGoalsExpanded {
+                if viewModel.targets.isEmpty {
+                    VStack(spacing: 8) {
+                        Text("No saving goals set")
+                            .font(.system(size: 15, weight: .medium, design: .rounded))
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 36)
+                    .liquidGlass(cornerRadius: 18)
+                    .padding(.horizontal, 20)
+                    .transition(.expandSection)
+                } else {
+                    // Row height: ~85px (28px vertical padding + ~57px content height)
+                    let rowHeight: CGFloat = 85
+                    let dividerHeight: CGFloat = 1
+                    let maxVisibleRows: CGFloat = 3.5
+                    let itemCount = CGFloat(viewModel.targets.count)
+                    let calculatedHeight: CGFloat = {
+                        if itemCount <= maxVisibleRows {
+                            // Show all items with dividers
+                            let fullRows = floor(itemCount)
+                            let partialRow = itemCount - fullRows
+                            let dividers = max(0, fullRows - 1)
+                            return fullRows * rowHeight + partialRow * rowHeight + CGFloat(dividers) * dividerHeight
+                        } else {
+                            // Show exactly 3.5 rows (3 full + 0.5 partial = 297.5px + 2px dividers)
+                            // This ensures the 4th row is only partially visible
+                            return 3 * rowHeight + 0.5 * rowHeight + 2 * dividerHeight
+                        }
+                    }()
+                    
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            ForEach(Array(viewModel.targets.enumerated()), id: \.element.id) { index, target in
+                                TargetRow(target: target, viewModel: viewModel)
+                                    .id("target-\(target.id)")
+                                    .opacity(isSavingGoalsExpanded ? 1 : 0)
+                                    .animation(
+                                        .spring(response: 0.4, dampingFraction: 0.8)
+                                            .delay(Double(index) * 0.025),
+                                        value: isSavingGoalsExpanded
+                                    )
+                                
+                                if index < viewModel.targets.count - 1 {
+                                    PremiumDivider()
+                                        .padding(.leading, 76)
+                                        .opacity(isSavingGoalsExpanded ? 1 : 0)
+                                        .animation(
+                                            .spring(response: 0.4, dampingFraction: 0.8)
+                                                .delay(Double(index) * 0.025 + 0.01),
+                                            value: isSavingGoalsExpanded
+                                        )
+                                }
+                            }
+                        }
+                    }
+                    .frame(height: calculatedHeight)
+                    .clipped()
+                    .liquidGlass(cornerRadius: 18)
+                    .padding(.horizontal, 20)
+                    .transition(.expandSection)
+                }
+            }
+        }
+    }
+    
+    private var assetsView: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Button(action: {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.75, blendDuration: 0.25)) {
+                    isAssetsExpanded.toggle()
+                }
+            }) {
+                HStack(spacing: 16) {
+                    ZStack {
+                        // Premium glass circle background with gradient
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(white: 0.2).opacity(0.3),
+                                        Color(white: 0.15).opacity(0.2)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 44, height: 44)
+                            .overlay {
+                                Circle()
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.white.opacity(0.2),
+                                                Color.white.opacity(0.1)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 1
+                                    )
+                            }
+                        
+                        Image(systemName: "wallet.pass.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color.green.opacity(0.95),
+                                        Color.green.opacity(0.8)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    }
+                    
+                    Text("Assets")
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white.opacity(0.95))
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.4))
+                        .rotationEffect(.degrees(isAssetsExpanded ? 90 : 0))
+                        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isAssetsExpanded)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 18)
+                .liquidGlass(cornerRadius: 18)
+                .padding(.horizontal, 20)
+            }
+            .buttonStyle(PremiumSettingsButtonStyle())
+            
+            if isAssetsExpanded {
+                // Total Assets Summary (shown when expanded)
+                if !comprehensiveAssets.isEmpty {
+                    HStack {
+                        Text("TOTAL ASSETS")
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white.opacity(0.4))
+                            .tracking(0.8)
+                        
+                        Spacer()
+                        
+                        Text(formatCurrency(totalAssetsValue))
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color.green.opacity(0.95),
+                                        Color.green.opacity(0.8)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 18)
+                    .liquidGlass(cornerRadius: 18)
+                    .padding(.horizontal, 20)
+                    .transition(.expandSection)
+                }
+                
+                if comprehensiveAssets.isEmpty {
+                    // Empty state with Add Asset button
+                    Button(action: {
+                        let impact = UIImpactFeedbackGenerator(style: .light)
+                        impact.impactOccurred()
+                        showAddAssetSheet = true
+                    }) {
+                        VStack(spacing: 16) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 48, weight: .light))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [
+                                            Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.8),
+                                            Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.6)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                            
+                            Text("No assets tracked")
+                                .font(.system(size: 15, weight: .medium, design: .rounded))
+                                .foregroundColor(.white.opacity(0.5))
+                            
+                            Text("Tap to add your first asset")
+                                .font(.system(size: 13, weight: .regular, design: .rounded))
+                                .foregroundColor(.white.opacity(0.4))
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 40)
-                        .padding(.horizontal, 32)
-                        .liquidGlass(cornerRadius: 24)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 12)
-                        
-                        // Category Analysis Section
-                        VStack(alignment: .leading, spacing: 14) {
+                        .padding(.vertical, 36)
+                    }
+                    .buttonStyle(PremiumSettingsButtonStyle())
+                    .liquidGlass(cornerRadius: 18)
+                    .padding(.horizontal, 20)
+                    .transition(.expandSection)
+                } else {
+                    // Row height: ~85px (28px vertical padding + ~57px content height)
+                    let rowHeight: CGFloat = 85
+                    let dividerHeight: CGFloat = 1
+                    let maxVisibleRows: CGFloat = 3.5
+                    let itemCount = CGFloat(comprehensiveAssets.count)
+                    let calculatedHeight: CGFloat = {
+                        if itemCount <= maxVisibleRows {
+                            // Show all items with dividers
+                            let fullRows = floor(itemCount)
+                            let partialRow = itemCount - fullRows
+                            let dividers = max(0, fullRows - 1)
+                            return fullRows * rowHeight + partialRow * rowHeight + CGFloat(dividers) * dividerHeight
+                        } else {
+                            // Show exactly 3.5 rows (3 full + 0.5 partial = 297.5px + 2px dividers)
+                            // This ensures the 4th row is only partially visible
+                            return 3 * rowHeight + 0.5 * rowHeight + 2 * dividerHeight
+                        }
+                    }()
+                    
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            // Add Asset button as first item in the list (matching AssetRow design)
                             Button(action: {
-                                withAnimation(.spring(response: 0.4, dampingFraction: 0.75, blendDuration: 0.25)) {
-                                    isCategoryAnalysisExpanded.toggle()
-                                    if isCategoryAnalysisExpanded && categoryViewModel.categoryData == nil {
-                                        categoryViewModel.loadData()
-                                    }
-                                }
+                                let impact = UIImpactFeedbackGenerator(style: .light)
+                                impact.impactOccurred()
+                                showAddAssetSheet = true
                             }) {
                                 HStack(spacing: 16) {
+                                    // Asset icon with premium glass effect (matching AssetRow)
                                     ZStack {
-                                        // Premium glass circle background with gradient
                                         Circle()
                                             .fill(
                                                 LinearGradient(
@@ -292,795 +957,7 @@ struct FinanceView: View {
                                                     endPoint: .bottomTrailing
                                                 )
                                             )
-                                            .frame(width: 44, height: 44)
-                                            .overlay {
-                                                Circle()
-                                                    .stroke(
-                                                        LinearGradient(
-                                                            colors: [
-                                                                Color.white.opacity(0.2),
-                                                                Color.white.opacity(0.1)
-                                                            ],
-                                                            startPoint: .topLeading,
-                                                            endPoint: .bottomTrailing
-                                                        ),
-                                                        lineWidth: 1
-                                                    )
-                                            }
-                                        
-                                        Image(systemName: "chart.pie.fill")
-                                            .font(.system(size: 18, weight: .semibold))
-                                            .foregroundStyle(
-                                                LinearGradient(
-                                                    colors: [
-                                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.95),
-                                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.8)
-                                                    ],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
-                                    }
-                                    
-                                    Text("Category Analysis")
-                                        .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                        .foregroundColor(.white.opacity(0.95))
-                                    
-                                    Spacer()
-                                    
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundColor(.white.opacity(0.4))
-                                        .rotationEffect(.degrees(isCategoryAnalysisExpanded ? 90 : 0))
-                                        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isCategoryAnalysisExpanded)
-                                }
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 18)
-                                .liquidGlass(cornerRadius: 18)
-                                .padding(.horizontal, 20)
-                            }
-                            .buttonStyle(PremiumSettingsButtonStyle())
-                            
-                            if isCategoryAnalysisExpanded {
-                                if categoryViewModel.isLoading {
-                                    ProgressView()
-                                        .tint(Color(red: 0.4, green: 0.49, blue: 0.92))
-                                        .frame(height: 200)
-                                        .frame(maxWidth: .infinity)
-                                        .liquidGlass(cornerRadius: 14)
-                                        .padding(.horizontal, 20)
-                                        .transition(.expandSection)
-                                } else if let data = categoryViewModel.categoryData {
-                                    VStack(spacing: 20) {
-                                        // Perfect Donut Chart - iOS style with smooth rendering
-                                        GeometryReader { geometry in
-                                            let chartSize = min(geometry.size.width, geometry.size.height)
-                                            let radius = chartSize / 2 - 10
-                                            let innerRadius = radius * 0.6
-                                            let innerCircleDiameter = innerRadius * 2
-                                            
-                                            ZStack {
-                                                DonutChartView(categories: data.categories, selectedCategory: selectedCategory)
-                                                    .drawingGroup() // Ensures smooth rendering
-                                                
-                                                // Center text - shows selected category or total count, constrained to inner circle
-                                                VStack(spacing: 6) {
-                                                    if let selectedCategory = selectedCategory,
-                                                       let category = data.categories.first(where: { $0.name == selectedCategory }) {
-                                                        Text(String(format: "%.1f%%", category.percentage))
-                                                            .font(.system(size: min(36, innerCircleDiameter * 0.3), weight: .bold, design: .rounded))
-                                                            .foregroundStyle(
-                                                                LinearGradient(
-                                                                    colors: [
-                                                                        Color.white.opacity(0.98),
-                                                                        Color.white.opacity(0.9)
-                                                                    ],
-                                                                    startPoint: .topLeading,
-                                                                    endPoint: .bottomTrailing
-                                                                )
-                                                            )
-                                                            .lineLimit(1)
-                                                            .minimumScaleFactor(0.5)
-                                                        
-                                                        Text(category.name.uppercased())
-                                                            .font(.system(size: min(10, innerCircleDiameter * 0.08), weight: .semibold, design: .rounded))
-                                                            .foregroundColor(.white.opacity(0.5))
-                                                            .tracking(0.8)
-                                                            .textCase(.uppercase)
-                                                            .lineLimit(1)
-                                                            .minimumScaleFactor(0.6)
-                                                    } else {
-                                                        Text("\(data.categoryCount)")
-                                                            .font(.system(size: min(36, innerCircleDiameter * 0.3), weight: .bold, design: .rounded))
-                                                            .foregroundStyle(
-                                                                LinearGradient(
-                                                                    colors: [
-                                                                        Color.white.opacity(0.98),
-                                                                        Color.white.opacity(0.9)
-                                                                    ],
-                                                                    startPoint: .topLeading,
-                                                                    endPoint: .bottomTrailing
-                                                                )
-                                                            )
-                                                            .lineLimit(1)
-                                                            .minimumScaleFactor(0.5)
-                                                        
-                                                        Text("CATEGORIES")
-                                                            .font(.system(size: min(10, innerCircleDiameter * 0.08), weight: .semibold, design: .rounded))
-                                                            .foregroundColor(.white.opacity(0.5))
-                                                            .tracking(0.8)
-                                                            .textCase(.uppercase)
-                                                            .lineLimit(1)
-                                                            .minimumScaleFactor(0.6)
-                                                    }
-                                                }
-                                                .frame(width: innerCircleDiameter * 0.9, height: innerCircleDiameter * 0.9)
-                                                .clipped()
-                                            }
-                                        }
-                                        .frame(height: 220)
-                                        .padding(.vertical, 24)
-                                        .opacity(isCategoryAnalysisExpanded ? 1 : 0)
-                                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: isCategoryAnalysisExpanded)
-                                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedCategory)
-                                        
-                                        // Category List with scrollable behavior
-                                        if !data.categories.isEmpty {
-                                            let rowHeight: CGFloat = 68 // Clean iOS spacing (14px padding top/bottom + 40px content)
-                                            let dividerHeight: CGFloat = 1
-                                            let maxVisibleRows: CGFloat = 3.5
-                                            let itemCount = CGFloat(data.categories.count)
-                                            let calculatedHeight: CGFloat = {
-                                                if itemCount <= maxVisibleRows {
-                                                    let fullRows = floor(itemCount)
-                                                    let partialRow = itemCount - fullRows
-                                                    let dividers = max(0, fullRows - 1)
-                                                    return fullRows * rowHeight + partialRow * rowHeight + CGFloat(dividers) * dividerHeight
-                                                } else {
-                                                    return 3 * rowHeight + 0.5 * rowHeight + 2 * dividerHeight
-                                                }
-                                            }()
-                                            
-                                            ScrollView {
-                                                VStack(spacing: 8) {
-                                                    ForEach(Array(data.categories.enumerated()), id: \.element.id) { index, category in
-                                                        Button(action: {
-                                                            let impact = UIImpactFeedbackGenerator(style: .light)
-                                                            impact.impactOccurred()
-                                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                                                selectedCategory = selectedCategory == category.name ? nil : category.name
-                                                            }
-                                                        }) {
-                                                            FinanceCategoryRow(
-                                                                category: category,
-                                                                isSelected: selectedCategory == category.name
-                                                            )
-                                                        }
-                                                        .buttonStyle(PlainButtonStyle())
-                                                        .opacity(isCategoryAnalysisExpanded ? 1 : 0)
-                                                        .animation(
-                                                            .spring(response: 0.4, dampingFraction: 0.8)
-                                                                .delay(Double(index) * 0.025),
-                                                            value: isCategoryAnalysisExpanded
-                                                        )
-                                                    }
-                                                }
-                                                .padding(.horizontal, 12)
-                                                .padding(.vertical, 4)
-                                            }
-                                            .frame(height: calculatedHeight)
-                                            .clipped()
-                                        }
-                                    }
-                                    .liquidGlass(cornerRadius: 18)
-                                    .padding(.horizontal, 20)
-                                    .transition(.expandSection)
-                                } else {
-                                    VStack(spacing: 8) {
-                                        Text("No category data available")
-                                            .font(.system(size: 15, weight: .medium, design: .rounded))
-                                            .foregroundColor(.white.opacity(0.5))
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 36)
-                                    .liquidGlass(cornerRadius: 18)
-                                    .padding(.horizontal, 20)
-                                    .transition(.expandSection)
-                                }
-                            }
-                        }
-                        
-                        // Spending Limits Section
-                        VStack(alignment: .leading, spacing: 14) {
-                            Button(action: {
-                                withAnimation(.spring(response: 0.4, dampingFraction: 0.75, blendDuration: 0.25)) {
-                                    isSpendingLimitsExpanded.toggle()
-                                }
-                            }) {
-                                HStack(spacing: 16) {
-                                    ZStack {
-                                        // Premium glass circle background with gradient
-                                        Circle()
-                                            .fill(
-                                                LinearGradient(
-                                                    colors: [
-                                                        Color(white: 0.2).opacity(0.3),
-                                                        Color(white: 0.15).opacity(0.2)
-                                                    ],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
-                                            .frame(width: 44, height: 44)
-                                            .overlay {
-                                                Circle()
-                                                    .stroke(
-                                                        LinearGradient(
-                                                            colors: [
-                                                                Color.white.opacity(0.2),
-                                                                Color.white.opacity(0.1)
-                                                            ],
-                                                            startPoint: .topLeading,
-                                                            endPoint: .bottomTrailing
-                                                        ),
-                                                        lineWidth: 1
-                                                    )
-                                            }
-                                        
-                                        Image(systemName: "arrow.down.right")
-                                            .font(.system(size: 18, weight: .semibold))
-                                            .foregroundStyle(
-                                                LinearGradient(
-                                                    colors: [
-                                                        Color.red.opacity(0.95),
-                                                        Color.red.opacity(0.8)
-                                                    ],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
-                                    }
-                                    
-                                    Text("Spending Limits")
-                                        .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                        .foregroundColor(.white.opacity(0.95))
-                                    
-                                    Spacer()
-                                    
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundColor(.white.opacity(0.4))
-                                        .rotationEffect(.degrees(isSpendingLimitsExpanded ? 90 : 0))
-                                        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isSpendingLimitsExpanded)
-                                }
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 18)
-                                .liquidGlass(cornerRadius: 18)
-                                .padding(.horizontal, 20)
-                            }
-                            .buttonStyle(PremiumSettingsButtonStyle())
-                            
-                            if isSpendingLimitsExpanded {
-                                if viewModel.goals.isEmpty {
-                                    VStack(spacing: 8) {
-                                        Text("No spending limits set")
-                                            .font(.system(size: 15, weight: .medium, design: .rounded))
-                                            .foregroundColor(.white.opacity(0.5))
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 36)
-                                    .liquidGlass(cornerRadius: 18)
-                                    .padding(.horizontal, 20)
-                                    .transition(.expandSection)
-                                } else {
-                                    // Row height: ~85px (28px vertical padding + ~57px content height)
-                                    let rowHeight: CGFloat = 85
-                                    let dividerHeight: CGFloat = 1
-                                    let maxVisibleRows: CGFloat = 3.5
-                                    let itemCount = CGFloat(viewModel.goals.count)
-                                    let calculatedHeight: CGFloat = {
-                                        if itemCount <= maxVisibleRows {
-                                            // Show all items with dividers
-                                            let fullRows = floor(itemCount)
-                                            let partialRow = itemCount - fullRows
-                                            let dividers = max(0, fullRows - 1)
-                                            return fullRows * rowHeight + partialRow * rowHeight + CGFloat(dividers) * dividerHeight
-                                        } else {
-                                            // Show exactly 3.5 rows (3 full + 0.5 partial = 297.5px + 2px dividers)
-                                            // This ensures the 4th row is only partially visible
-                                            return 3 * rowHeight + 0.5 * rowHeight + 2 * dividerHeight
-                                        }
-                                    }()
-                                    
-                                    ScrollView {
-                                        VStack(spacing: 0) {
-                                            ForEach(Array(viewModel.goals.enumerated()), id: \.element.id) { index, goal in
-                                                GoalRow(goal: goal, viewModel: viewModel)
-                                                    .opacity(isSpendingLimitsExpanded ? 1 : 0)
-                                                    .animation(
-                                                        .spring(response: 0.4, dampingFraction: 0.8)
-                                                            .delay(Double(index) * 0.025),
-                                                        value: isSpendingLimitsExpanded
-                                                    )
-                                                
-                                                if index < viewModel.goals.count - 1 {
-                                                    PremiumDivider()
-                                                        .padding(.leading, 76)
-                                                        .opacity(isSpendingLimitsExpanded ? 1 : 0)
-                                                        .animation(
-                                                            .spring(response: 0.4, dampingFraction: 0.8)
-                                                                .delay(Double(index) * 0.025 + 0.01),
-                                                            value: isSpendingLimitsExpanded
-                                                        )
-                                                }
-                                            }
-                                        }
-                                    }
-                                    .frame(height: calculatedHeight)
-                                    .clipped()
-                                    .liquidGlass(cornerRadius: 18)
-                                    .padding(.horizontal, 20)
-                                    .transition(.expandSection)
-                                }
-                            }
-                        }
-                        
-                        // Saving Goals Section
-                        VStack(alignment: .leading, spacing: 14) {
-                            Button(action: {
-                                withAnimation(.spring(response: 0.4, dampingFraction: 0.75, blendDuration: 0.25)) {
-                                    isSavingGoalsExpanded.toggle()
-                                }
-                            }) {
-                                HStack(spacing: 16) {
-                                    ZStack {
-                                        // Premium glass circle background with gradient
-                                        Circle()
-                                            .fill(
-                                                LinearGradient(
-                                                    colors: [
-                                                        Color(white: 0.2).opacity(0.3),
-                                                        Color(white: 0.15).opacity(0.2)
-                                                    ],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
-                                            .frame(width: 44, height: 44)
-                                            .overlay {
-                                                Circle()
-                                                    .stroke(
-                                                        LinearGradient(
-                                                            colors: [
-                                                                Color.white.opacity(0.2),
-                                                                Color.white.opacity(0.1)
-                                                            ],
-                                                            startPoint: .topLeading,
-                                                            endPoint: .bottomTrailing
-                                                        ),
-                                                        lineWidth: 1
-                                                    )
-                                            }
-                                        
-                                        Image(systemName: "target")
-                                            .font(.system(size: 18, weight: .semibold))
-                                            .foregroundStyle(
-                                                LinearGradient(
-                                                    colors: [
-                                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.95),
-                                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.8)
-                                                    ],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
-                                    }
-                                    
-                                    Text("Saving Goals")
-                                        .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                        .foregroundColor(.white.opacity(0.95))
-                                    
-                                    Spacer()
-                                    
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundColor(.white.opacity(0.4))
-                                        .rotationEffect(.degrees(isSavingGoalsExpanded ? 90 : 0))
-                                        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isSavingGoalsExpanded)
-                                }
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 18)
-                                .liquidGlass(cornerRadius: 18)
-                                .padding(.horizontal, 20)
-                            }
-                            .buttonStyle(PremiumSettingsButtonStyle())
-                            
-                            if isSavingGoalsExpanded {
-                                if viewModel.targets.isEmpty {
-                                    VStack(spacing: 8) {
-                                        Text("No saving goals set")
-                                            .font(.system(size: 15, weight: .medium, design: .rounded))
-                                            .foregroundColor(.white.opacity(0.5))
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 36)
-                                    .liquidGlass(cornerRadius: 18)
-                                    .padding(.horizontal, 20)
-                                    .transition(.expandSection)
-                                } else {
-                                    // Row height: ~85px (28px vertical padding + ~57px content height)
-                                    let rowHeight: CGFloat = 85
-                                    let dividerHeight: CGFloat = 1
-                                    let maxVisibleRows: CGFloat = 3.5
-                                    let itemCount = CGFloat(viewModel.targets.count)
-                                    let calculatedHeight: CGFloat = {
-                                        if itemCount <= maxVisibleRows {
-                                            // Show all items with dividers
-                                            let fullRows = floor(itemCount)
-                                            let partialRow = itemCount - fullRows
-                                            let dividers = max(0, fullRows - 1)
-                                            return fullRows * rowHeight + partialRow * rowHeight + CGFloat(dividers) * dividerHeight
-                                        } else {
-                                            // Show exactly 3.5 rows (3 full + 0.5 partial = 297.5px + 2px dividers)
-                                            // This ensures the 4th row is only partially visible
-                                            return 3 * rowHeight + 0.5 * rowHeight + 2 * dividerHeight
-                                        }
-                                    }()
-                                    
-                                    ScrollView {
-                                        VStack(spacing: 0) {
-                                            ForEach(Array(viewModel.targets.enumerated()), id: \.element.id) { index, target in
-                                                TargetRow(target: target, viewModel: viewModel)
-                                                    .opacity(isSavingGoalsExpanded ? 1 : 0)
-                                                    .animation(
-                                                        .spring(response: 0.4, dampingFraction: 0.8)
-                                                            .delay(Double(index) * 0.025),
-                                                        value: isSavingGoalsExpanded
-                                                    )
-                                                
-                                                if index < viewModel.targets.count - 1 {
-                                                    PremiumDivider()
-                                                        .padding(.leading, 76)
-                                                        .opacity(isSavingGoalsExpanded ? 1 : 0)
-                                                        .animation(
-                                                            .spring(response: 0.4, dampingFraction: 0.8)
-                                                                .delay(Double(index) * 0.025 + 0.01),
-                                                            value: isSavingGoalsExpanded
-                                                        )
-                                                }
-                                            }
-                                        }
-                                    }
-                                    .frame(height: calculatedHeight)
-                                    .clipped()
-                                    .liquidGlass(cornerRadius: 18)
-                                    .padding(.horizontal, 20)
-                                    .transition(.expandSection)
-                                }
-                            }
-                        }
-                        
-                        // Assets Section
-                        VStack(alignment: .leading, spacing: 14) {
-                            Button(action: {
-                                withAnimation(.spring(response: 0.4, dampingFraction: 0.75, blendDuration: 0.25)) {
-                                    isAssetsExpanded.toggle()
-                                }
-                            }) {
-                                HStack(spacing: 16) {
-                                    ZStack {
-                                        // Premium glass circle background with gradient
-                                        Circle()
-                                            .fill(
-                                                LinearGradient(
-                                                    colors: [
-                                                        Color(white: 0.2).opacity(0.3),
-                                                        Color(white: 0.15).opacity(0.2)
-                                                    ],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
-                                            .frame(width: 44, height: 44)
-                                            .overlay {
-                                                Circle()
-                                                    .stroke(
-                                                        LinearGradient(
-                                                            colors: [
-                                                                Color.white.opacity(0.2),
-                                                                Color.white.opacity(0.1)
-                                                            ],
-                                                            startPoint: .topLeading,
-                                                            endPoint: .bottomTrailing
-                                                        ),
-                                                        lineWidth: 1
-                                                    )
-                                            }
-                                        
-                                        Image(systemName: "wallet.pass.fill")
-                                            .font(.system(size: 18, weight: .semibold))
-                                            .foregroundStyle(
-                                                LinearGradient(
-                                                    colors: [
-                                                        Color.green.opacity(0.95),
-                                                        Color.green.opacity(0.8)
-                                                    ],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
-                                    }
-                                    
-                                    Text("Assets")
-                                        .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                        .foregroundColor(.white.opacity(0.95))
-                                    
-                                    Spacer()
-                                    
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundColor(.white.opacity(0.4))
-                                        .rotationEffect(.degrees(isAssetsExpanded ? 90 : 0))
-                                        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isAssetsExpanded)
-                                }
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 18)
-                                .liquidGlass(cornerRadius: 18)
-                                .padding(.horizontal, 20)
-                            }
-                            .buttonStyle(PremiumSettingsButtonStyle())
-                            
-                            if isAssetsExpanded {
-                                // Total Assets Summary (shown when expanded)
-                                if !comprehensiveAssets.isEmpty {
-                                    HStack {
-                                        Text("TOTAL ASSETS")
-                                            .font(.system(size: 10, weight: .semibold, design: .rounded))
-                                            .foregroundColor(.white.opacity(0.4))
-                                            .tracking(0.8)
-                                        
-                                        Spacer()
-                                        
-                                        Text(formatCurrency(totalAssetsValue))
-                                            .font(.system(size: 18, weight: .bold, design: .rounded))
-                                            .foregroundStyle(
-                                                LinearGradient(
-                                                    colors: [
-                                                        Color.green.opacity(0.95),
-                                                        Color.green.opacity(0.8)
-                                                    ],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
-                                    }
-                                    .padding(.horizontal, 20)
-                                    .padding(.vertical, 18)
-                                    .liquidGlass(cornerRadius: 18)
-                                    .padding(.horizontal, 20)
-                                    .transition(.expandSection)
-                                }
-                                
-                                if comprehensiveAssets.isEmpty {
-                                    // Empty state with Add Asset button
-                                    Button(action: {
-                                        let impact = UIImpactFeedbackGenerator(style: .light)
-                                        impact.impactOccurred()
-                                        showAddAssetSheet = true
-                                    }) {
-                                        VStack(spacing: 16) {
-                                            Image(systemName: "plus.circle.fill")
-                                                .font(.system(size: 48, weight: .light))
-                                                .foregroundStyle(
-                                                    LinearGradient(
-                                                        colors: [
-                                                            Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.8),
-                                                            Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.6)
-                                                        ],
-                                                        startPoint: .topLeading,
-                                                        endPoint: .bottomTrailing
-                                                    )
-                                                )
-                                            
-                                            Text("No assets tracked")
-                                                .font(.system(size: 15, weight: .medium, design: .rounded))
-                                                .foregroundColor(.white.opacity(0.5))
-                                            
-                                            Text("Tap to add your first asset")
-                                                .font(.system(size: 13, weight: .regular, design: .rounded))
-                                                .foregroundColor(.white.opacity(0.4))
-                                        }
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 36)
-                                    }
-                                    .buttonStyle(PremiumSettingsButtonStyle())
-                                    .liquidGlass(cornerRadius: 18)
-                                    .padding(.horizontal, 20)
-                                    .transition(.expandSection)
-                                } else {
-                                    // Row height: ~85px (28px vertical padding + ~57px content height)
-                                    let rowHeight: CGFloat = 85
-                                    let dividerHeight: CGFloat = 1
-                                    let maxVisibleRows: CGFloat = 3.5
-                                    let itemCount = CGFloat(comprehensiveAssets.count)
-                                    let calculatedHeight: CGFloat = {
-                                        if itemCount <= maxVisibleRows {
-                                            // Show all items with dividers
-                                            let fullRows = floor(itemCount)
-                                            let partialRow = itemCount - fullRows
-                                            let dividers = max(0, fullRows - 1)
-                                            return fullRows * rowHeight + partialRow * rowHeight + CGFloat(dividers) * dividerHeight
-                                        } else {
-                                            // Show exactly 3.5 rows (3 full + 0.5 partial = 297.5px + 2px dividers)
-                                            // This ensures the 4th row is only partially visible
-                                            return 3 * rowHeight + 0.5 * rowHeight + 2 * dividerHeight
-                                        }
-                                    }()
-                                    
-                                    ScrollView {
-                                        VStack(spacing: 0) {
-                                            // Add Asset button as first item in the list (matching AssetRow design)
-                                            Button(action: {
-                                                let impact = UIImpactFeedbackGenerator(style: .light)
-                                                impact.impactOccurred()
-                                                showAddAssetSheet = true
-                                            }) {
-                                                HStack(spacing: 16) {
-                                                    // Asset icon with premium glass effect (matching AssetRow)
-                                                    ZStack {
-                                                        Circle()
-                                                            .fill(
-                                                                LinearGradient(
-                                                                    colors: [
-                                                                        Color(white: 0.2).opacity(0.3),
-                                                                        Color(white: 0.15).opacity(0.2)
-                                                                    ],
-                                                                    startPoint: .topLeading,
-                                                                    endPoint: .bottomTrailing
-                                                                )
-                                                            )
-                                                            .frame(width: 48, height: 48)
-                                                            .overlay {
-                                                                Circle()
-                                                                    .stroke(
-                                                                        LinearGradient(
-                                                                            colors: [
-                                                                                Color.white.opacity(0.2),
-                                                                                Color.white.opacity(0.1)
-                                                                            ],
-                                                                            startPoint: .topLeading,
-                                                                            endPoint: .bottomTrailing
-                                                                        ),
-                                                                        lineWidth: 1
-                                                                    )
-                                                            }
-                                                        
-                                                        Image(systemName: "plus")
-                                                            .font(.system(size: 19, weight: .semibold))
-                                                            .foregroundStyle(
-                                                                LinearGradient(
-                                                                    colors: [
-                                                                        Color.green.opacity(0.95),
-                                                                        Color.green.opacity(0.8)
-                                                                    ],
-                                                                    startPoint: .topLeading,
-                                                                    endPoint: .bottomTrailing
-                                                                )
-                                                            )
-                                                    }
-                                                    
-                                                    // Asset details (matching AssetRow)
-                                                    VStack(alignment: .leading, spacing: 5) {
-                                                        Text("Add Asset")
-                                                            .font(.system(size: 16, weight: .medium, design: .rounded))
-                                                            .foregroundColor(.white.opacity(0.95))
-                                                        
-                                                        HStack(spacing: 6) {
-                                                            Text("NEW")
-                                                                .font(.system(size: 11, weight: .medium, design: .rounded))
-                                                                .foregroundColor(.white.opacity(0.5))
-                                                                .tracking(0.3)
-                                                        }
-                                                    }
-                                                    
-                                                    Spacer()
-                                                }
-                                                .padding(.horizontal, 20)
-                                                .padding(.vertical, 14)
-                                                .background(Color.clear)
-                                            }
-                                            .buttonStyle(PremiumSettingsButtonStyle())
-                                            .opacity(isAssetsExpanded ? 1 : 0)
-                                            .animation(
-                                                .spring(response: 0.4, dampingFraction: 0.8)
-                                                    .delay(0.01),
-                                                value: isAssetsExpanded
-                                            )
-                                            
-                                            // Divider after Add Asset button
-                                            PremiumDivider()
-                                                .padding(.leading, 76)
-                                                .opacity(isAssetsExpanded ? 1 : 0)
-                                                .animation(
-                                                    .spring(response: 0.4, dampingFraction: 0.8)
-                                                        .delay(0.02),
-                                                    value: isAssetsExpanded
-                                                )
-                                            
-                                            // Asset list
-                                            ForEach(Array(comprehensiveAssets.enumerated()), id: \.element.id) { index, asset in
-                                                AssetRow(asset: asset, isVirtualAsset: asset.id.hasPrefix("target-"), viewModel: viewModel)
-                                                    .opacity(isAssetsExpanded ? 1 : 0)
-                                                    .animation(
-                                                        .spring(response: 0.4, dampingFraction: 0.8)
-                                                            .delay(Double(index + 1) * 0.025),
-                                                        value: isAssetsExpanded
-                                                    )
-                                                
-                                                if index < comprehensiveAssets.count - 1 {
-                                                    PremiumDivider()
-                                                        .padding(.leading, 76)
-                                                        .opacity(isAssetsExpanded ? 1 : 0)
-                                                        .animation(
-                                                            .spring(response: 0.4, dampingFraction: 0.8)
-                                                                .delay(Double(index + 1) * 0.025 + 0.01),
-                                                            value: isAssetsExpanded
-                                                        )
-                                                }
-                                            }
-                                        }
-                                    }
-                                    .frame(height: calculatedHeight)
-                                    .clipped()
-                                    .liquidGlass(cornerRadius: 18)
-                                    .padding(.horizontal, 20)
-                                    .transition(.expandSection)
-                                }
-                            }
-                        }
-                        
-                        // XP Level Widget
-                        if let xpStats = viewModel.xpStats {
-                            XPLevelWidget(xpStats: xpStats)
-                                .padding(.horizontal, 20)
-                        }
-                        
-                        // Transactions Section
-                        VStack(alignment: .leading, spacing: 16) {
-                            HStack {
-                                Text("Recent Transactions")
-                                    .font(.system(size: 24, weight: .bold, design: .rounded))
-                                    .foregroundStyle(
-                                        LinearGradient(
-                                            colors: [
-                                                Color.white.opacity(0.98),
-                                                Color.white.opacity(0.9)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                
-                                Spacer()
-                                
-                                Button(action: {
-                                    // TODO: Implement add transaction
-                                    // This could open a sheet or navigate to add transaction view
-                                }) {
-                                    ZStack {
-                                        // Premium glass circle background with gradient
-                                        Circle()
-                                            .fill(
-                                                LinearGradient(
-                                                    colors: [
-                                                        Color(white: 0.2).opacity(0.3),
-                                                        Color(white: 0.15).opacity(0.2)
-                                                    ],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
-                                            .frame(width: 40, height: 40)
+                                            .frame(width: 48, height: 48)
                                             .overlay {
                                                 Circle()
                                                     .stroke(
@@ -1097,87 +974,339 @@ struct FinanceView: View {
                                             }
                                         
                                         Image(systemName: "plus")
-                                            .font(.system(size: 16, weight: .semibold))
+                                            .font(.system(size: 19, weight: .semibold))
                                             .foregroundStyle(
                                                 LinearGradient(
                                                     colors: [
-                                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.95),
-                                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.8)
+                                                        Color.green.opacity(0.95),
+                                                        Color.green.opacity(0.8)
                                                     ],
                                                     startPoint: .topLeading,
                                                     endPoint: .bottomTrailing
                                                 )
                                             )
                                     }
-                                }
-                                .buttonStyle(PremiumSettingsButtonStyle())
-                            }
-                            .padding(.horizontal, 20)
-                            
-                            if viewModel.isLoading {
-                                ProgressView()
-                                    .tint(Color(red: 0.4, green: 0.49, blue: 0.92))
-                                    .padding()
-                                    .frame(height: 200)
-                                    .frame(maxWidth: .infinity)
-                                    .liquidGlass(cornerRadius: 18)
-                                    .padding(.horizontal, 20)
-                            } else if viewModel.transactions.isEmpty {
-                                VStack(spacing: 16) {
-                                    Image(systemName: "chart.bar.doc.horizontal")
-                                        .font(.system(size: 48, weight: .light))
-                                        .foregroundStyle(
-                                            LinearGradient(
-                                                colors: [
-                                                    Color.white.opacity(0.4),
-                                                    Color.white.opacity(0.3)
-                                                ],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
-                                        )
                                     
-                                    Text("No transactions yet")
-                                        .font(.system(size: 18, weight: .semibold, design: .rounded))
-                                        .foregroundColor(.white.opacity(0.7))
-                                    
-                                    Text("Add your first transaction to start tracking")
-                                        .font(.system(size: 14, weight: .regular, design: .rounded))
-                                        .foregroundColor(.white.opacity(0.5))
-                                        .multilineTextAlignment(.center)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 52)
-                                .frame(height: 200)
-                                .liquidGlass(cornerRadius: 18)
-                                .padding(.horizontal, 20)
-                            } else {
-                                ScrollView {
-                                    VStack(spacing: 0) {
-                                        ForEach(viewModel.transactions) { transaction in
-                                            TransactionRow(transaction: transaction)
+                                    // Asset details (matching AssetRow)
+                                    VStack(alignment: .leading, spacing: 5) {
+                                        Text("Add Asset")
+                                            .font(.system(size: 16, weight: .medium, design: .rounded))
+                                            .foregroundColor(.white.opacity(0.95))
+                                        
+                                        HStack(spacing: 6) {
+                                            Text("NEW")
+                                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                                .foregroundColor(.white.opacity(0.5))
+                                                .tracking(0.3)
                                         }
                                     }
+                                    
+                                    Spacer()
                                 }
-                                .frame(height: 400)
-                                .liquidGlass(cornerRadius: 18)
                                 .padding(.horizontal, 20)
+                                .padding(.vertical, 14)
+                                .background(Color.clear)
                             }
+                            .buttonStyle(PremiumSettingsButtonStyle())
+                            .opacity(isAssetsExpanded ? 1 : 0)
+                            .animation(
+                                .spring(response: 0.4, dampingFraction: 0.8)
+                                    .delay(0.01),
+                                value: isAssetsExpanded
+                            )
                             
-                            if let errorMessage = viewModel.errorMessage {
-                                Text(errorMessage)
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundColor(.red.opacity(0.8))
-                                    .padding(.horizontal, 20)
-                                    .padding(.top, 4)
+                            // Divider after Add Asset button
+                            PremiumDivider()
+                                .padding(.leading, 76)
+                                .opacity(isAssetsExpanded ? 1 : 0)
+                                .animation(
+                                    .spring(response: 0.4, dampingFraction: 0.8)
+                                        .delay(0.02),
+                                    value: isAssetsExpanded
+                                )
+                            
+                            // Asset list
+                            ForEach(Array(comprehensiveAssets.enumerated()), id: \.element.id) { index, asset in
+                                AssetRow(asset: asset, isVirtualAsset: asset.id.hasPrefix("target-"), viewModel: viewModel)
+                                    .opacity(isAssetsExpanded ? 1 : 0)
+                                    .animation(
+                                        .spring(response: 0.4, dampingFraction: 0.8)
+                                            .delay(Double(index + 1) * 0.025),
+                                        value: isAssetsExpanded
+                                    )
+                                
+                                if index < comprehensiveAssets.count - 1 {
+                                    PremiumDivider()
+                                        .padding(.leading, 76)
+                                        .opacity(isAssetsExpanded ? 1 : 0)
+                                        .animation(
+                                            .spring(response: 0.4, dampingFraction: 0.8)
+                                                .delay(Double(index + 1) * 0.025 + 0.01),
+                                            value: isAssetsExpanded
+                                        )
+                                }
                             }
                         }
+                    }
+                    .frame(height: calculatedHeight)
+                    .clipped()
+                    .liquidGlass(cornerRadius: 18)
+                    .padding(.horizontal, 20)
+                    .transition(.expandSection)
+                }
+            }
+        }
+    }
+    
+    private var xpLevelWidgetView: some View {
+        Group {
+            if let xpStats = viewModel.xpStats {
+                XPLevelWidget(xpStats: xpStats)
+                    .padding(.horizontal, 20)
+            }
+        }
+    }
+    
+    private var transactionsView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Add ID for scrolling
+            Color.clear
+                .frame(height: 0)
+                .id("transactions-section")
+            HStack {
+                Text("Recent Transactions")
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.98),
+                                Color.white.opacity(0.9)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                
+                Spacer()
+                
+                Button(action: {
+                    // TODO: Implement add transaction
+                    // This could open a sheet or navigate to add transaction view
+                }) {
+                    ZStack {
+                        // Premium glass circle background with gradient
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(white: 0.2).opacity(0.3),
+                                        Color(white: 0.15).opacity(0.2)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 40, height: 40)
+                            .overlay {
+                                Circle()
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.white.opacity(0.2),
+                                                Color.white.opacity(0.1)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 1
+                                    )
+                            }
                         
-                        Spacer(minLength: 40)
+                        Image(systemName: "plus")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.95),
+                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.8)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    }
+                }
+                .buttonStyle(PremiumSettingsButtonStyle())
+            }
+            .padding(.horizontal, 20)
+            
+            if viewModel.isLoading {
+                ProgressView()
+                    .tint(Color(red: 0.4, green: 0.49, blue: 0.92))
+                    .padding()
+                    .frame(height: 200)
+                    .frame(maxWidth: .infinity)
+                    .liquidGlass(cornerRadius: 18)
+                    .padding(.horizontal, 20)
+            } else if viewModel.transactions.isEmpty {
+                VStack(spacing: 16) {
+                    Image(systemName: "chart.bar.doc.horizontal")
+                        .font(.system(size: 48, weight: .light))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.4),
+                                    Color.white.opacity(0.3)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                    
+                    Text("No transactions yet")
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white.opacity(0.7))
+                    
+                    Text("Add your first transaction to start tracking")
+                        .font(.system(size: 14, weight: .regular, design: .rounded))
+                        .foregroundColor(.white.opacity(0.5))
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 52)
+                .frame(height: 200)
+                .liquidGlass(cornerRadius: 18)
+                .padding(.horizontal, 20)
+            } else {
+                // Filter transactions by category if selected
+                let filteredTransactions = selectedCategory != nil 
+                    ? viewModel.transactions.filter { $0.category.lowercased() == selectedCategory!.lowercased() }
+                    : viewModel.transactions
+                
+                ScrollView {
+                    VStack(spacing: 0) {
+                        // Show filter indicator if category is selected
+                        if selectedCategory != nil {
+                            HStack {
+                                Text("Filtered: \(selectedCategory!)")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.6))
+                                
+                                Spacer()
+                                
+                                Button(action: {
+                                    withAnimation {
+                                        selectedCategory = nil
+                                    }
+                                }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(.white.opacity(0.6))
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                        }
+                        
+                        if filteredTransactions.isEmpty && selectedCategory != nil {
+                            VStack(spacing: 12) {
+                                Text("No transactions found")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.6))
+                                
+                                Text("No transactions in \(selectedCategory!) category")
+                                    .font(.system(size: 14, weight: .regular))
+                                    .foregroundColor(.white.opacity(0.4))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 40)
+                        } else {
+                            ForEach(filteredTransactions) { transaction in
+                                TransactionRow(transaction: transaction)
+                            }
+                        }
+                    }
+                }
+                .frame(height: 400)
+                .liquidGlass(cornerRadius: 18)
+                .padding(.horizontal, 20)
+            }
+            
+            if let errorMessage = viewModel.errorMessage {
+                Text(errorMessage)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.red.opacity(0.8))
+                    .padding(.horizontal, 20)
+                    .padding(.top, 4)
+            }
+        }
+    }
+    
+    var body: some View {
+        ZStack {
+            // Black background
+            Color.black
+                .ignoresSafeArea()
+            
+            NavigationView {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 24) {
+                            monthPickerView
+                            balanceCardView
+                            categoryAnalysisView
+                            spendingLimitsView
+                            savingGoalsView
+                            assetsView
+                            xpLevelWidgetView
+                            transactionsView
+                            
+                            Spacer(minLength: 40)
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToTarget"))) { notification in
+                    if let targetId = notification.object as? String {
+                        targetToScrollTo = targetId
+                        // Expand Saving Goals section if not already expanded
+                        if !isSavingGoalsExpanded {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                                isSavingGoalsExpanded = true
+                            }
+                        }
+                        // Wait a bit for the section to expand, then scroll
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                proxy.scrollTo("target-\(targetId)", anchor: .center)
+                            }
+                        }
                     }
                 }
                 .background(Color.black)
                 .navigationBarHidden(true)
+                .navigationBarTitleDisplayMode(.inline)
+                .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("TargetCreated"))) { _ in
+                    // Refresh targets when a new one is created
+                    Task {
+                        await viewModel.loadTargets()
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("FilterTransactionsByCategory"))) { notification in
+                    // Filter transactions by category when limit button is clicked
+                    if let category = notification.object as? String {
+                        withAnimation {
+                            selectedCategory = category
+                            // Scroll to transactions section
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                withAnimation {
+                                    proxy.scrollTo("transactions-section", anchor: .top)
+                                }
+                            }
+                        }
+                    }
+                }
+                .toolbarBackground(Color.black, for: .navigationBar)
+                .toolbarBackground(.visible, for: .navigationBar)
+                .toolbarColorScheme(.dark, for: .navigationBar)
             }
             .background(Color.black)
         }
@@ -1187,6 +1316,22 @@ struct FinanceView: View {
         .refreshable {
             Task { @MainActor in
                 viewModel.refresh()
+                // Also refresh category analytics if expanded
+                if isCategoryAnalysisExpanded {
+                    let calendar = Calendar.current
+                    let month = calendar.component(.month, from: viewModel.selectedMonth)
+                    let year = calendar.component(.year, from: viewModel.selectedMonth)
+                    categoryViewModel.loadData(month: month, year: year)
+                }
+            }
+        }
+        .onChange(of: viewModel.selectedMonth) { oldValue, newValue in
+            // Reload category analytics when month changes (if expanded)
+            if isCategoryAnalysisExpanded {
+                let calendar = Calendar.current
+                let month = calendar.component(.month, from: newValue)
+                let year = calendar.component(.year, from: newValue)
+                categoryViewModel.loadData(month: month, year: year)
             }
         }
         .sheet(isPresented: $showAddAssetSheet) {
@@ -1212,20 +1357,7 @@ struct FinanceView: View {
             )
         }
     }
-    
-    private func formatCurrency(_ amount: Double) -> String {
-        let currency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = currency
-        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
-    }
-    
-    private func monthYearString(from date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMMM yyyy"
-        return formatter.string(from: date)
-    }
+}
 }
 
 // TransactionItem is now defined in Models.swift
@@ -1290,7 +1422,7 @@ struct TransactionRow: View {
                     .lineLimit(1)
                 
                 HStack(spacing: 6) {
-                    Text(transaction.category.uppercased())
+                    Text(CategoryDefinitions.shared.normalizeCategory(transaction.category)) // Display with proper case
                         .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundColor(.white.opacity(0.5))
                         .tracking(0.3)
@@ -4138,6 +4270,27 @@ struct GoalRow: View {
         self.viewModel = viewModel
     }
     
+    // Calculate period-specific spending for this goal
+    private var periodSpending: Double {
+        // For budget goals (goals with category), show spending in selected period
+        if let goalCategory = goal.category, !goalCategory.isEmpty {
+            return viewModel.getGoalSpending(for: goal)
+        }
+        // For other goals, use currentAmount (all-time)
+        return goal.currentAmount
+    }
+    
+    // Calculate progress percentage based on period spending vs limit
+    private var periodProgressPercentage: Double {
+        guard goal.targetAmount > 0 else { return 0 }
+        // For budget goals, show how much of the limit has been spent
+        if let goalCategory = goal.category, !goalCategory.isEmpty {
+            return min((periodSpending / goal.targetAmount) * 100, 100)
+        }
+        // For savings goals, use standard progress
+        return goal.progressPercentage
+    }
+    
     var body: some View {
         HStack(spacing: 16) {
             // Goal icon with premium glass effect
@@ -4190,7 +4343,7 @@ struct GoalRow: View {
                     .foregroundColor(.white.opacity(0.95))
                 
                 HStack(spacing: 6) {
-                    Text("\(Int(goal.progressPercentage))%")
+                    Text("\(Int(periodProgressPercentage))%")
                         .font(.system(size: 12, weight: .semibold, design: .rounded))
                         .foregroundColor(.white.opacity(0.6))
                     
@@ -4198,9 +4351,16 @@ struct GoalRow: View {
                         .foregroundColor(.white.opacity(0.4))
                         .font(.system(size: 11))
                     
-                    Text(formatCurrency(goal.currentAmount))
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundColor(.white.opacity(0.5))
+                    // Show period spending for budget goals, currentAmount for savings
+                    if let goalCategory = goal.category, !goalCategory.isEmpty {
+                        Text(formatCurrency(periodSpending))
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundColor(.white.opacity(0.5))
+                    } else {
+                        Text(formatCurrency(goal.currentAmount))
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundColor(.white.opacity(0.5))
+                    }
                     
                     Text("of")
                         .font(.system(size: 12, weight: .regular, design: .rounded))
@@ -4211,7 +4371,7 @@ struct GoalRow: View {
                         .foregroundColor(.white.opacity(0.5))
                 }
                 
-                // Progress bar (red)
+                // Progress bar (red) - use period progress for budget goals
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
                         Rectangle()
@@ -4230,7 +4390,7 @@ struct GoalRow: View {
                                     endPoint: .trailing
                                 )
                             )
-                            .frame(width: geometry.size.width * CGFloat(goal.progressPercentage / 100), height: 5)
+                            .frame(width: geometry.size.width * CGFloat(periodProgressPercentage / 100), height: 5)
                             .cornerRadius(2.5)
                     }
                 }
@@ -5154,13 +5314,11 @@ struct MonthPickerSheet: View {
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Color.black, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
         }
     }
     
-    private func monthName(from month: Int) -> String {
+    // MARK: - Helper Functions
+    func monthName(from month: Int) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMMM"
         let date = Calendar.current.date(from: DateComponents(year: 2000, month: month, day: 1))!
@@ -5171,4 +5329,3 @@ struct MonthPickerSheet: View {
 #Preview {
     FinanceView()
 }
-

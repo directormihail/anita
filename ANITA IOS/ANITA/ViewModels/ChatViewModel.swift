@@ -36,7 +36,7 @@ class ChatViewModel: ObservableObject {
             forName: NSNotification.Name("BackendURLUpdated"),
             object: nil,
             queue: .main
-        ) { [weak self] notification in
+        ) { notification in
             if let newURL = notification.object as? String {
                 print("[ChatViewModel] Backend URL updated to: \(newURL)")
                 // NetworkService.shared will automatically use the new URL
@@ -313,47 +313,10 @@ class ChatViewModel: ObservableObject {
             return nil
         }
         
-        // Extract category (simple keyword matching)
-        let categoryKeywords: [String: String] = [
-            "food": "Food & Dining",
-            "groceries": "Food & Dining",
-            "restaurant": "Food & Dining",
-            "coffee": "Food & Dining",
-            "lunch": "Food & Dining",
-            "dinner": "Food & Dining",
-            "breakfast": "Food & Dining",
-            "transport": "Transportation",
-            "gas": "Transportation",
-            "uber": "Transportation",
-            "taxi": "Transportation",
-            "parking": "Transportation",
-            "rent": "Housing",
-            "mortgage": "Housing",
-            "utilities": "Utilities",
-            "electric": "Utilities",
-            "water": "Utilities",
-            "internet": "Utilities",
-            "phone": "Utilities",
-            "subscription": "Subscriptions",
-            "netflix": "Subscriptions",
-            "spotify": "Subscriptions",
-            "shopping": "Shopping",
-            "clothing": "Shopping",
-            "entertainment": "Entertainment",
-            "movie": "Entertainment",
-            "salary": "Income",
-            "paycheck": "Income",
-            "freelance": "Income",
-            "investment": "Investments"
-        ]
-        
-        var category: String? = "Other"
-        for (keyword, cat) in categoryKeywords {
-            if lowercased.contains(keyword) {
-                category = cat
-                break
-            }
-        }
+        // Use CategoryDefinitions for smart category detection
+        let categoryDefinitions = CategoryDefinitions.shared
+        let detectedCategory = categoryDefinitions.detectCategory(from: text)
+        let category = categoryDefinitions.normalizeCategory(detectedCategory)
         
         // Detect currency from user input
         let detectedCurrency = detectCurrency(from: text)
@@ -743,8 +706,25 @@ class ChatViewModel: ObservableObject {
                 
                 let assistantMessage = ChatMessage(
                     role: "assistant",
-                    content: response.response
+                    content: response.response,
+                    targetId: response.targetId, // Include target ID if one was created
+                    targetType: response.targetType, // Include target type (savings or budget)
+                    category: response.category // Include category for budget targets
                 )
+                
+                // If a target was created, notify FinanceViewModel to refresh
+                if let targetId = response.targetId {
+                    print("[ChatViewModel] Target created with ID: \(targetId), type: \(response.targetType ?? "unknown")")
+                    NotificationCenter.default.post(name: NSNotification.Name("TargetCreated"), object: targetId)
+                    
+                    // Also notify if multiple budget targets were created
+                    if let budgetTargetIds = response.budgetTargetIds, budgetTargetIds.count > 1 {
+                        print("[ChatViewModel] Multiple budget targets created: \(budgetTargetIds.count)")
+                        for budgetTargetId in budgetTargetIds {
+                            NotificationCenter.default.post(name: NSNotification.Name("TargetCreated"), object: budgetTargetId)
+                        }
+                    }
+                }
                 
                 await MainActor.run {
                     messages.append(assistantMessage)

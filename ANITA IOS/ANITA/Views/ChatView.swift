@@ -245,7 +245,7 @@ struct ChatView: View {
                             .padding(.vertical, 20)
                         }
                     }
-                    .onChange(of: viewModel.messages.count) {
+                    .onChange(of: viewModel.messages.count) { oldValue, newValue in
                         if !showWelcomeScreen, let lastMessage = viewModel.messages.last {
                             withAnimation {
                                 proxy.scrollTo(lastMessage.id, anchor: .bottom)
@@ -524,7 +524,7 @@ struct MessageBubble: View {
                     .padding(.vertical, 12)
                     .padding(.horizontal, 4)
                     
-                    // Like/Dislike/Copy buttons (only for ANITA messages)
+                    // Like/Dislike/Copy/Check Goal buttons (only for ANITA messages)
                     HStack(spacing: 16) {
                         FeedbackButton(
                             icon: "hand.thumbsup",
@@ -569,6 +569,17 @@ struct MessageBubble: View {
                                 .frame(width: 32, height: 32)
                                 .liquidGlass(cornerRadius: 16)
                         }
+                        
+                        // Check Goal/Limit button (only shown when targetId is present)
+                        if let targetId = message.targetId {
+                            if message.targetType == "budget" {
+                                // For budget targets, we need to get the category from the target
+                                // For now, we'll pass nil and fetch it when needed
+                                CheckLimitButton(targetId: targetId, category: message.category)
+                            } else {
+                                CheckGoalButton(targetId: targetId)
+                            }
+                        }
                     }
                 }
             }
@@ -596,6 +607,125 @@ struct FeedbackButton: View {
         }
     }
 }
+
+// Check Goal Button Component - matches background style with blue text/icon
+struct CheckGoalButton: View {
+    let targetId: String
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        Button(action: {
+            // Haptic feedback
+            let impact = UIImpactFeedbackGenerator(style: .medium)
+            impact.impactOccurred()
+            
+            // Post notification to switch to Finance tab and scroll to target
+            NotificationCenter.default.post(
+                name: NSNotification.Name("NavigateToTarget"),
+                object: targetId
+            )
+            
+            // Switch to Finance tab (index 1)
+            NotificationCenter.default.post(
+                name: NSNotification.Name("SwitchToFinanceTab"),
+                object: nil
+            )
+        }) {
+            HStack(spacing: 6) {
+                Image(systemName: "target")
+                    .font(.system(size: 16))
+                    .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                
+                Text("Check your goal")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(height: 32)
+            .liquidGlass(cornerRadius: 16)
+        }
+        .buttonStyle(CheckGoalButtonStyle())
+    }
+}
+
+// Check Limit Button Component - matches background style with red text/icon
+struct CheckLimitButton: View {
+    let targetId: String
+    let category: String?
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        Button(action: {
+            // Haptic feedback
+            let impact = UIImpactFeedbackGenerator(style: .medium)
+            impact.impactOccurred()
+            
+            // Post notification to switch to Finance tab and scroll to target
+            NotificationCenter.default.post(
+                name: NSNotification.Name("NavigateToTarget"),
+                object: targetId
+            )
+            
+            // If category is available, post notification to filter transactions by category
+            if let category = category {
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("FilterTransactionsByCategory"),
+                    object: category
+                )
+            }
+            
+            // Switch to Finance tab (index 1)
+            NotificationCenter.default.post(
+                name: NSNotification.Name("SwitchToFinanceTab"),
+                object: nil
+            )
+        }) {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.down.right")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [
+                                Color.red.opacity(0.95),
+                                Color.red.opacity(0.8)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                
+                Text("Check your limit")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(Color(red: 0.9, green: 0.3, blue: 0.3))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(height: 32)
+            .liquidGlass(cornerRadius: 16)
+        }
+        .buttonStyle(CheckLimitButtonStyle())
+    }
+}
+
+struct CheckGoalButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .opacity(configuration.isPressed ? 0.9 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: configuration.isPressed)
+    }
+}
+
+struct CheckLimitButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .opacity(configuration.isPressed ? 0.9 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: configuration.isPressed)
+    }
+}
+
 
 struct CurrencyLoadingAnimation: View {
     @State private var animationOffsets: [CGFloat] = [0, 0, 0]
