@@ -41,6 +41,8 @@ struct FinanceView: View {
     @State private var isAssetsExpanded = false
     @State private var selectedCategory: String? = nil
     @State private var showAddAssetSheet = false
+    @State private var showMonthPicker = false
+    @State private var tempSelectedMonth: Date = Date()
     
     // Comprehensive assets including goals (matching webapp behavior)
     private var comprehensiveAssets: [Asset] {
@@ -121,7 +123,8 @@ struct FinanceView: View {
                             
                             // Month Display
                             Button(action: {
-                                // Could add date picker here in future
+                                tempSelectedMonth = viewModel.selectedMonth
+                                showMonthPicker = true
                             }) {
                                 VStack(spacing: 4) {
                                     Text(monthYearString(from: viewModel.selectedMonth))
@@ -1188,6 +1191,25 @@ struct FinanceView: View {
         }
         .sheet(isPresented: $showAddAssetSheet) {
             AddAssetSheet(viewModel: viewModel)
+        }
+        .sheet(isPresented: $showMonthPicker) {
+            MonthPickerSheet(
+                selectedMonth: $tempSelectedMonth,
+                onConfirm: {
+                    let calendar = Calendar.current
+                    let now = Date()
+                    let currentMonth = calendar.dateInterval(of: .month, for: now)?.start ?? now
+                    
+                    // Don't allow future months
+                    if tempSelectedMonth <= currentMonth {
+                        viewModel.changeMonth(to: tempSelectedMonth)
+                    }
+                    showMonthPicker = false
+                },
+                onCancel: {
+                    showMonthPicker = false
+                }
+            )
         }
     }
     
@@ -4993,6 +5015,156 @@ struct AddAssetSheet: View {
                 }
             }
         }
+    }
+}
+
+// Month Picker Sheet
+struct MonthPickerSheet: View {
+    @Binding var selectedMonth: Date
+    let onConfirm: () -> Void
+    let onCancel: () -> Void
+    @Environment(\.dismiss) var dismiss
+    
+    private var maxDate: Date {
+        let calendar = Calendar.current
+        let now = Date()
+        return calendar.dateInterval(of: .month, for: now)?.start ?? now
+    }
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black
+                    .ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Header
+                    VStack(spacing: 8) {
+                        Text("Select Month")
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                            .padding(.top, 20)
+                    }
+                    .padding(.bottom, 32)
+                    
+                    // Month and Year Picker (styled to look like single calendar)
+                    HStack(spacing: 0) {
+                        // Month Picker
+                        Picker("Month", selection: Binding(
+                            get: {
+                                Calendar.current.component(.month, from: selectedMonth)
+                            },
+                            set: { newMonth in
+                                let calendar = Calendar.current
+                                let year = calendar.component(.year, from: selectedMonth)
+                                let currentYear = calendar.component(.year, from: maxDate)
+                                let currentMonth = calendar.component(.month, from: maxDate)
+                                
+                                // If selecting current year, don't allow months beyond current month
+                                if year == currentYear && newMonth > currentMonth {
+                                    return
+                                }
+                                
+                                if let newDate = calendar.date(from: DateComponents(year: year, month: newMonth, day: 1)) {
+                                    if newDate <= maxDate {
+                                        selectedMonth = newDate
+                                    }
+                                }
+                            }
+                        )) {
+                            ForEach(1...12, id: \.self) { month in
+                                Text(monthName(from: month))
+                                    .foregroundColor(.white)
+                                    .tag(month)
+                            }
+                        }
+                        .pickerStyle(.wheel)
+                        .frame(maxWidth: .infinity)
+                        .colorScheme(.dark)
+                        
+                        // Year Picker
+                        Picker("Year", selection: Binding(
+                            get: {
+                                Calendar.current.component(.year, from: selectedMonth)
+                            },
+                            set: { newYear in
+                                let calendar = Calendar.current
+                                let month = calendar.component(.month, from: selectedMonth)
+                                let currentYear = calendar.component(.year, from: maxDate)
+                                let currentMonth = calendar.component(.month, from: maxDate)
+                                
+                                // If selecting current year, don't allow months beyond current month
+                                if newYear == currentYear && month > currentMonth {
+                                    if let newDate = calendar.date(from: DateComponents(year: newYear, month: currentMonth, day: 1)) {
+                                        selectedMonth = newDate
+                                    }
+                                } else if let newDate = calendar.date(from: DateComponents(year: newYear, month: month, day: 1)) {
+                                    if newDate <= maxDate {
+                                        selectedMonth = newDate
+                                    }
+                                }
+                            }
+                        )) {
+                            ForEach(2000...Calendar.current.component(.year, from: maxDate), id: \.self) { year in
+                                Text(String(year))
+                                    .foregroundColor(.white)
+                                    .tag(year)
+                            }
+                        }
+                        .pickerStyle(.wheel)
+                        .frame(maxWidth: .infinity)
+                        .colorScheme(.dark)
+                        .accentColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                    }
+                    .padding(.horizontal, 20)
+                    .tint(Color(red: 0.4, green: 0.49, blue: 0.92))
+                    
+                    Spacer()
+                    
+                    // Action Buttons
+                    HStack(spacing: 16) {
+                        Button(action: {
+                            onCancel()
+                        }) {
+                            Text("Cancel")
+                                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                .foregroundColor(.white.opacity(0.7))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(PremiumSettingsButtonStyle())
+                        .liquidGlass(cornerRadius: 12)
+                        
+                        Button(action: {
+                            onConfirm()
+                        }) {
+                            Text("Done")
+                                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(PremiumSettingsButtonStyle())
+                        .liquidGlass(cornerRadius: 12)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 40)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.black, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+        }
+    }
+    
+    private func monthName(from month: Int) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM"
+        let date = Calendar.current.date(from: DateComponents(year: 2000, month: month, day: 1))!
+        return formatter.string(from: date)
     }
 }
 
