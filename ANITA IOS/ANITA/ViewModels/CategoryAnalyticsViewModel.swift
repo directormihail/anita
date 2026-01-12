@@ -17,6 +17,10 @@ class CategoryAnalyticsViewModel: ObservableObject {
     private let networkService = NetworkService.shared
     private let userId: String
     
+    // Period filtering - defaults to current month
+    var selectedMonth: Date? = nil
+    var selectedYear: Int? = nil
+    
     // Predefined colors for categories
     private let categoryColors: [Color] = [
         Color(red: 0.2, green: 0.5, blue: 0.9),      // Blue
@@ -33,13 +37,29 @@ class CategoryAnalyticsViewModel: ObservableObject {
         self.userId = userId ?? UserManager.shared.userId
     }
     
-    func loadData() {
+    func loadData(month: Int? = nil, year: Int? = nil) {
         isLoading = true
         errorMessage = nil
         
+        // Store period for refresh
+        if let month = month, let year = year {
+            let calendar = Calendar.current
+            var components = DateComponents()
+            components.year = year
+            components.month = month
+            components.day = 1
+            self.selectedMonth = calendar.date(from: components)
+            self.selectedYear = year
+        }
+        
         Task {
             do {
-                let transactionsResponse = try await networkService.getTransactions(userId: userId)
+                // Load transactions filtered by period
+                let transactionsResponse = try await networkService.getTransactions(
+                    userId: userId,
+                    month: month,
+                    year: year
+                )
                 let analyticsData = calculateCategoryAnalytics(from: transactionsResponse.transactions)
                 
                 await MainActor.run {
@@ -56,7 +76,18 @@ class CategoryAnalyticsViewModel: ObservableObject {
     }
     
     func refresh() {
-        loadData()
+        // Use stored period if available, otherwise use current month
+        let calendar = Calendar.current
+        if let selectedMonth = selectedMonth {
+            let month = calendar.component(.month, from: selectedMonth)
+            let year = calendar.component(.year, from: selectedMonth)
+            loadData(month: month, year: year)
+        } else {
+            let now = Date()
+            let month = calendar.component(.month, from: now)
+            let year = calendar.component(.year, from: now)
+            loadData(month: month, year: year)
+        }
     }
     
     private func calculateCategoryAnalytics(from transactions: [TransactionItem]) -> CategoryAnalyticsData {
@@ -67,8 +98,9 @@ class CategoryAnalyticsViewModel: ObservableObject {
         var categoryTotals: [String: Double] = [:]
         
         for transaction in expenses {
-            let category = transaction.category.isEmpty ? "OTHER" : transaction.category.uppercased()
-            categoryTotals[category, default: 0.0] += transaction.amount
+            // Normalize category to proper case (not all caps)
+            let categoryName = CategoryDefinitions.shared.normalizeCategory(transaction.category)
+            categoryTotals[categoryName, default: 0.0] += transaction.amount
         }
         
         // Calculate total

@@ -40,7 +40,9 @@ class FinanceViewModel: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.refresh()
+            Task { @MainActor in
+                self?.refresh()
+            }
         }
     }
     
@@ -109,9 +111,41 @@ class FinanceViewModel: ObservableObject {
         loadData()
     }
     
+    func loadTargets() async {
+        do {
+            let targetsResponse = try await networkService.getTargets(userId: userId)
+            await MainActor.run {
+                self.targets = targetsResponse.targets
+                self.goals = targetsResponse.goals ?? []
+            }
+        } catch {
+            print("[FinanceViewModel] Error loading targets: \(error.localizedDescription)")
+        }
+    }
+    
     func changeMonth(to date: Date) {
         selectedMonth = date
         loadData()
+        // Also reload category analytics for the new period
+        // This will be triggered when the category section is expanded
+    }
+    
+    // Calculate spending for a specific category in the selected period
+    func getCategorySpending(for category: String) -> Double {
+        let categorySpending = transactions
+            .filter { $0.type == "expense" && $0.category.lowercased() == category.lowercased() }
+            .reduce(0.0) { $0 + $1.amount }
+        return categorySpending
+    }
+    
+    // Get period-specific spending for a goal (budget limit)
+    func getGoalSpending(for goal: Target) -> Double {
+        // If goal has a category, calculate spending for that category in selected period
+        if let goalCategory = goal.category, !goalCategory.isEmpty {
+            return getCategorySpending(for: goalCategory)
+        }
+        // Otherwise return the goal's current amount (all-time)
+        return goal.currentAmount
     }
     
     func addAsset(name: String, type: String, currentValue: Double, description: String?) async throws {

@@ -6,6 +6,7 @@
 import { Request, Response } from 'express';
 import { createClient } from '@supabase/supabase-js';
 import { applySecurityHeaders } from '../utils/securityHeaders';
+import { normalizeCategory } from '../utils/categoryNormalizer';
 import * as logger from '../utils/logger';
 
 // Lazy-load Supabase client to ensure env vars are loaded
@@ -97,12 +98,12 @@ export async function handleGetTransactions(req: Request, res: Response): Promis
       return;
     }
 
-    // Transform data to match expected format
+    // Transform data to match expected format and normalize categories
     const transactions = (data || []).map((item: any) => ({
       id: item.message_id || item.id,
       type: item.transaction_type || 'expense',
       amount: Number(item.transaction_amount) || 0,
-      category: item.transaction_category || 'Other',
+      category: normalizeCategory(item.transaction_category), // Normalize to proper case
       description: item.transaction_description || '',
       date: item.transaction_date || item.created_at
     }));

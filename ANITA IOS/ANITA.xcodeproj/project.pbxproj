@@ -35,6 +35,7 @@
 		A1000064 /* GoogleLogoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000065 /* GoogleLogoView.swift */; };
 		A1000066 /* UpgradeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000067 /* UpgradeView.swift */; };
 		A1000068 /* StoreKitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000069 /* StoreKitService.swift */; };
+		A1000070 /* CategoryDefinitions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000071 /* CategoryDefinitions.swift */; };
 		/* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -67,6 +68,7 @@
 		A1000065 /* GoogleLogoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleLogoView.swift; sourceTree = "<group>"; };
 		A1000067 /* UpgradeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpgradeView.swift; sourceTree = "<group>"; };
 		A1000069 /* StoreKitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreKitService.swift; sourceTree = "<group>"; };
+		A1000071 /* CategoryDefinitions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryDefinitions.swift; sourceTree = "<group>"; };
 		/* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -167,6 +169,7 @@
 				A1000041 /* UserManager.swift */,
 				A1000048 /* LiquidGlassModifier.swift */,
 				A1000052 /* Config.swift */,
+				A1000071 /* CategoryDefinitions.swift */,
 					Af035dc2b2fe /* TextFormatter.swift */,);
 			path = Utils;
 			sourceTree = "<group>";
@@ -279,7 +282,8 @@
 				A1000059 /* AuthViewModel.swift in Sources */,
 				A1000064 /* GoogleLogoView.swift in Sources */,
 				A1000066 /* UpgradeView.swift in Sources */,
-				A1000068 /* StoreKitService.swift in Sources */,);
+				A1000068 /* StoreKitService.swift in Sources */,
+				A1000070 /* CategoryDefinitions.swift in Sources */,);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */

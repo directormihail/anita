@@ -162,71 +162,103 @@ struct ChatView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         if showWelcomeScreen {
-                            // Welcome screen matching the image
-                            VStack(spacing: 24) {
-                                // Greeting
-                                VStack(spacing: 8) {
-                                    Text("Hi, I'm ANITA")
-                                        .font(.system(size: 32, weight: .bold))
-                                        .foregroundColor(.white)
-                                    
-                                    Text("Your Personal Finance Assistant. I can help you:")
-                                        .font(.system(size: 16))
-                                        .foregroundColor(.white)
-                                        .multilineTextAlignment(.center)
-                                }
-                                .padding(.top, 40)
-                                
-                                // Capability bullet points (clickable)
-                                VStack(alignment: .leading, spacing: 20) {
-                                    ClickableFeatureBullet(
-                                        icon: "doc.text.fill",
-                                        title: "Record transactions",
-                                        description: "Track your income and expenses",
-                                        action: {
-                                            viewModel.inputText = "Record a transaction"
-                                            viewModel.sendMessage()
+                            // Premium filled welcome screen
+                            ScrollView {
+                                VStack(spacing: 0) {
+                                    // Premium welcome card - more substantial
+                                    VStack(spacing: 18) {
+                                        VStack(spacing: 8) {
+                                            Text("Welcome to ANITA")
+                                                .font(.system(size: 32, weight: .bold, design: .rounded))
+                                                .foregroundStyle(
+                                                    LinearGradient(
+                                                        colors: [
+                                                            Color.white.opacity(0.98),
+                                                            Color.white.opacity(0.9)
+                                                        ],
+                                                        startPoint: .topLeading,
+                                                        endPoint: .bottomTrailing
+                                                    )
+                                                )
+                                                .multilineTextAlignment(.center)
+                                            
+                                            Text("Your Personal Finance Assistant")
+                                                .font(.system(size: 17, weight: .medium, design: .rounded))
+                                                .foregroundColor(.white.opacity(0.75))
+                                                .multilineTextAlignment(.center)
                                         }
-                                    )
-                                    
-                                    ClickableFeatureBullet(
-                                        icon: "target",
-                                        title: "Set targets",
-                                        description: "Create and manage your financial goals",
-                                        action: {
-                                            viewModel.inputText = "Set a target"
-                                            viewModel.sendMessage()
-                                        }
-                                    )
-                                    
-                                    ClickableFeatureBullet(
-                                        icon: "chart.bar.fill",
-                                        title: "Analytics",
-                                        description: "Get insights into your spending patterns",
-                                        action: {
-                                            viewModel.inputText = "Show analytics"
-                                            viewModel.sendMessage()
-                                        }
-                                    )
-                                    
-                                    ClickableFeatureBullet(
-                                        icon: "message.fill",
-                                        title: "Talk about finances",
-                                        description: "Ask me anything about your money",
-                                        action: {
-                                            viewModel.inputText = "Tell me about my finances"
-                                            viewModel.sendMessage()
-                                        }
-                                    )
-                                }
-                                .padding(.horizontal, 32)
-                                
-                                Text("Start a conversation to begin managing your finances!")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.gray)
-                                    .multilineTextAlignment(.center)
+                                        
+                                        Divider()
+                                            .background(Color.white.opacity(0.15))
+                                            .padding(.vertical, 4)
+                                        
+                                        // Simple explanation text
+                                        Text("Track expenses, set goals, and get insights about your finances. Just ask me anything or use the buttons below to get started.")
+                                            .font(.system(size: 15, weight: .regular, design: .rounded))
+                                            .foregroundColor(.white.opacity(0.65))
+                                            .multilineTextAlignment(.center)
+                                            .lineSpacing(5)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.horizontal, 28)
+                                    .padding(.vertical, 32)
+                                    .liquidGlass(cornerRadius: 16)
                                     .padding(.horizontal, 20)
+                                    .padding(.top, 12)
+                                    
+                                    // Task options in 2x2 grid - premium spacing with full text visibility
+                                    VStack(spacing: 12) {
+                                        // Row 1
+                                        HStack(spacing: 12) {
+                                            EnhancedTaskButton(
+                                                icon: "plus",
+                                                iconColor: Color.green,
+                                                title: "Add Income",
+                                                action: {
+                                                    viewModel.inputText = "Add income"
+                                                    viewModel.sendMessage()
+                                                }
+                                            )
+                                            
+                                            EnhancedTaskButton(
+                                                icon: "minus",
+                                                iconColor: Color.red,
+                                                title: "Add Expense",
+                                                action: {
+                                                    viewModel.inputText = "Add expense"
+                                                    viewModel.sendMessage()
+                                                }
+                                            )
+                                        }
+                                        
+                                        // Row 2
+                                        HStack(spacing: 12) {
+                                            EnhancedTaskButton(
+                                                icon: "target",
+                                                iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
+                                                title: "Set a Target",
+                                                action: {
+                                                    viewModel.inputText = "Set a target"
+                                                    viewModel.sendMessage()
+                                                }
+                                            )
+                                            
+                                            EnhancedTaskButton(
+                                                icon: "chart.pie.fill",
+                                                iconColor: Color.orange,
+                                                title: "Analytics",
+                                                action: {
+                                                    viewModel.inputText = "Show analytics"
+                                                    viewModel.sendMessage()
+                                                }
+                                            )
+                                        }
+                                    }
+                                    .padding(.horizontal, 20)
+                                    .padding(.top, 24)
                                     .padding(.bottom, 20)
+                                }
                             }
                         } else {
                             // Messages list
@@ -254,40 +286,11 @@ struct ChatView: View {
                     }
                 }
                 
-                // Quick action buttons (only show on welcome screen)
-                if showWelcomeScreen {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 12) {
-                            QuickActionButton(title: "Add Income") {
-                                viewModel.inputText = "Add income"
-                                viewModel.sendMessage()
-                            }
-                            
-                            QuickActionButton(title: "Add Expense") {
-                                viewModel.inputText = "Add expense"
-                                viewModel.sendMessage()
-                            }
-                            
-                            QuickActionButton(title: "Set a Target") {
-                                viewModel.inputText = "Set a target"
-                                viewModel.sendMessage()
-                            }
-                            
-                            QuickActionButton(title: "Analytics") {
-                                viewModel.inputText = "Show analytics"
-                                viewModel.sendMessage()
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                    }
-                    .padding(.bottom, 12)
-                }
-                
                 // Input area - matching image design
                 VStack(spacing: 0) {
                     HStack(spacing: 12) {
                         // Text input
-                        TextField("Type a message...", text: $viewModel.inputText, axis: .vertical)
+                        TextField("Ask about finance", text: $viewModel.inputText, axis: .vertical)
                             .focused($isInputFocused)
                             .font(.body)
                             .foregroundColor(.white)
@@ -297,31 +300,18 @@ struct ChatView: View {
                             .lineLimit(1...4)
                             .disabled(viewModel.isLoading)
                         
-                        // Microphone or Send button
-                        if viewModel.inputText.isEmpty {
-                            Button(action: {
-                                // Voice recording
-                            }) {
-                                Image(systemName: "mic.fill")
-                                    .font(.system(size: 16))
-                                    .foregroundColor(.white)
-                                    .frame(width: 40, height: 40)
-                                    .background(Color(white: 0.12), in: Circle())
-                                    .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
-                            }
-                        } else {
-                            Button(action: {
-                                viewModel.sendMessage()
-                            }) {
-                                Image(systemName: "paperplane.fill")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(viewModel.isLoading ? .gray : .white)
-                                    .frame(width: 40, height: 40)
-                                    .background(Color(white: 0.12), in: Circle())
-                                    .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
-                            }
-                            .disabled(viewModel.isLoading)
+                        // Send button - always visible, disabled when empty
+                        Button(action: {
+                            viewModel.sendMessage()
+                        }) {
+                            Image(systemName: "paperplane.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor((viewModel.isLoading || viewModel.inputText.isEmpty) ? .gray : .white)
+                                .frame(width: 40, height: 40)
+                                .background(Color(white: 0.12), in: Circle())
+                                .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
                         }
+                        .disabled(viewModel.isLoading || viewModel.inputText.isEmpty)
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
@@ -363,14 +353,97 @@ struct ChatView: View {
         }
     }
 
-// Clickable Feature Bullet Component matching WelcomeView design
-struct ClickableFeatureBullet: View {
+// Enhanced Task Button Component - Matching FinanceView design with smaller icons and full text
+struct EnhancedTaskButton: View {
     let icon: String
+    let iconColor: Color
     let title: String
-    let description: String
     let action: () -> Void
     
-    @State private var isPressed = false
+    var body: some View {
+        Button(action: {
+            let impact = UIImpactFeedbackGenerator(style: .medium)
+            impact.impactOccurred()
+            action()
+        }) {
+            HStack(spacing: 10) {
+                // Icon with premium glass effect matching FinanceView
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(white: 0.2).opacity(0.3),
+                                    Color(white: 0.15).opacity(0.2)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 40, height: 40)
+                        .overlay {
+                            Circle()
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(0.2),
+                                            Color.white.opacity(0.1)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1
+                                )
+                        }
+                    
+                    Image(systemName: icon)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [
+                                    iconColor.opacity(0.95),
+                                    iconColor.opacity(0.8)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                }
+                .frame(width: 40)
+                
+                // Title text - ensure all letters are visible with proper scaling
+                Text(title)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundColor(.white.opacity(0.95))
+                    .lineLimit(1)
+                    .allowsTightening(true)
+                    .minimumScaleFactor(0.75)
+                
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: 64)
+            .padding(.leading, 14)
+            .padding(.trailing, 16)
+            .liquidGlass(cornerRadius: 16)
+        }
+        .buttonStyle(EnhancedTaskButtonStyle())
+    }
+}
+
+struct EnhancedTaskButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .opacity(configuration.isPressed ? 0.9 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
+
+// Quick Action Button Component - Enhanced design
+struct QuickActionButton: View {
+    let title: String
+    let action: () -> Void
     
     var body: some View {
         Button(action: {
@@ -378,99 +451,23 @@ struct ClickableFeatureBullet: View {
             impact.impactOccurred()
             action()
         }) {
-            HStack(alignment: .top, spacing: 16) {
-                // Bullet point icon
-                VStack {
-                    ZStack {
-                        // Glass circle background
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color(white: 0.2).opacity(0.3),
-                                        Color(white: 0.15).opacity(0.2)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 40, height: 40)
-                            .overlay {
-                                Circle()
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [
-                                                Color.white.opacity(0.2),
-                                                Color.white.opacity(0.1)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 1
-                                    )
-                            }
-                        
-                        Image(systemName: icon)
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.9),
-                                        Color.white.opacity(0.75)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                    }
-                    
-                    Spacer()
-                }
-                .padding(.top, 2)
-                
-                // Text content
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(title)
-                        .font(.system(size: 18, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white.opacity(0.95))
-                    
-                    Text(description)
-                        .font(.system(size: 15, weight: .regular))
-                        .foregroundColor(.white.opacity(0.65))
-                        .lineSpacing(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                
-                Spacer()
-            }
+            Text(title)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundColor(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .liquidGlass(cornerRadius: 12)
         }
-        .buttonStyle(FeatureBulletButtonStyle())
+        .buttonStyle(QuickActionButtonStyle())
     }
 }
 
-struct FeatureBulletButtonStyle: ButtonStyle {
+struct QuickActionButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
             .opacity(configuration.isPressed ? 0.8 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: configuration.isPressed)
-    }
-}
-
-// Quick Action Button Component
-struct QuickActionButton: View {
-    let title: String
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .liquidGlass(cornerRadius: 8)
-        }
+            .animation(.spring(response: 0.2, dampingFraction: 0.6), value: configuration.isPressed)
     }
 }
 

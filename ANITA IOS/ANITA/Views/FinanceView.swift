@@ -46,13 +46,18 @@ struct FinanceView: View {
     @State private var targetToScrollTo: String? = nil
     
     // MARK: - Helper Functions
+    private var userCurrency: String {
+        UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+    }
+    
     private func formatCurrency(_ amount: Double) -> String {
-        let currency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+        let currency = userCurrency
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: amount)) ?? "$0"
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
     }
     
     func monthYearString(from date: Date) -> String {
@@ -1365,6 +1370,10 @@ struct FinanceView: View {
 struct TransactionRow: View {
     let transaction: TransactionItem
     
+    private var userCurrency: String {
+        UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+    }
+    
     var body: some View {
         HStack(spacing: 16) {
             // Category icon with premium glass effect
@@ -1487,10 +1496,12 @@ struct TransactionRow: View {
     }
     
     private func formatAmount(_ amount: Double) -> String {
-        let currency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+        let currency = userCurrency
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
         let formatted = formatter.string(from: NSNumber(value: abs(amount))) ?? "$0.00"
         let sign = transaction.type == "income" ? "+" : "-"
         return "\(sign)\(formatted)"
@@ -1533,6 +1544,10 @@ struct TargetRow: View {
     let target: Target
     @State private var showEditGoalSheet = false
     @ObservedObject var viewModel: FinanceViewModel
+    
+    private var userCurrency: String {
+        UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+    }
     
     init(target: Target, viewModel: FinanceViewModel) {
         self.target = target
@@ -1728,12 +1743,13 @@ struct TargetRow: View {
     }
     
     private func formatCurrency(_ amount: Double) -> String {
-        let currency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+        let currency = userCurrency
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: amount)) ?? "$0"
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
     }
 }
 
@@ -1745,6 +1761,10 @@ struct AddMoneyToGoalSheet: View {
     @State private var amount: String = "0"
     @State private var isAdding = false
     @State private var errorMessage: String?
+    
+    private var userCurrency: String {
+        UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+    }
     
     var body: some View {
         NavigationView {
@@ -2028,6 +2048,10 @@ struct ChangeAmountSheet: View {
     @State private var amount: String
     @State private var isSaving = false
     @State private var errorMessage: String?
+    
+    private var userCurrency: String {
+        UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+    }
     
     init(target: Target, viewModel: FinanceViewModel) {
         self.target = target
@@ -2946,6 +2970,10 @@ struct TakeMoneyFromGoalSheet: View {
     @State private var isProcessing = false
     @State private var errorMessage: String?
     
+    private var userCurrency: String {
+        UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+    }
+    
     var body: some View {
         NavigationView {
             ZStack {
@@ -3548,6 +3576,10 @@ struct AddValueToAssetSheet: View {
     @State private var isAdding = false
     @State private var errorMessage: String?
     
+    private var userCurrency: String {
+        UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+    }
+    
     var body: some View {
         NavigationView {
             ZStack {
@@ -3785,6 +3817,10 @@ struct ReduceAssetValueSheet: View {
     @State private var amount: String = "0"
     @State private var isProcessing = false
     @State private var errorMessage: String?
+    
+    private var userCurrency: String {
+        UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+    }
     
     var body: some View {
         NavigationView {
@@ -4265,6 +4301,10 @@ struct GoalRow: View {
     @State private var showEditGoalSheet = false
     @ObservedObject var viewModel: FinanceViewModel
     
+    private var userCurrency: String {
+        UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+    }
+    
     init(goal: Target, viewModel: FinanceViewModel) {
         self.goal = goal
         self.viewModel = viewModel
@@ -4459,12 +4499,13 @@ struct GoalRow: View {
     }
     
     private func formatCurrency(_ amount: Double) -> String {
-        let currency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+        let currency = userCurrency
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: amount)) ?? "$0"
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
     }
 }
 
@@ -4473,6 +4514,10 @@ struct AssetRow: View {
     let isVirtualAsset: Bool
     @ObservedObject var viewModel: FinanceViewModel
     @State private var showEditAssetSheet = false
+    
+    private var userCurrency: String {
+        UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+    }
     
     init(asset: Asset, isVirtualAsset: Bool = false, viewModel: FinanceViewModel) {
         self.asset = asset
@@ -4670,12 +4715,13 @@ struct AssetRow: View {
     }
     
     private func formatCurrency(_ amount: Double) -> String {
-        let currency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+        let currency = userCurrency
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: amount)) ?? "$0"
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
     }
 }
 
@@ -4800,6 +4846,10 @@ struct XPLevelWidget: View {
 struct FinanceCategoryRow: View {
     let category: CategoryAnalytics
     var isSelected: Bool = false
+    
+    private var userCurrency: String {
+        UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+    }
     
     var body: some View {
         HStack(spacing: 16) {
@@ -4935,10 +4985,12 @@ struct FinanceCategoryRow: View {
     }
     
     private func formatCurrency(_ amount: Double) -> String {
-        let currency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+        let currency = userCurrency
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
         return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
     }
 }

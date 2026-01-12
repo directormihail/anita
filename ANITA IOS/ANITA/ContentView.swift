@@ -29,9 +29,9 @@ struct ContentView: View {
         .task {
             await authViewModel.checkAuthStatus()
         }
-        .onChange(of: authViewModel.isAuthenticated) { isAuthenticated in
+        .onChange(of: authViewModel.isAuthenticated) { _, newValue in
             // When user signs out, reset to welcome page
-            if !isAuthenticated {
+            if !newValue {
                 withAnimation {
                     authViewState = .welcome
                     selectedTab = 0
@@ -66,6 +66,11 @@ struct ContentView: View {
                     .tag(2)
             }
             .accentColor(Color(red: 0.4, green: 0.49, blue: 0.92)) // #667eea purple accent
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SwitchToFinanceTab"))) { _ in
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    selectedTab = 1
+                }
+            }
             .onAppear {
                 // Customize tab bar appearance with transparent liquid glass effect
                 let appearance = UITabBarAppearance()

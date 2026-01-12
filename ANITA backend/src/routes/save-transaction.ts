@@ -6,6 +6,9 @@
 import { Request, Response } from 'express';
 import { createClient } from '@supabase/supabase-js';
 import { applySecurityHeaders } from '../utils/securityHeaders';
+import { normalizeCategory } from '../utils/categoryNormalizer';
+import { detectCategoryFromDescription } from '../utils/categoryDetector';
+import { generateTransactionDescription } from '../utils/transactionDescriptionGenerator';
 import * as logger from '../utils/logger';
 
 // Lazy-load Supabase client to ensure env vars are loaded
@@ -133,14 +136,74 @@ export async function handleSaveTransaction(req: Request, res: Response): Promis
       }
     }
 
+    // Detect category from description if category is missing or "Other"
+    let detectedCategory = category;
+    if (!detectedCategory || detectedCategory.trim().length === 0 || 
+        detectedCategory.toLowerCase() === 'other') {
+      detectedCategory = detectCategoryFromDescription(description, type as 'income' | 'expense');
+      logger.info('Detected category from description', { 
+        requestId, 
+        description, 
+        detectedCategory 
+      });
+    }
+    
+    // Normalize category to ensure proper formatting (not all caps)
+    const normalizedCategory = normalizeCategory(detectedCategory);
+    
+    // Get currency symbol for description generation
+    let currencySymbol = '$';
+    try {
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('currency_code')
+        .eq('id', userId)
+        .single();
+      
+      if (profileData?.currency_code) {
+        const currencySymbols: { [key: string]: string } = {
+          'USD': '$', 'EUR': '€', 'GBP': '£', 'JPY': '¥', 'CAD': 'C$',
+          'AUD': 'A$', 'CHF': 'CHF', 'CNY': '¥', 'INR': '₹', 'BRL': 'R$',
+          'MXN': 'MX$', 'SGD': 'S$', 'HKD': 'HK$', 'NZD': 'NZ$', 'ZAR': 'R'
+        };
+        currencySymbol = currencySymbols[profileData.currency_code] || '$';
+      }
+    } catch (error) {
+      // Use default if currency lookup fails
+    }
+    
+    // Generate clean, meaningful transaction description using AI
+    let finalDescription = description;
+    try {
+      const generatedDescription = await generateTransactionDescription(
+        description,
+        type as 'income' | 'expense',
+        amount,
+        normalizedCategory,
+        currencySymbol
+      );
+      finalDescription = generatedDescription;
+      logger.info('Generated transaction description', { 
+        requestId, 
+        original: description, 
+        generated: finalDescription 
+      });
+    } catch (error) {
+      logger.warn('Failed to generate transaction description, using original', { 
+        error: error instanceof Error ? error.message : 'Unknown',
+        requestId 
+      });
+      // Use original description if generation fails
+    }
+    
     // Prepare transaction data
     const transactionData: any = {
       account_id: userId,
-      message_text: description,
+      message_text: description, // Keep original for reference
       transaction_type: type,
       transaction_amount: amount,
-      transaction_category: category || 'Other',
-      transaction_description: description,
+      transaction_category: normalizedCategory,
+      transaction_description: finalDescription, // Use AI-generated clean description
       data_type: 'transaction',
       message_id: transactionId || `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       created_at: date ? new Date(date).toISOString() : new Date().toISOString()
@@ -171,8 +234,8 @@ export async function handleSaveTransaction(req: Request, res: Response): Promis
         id: transactionData.message_id,
         type: type,
         amount: amount,
-        category: category || 'Other',
-        description: description,
+        category: normalizedCategory,
+        description: finalDescription, // Return the clean, AI-generated description
         date: transactionData.created_at
       },
       requestId
