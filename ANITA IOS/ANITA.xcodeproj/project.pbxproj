@@ -36,6 +36,7 @@
 		A1000066 /* UpgradeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000067 /* UpgradeView.swift */; };
 		A1000068 /* StoreKitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000069 /* StoreKitService.swift */; };
 		A1000070 /* CategoryDefinitions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000071 /* CategoryDefinitions.swift */; };
+		A1000072 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000073 /* OnboardingView.swift */; };
 		/* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -69,6 +70,7 @@
 		A1000067 /* UpgradeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpgradeView.swift; sourceTree = "<group>"; };
 		A1000069 /* StoreKitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreKitService.swift; sourceTree = "<group>"; };
 		A1000071 /* CategoryDefinitions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryDefinitions.swift; sourceTree = "<group>"; };
+		A1000073 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		/* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -129,6 +131,7 @@
 				A1000058 /* SignUpView.swift */,
 				A1000065 /* GoogleLogoView.swift */,
 				A1000067 /* UpgradeView.swift */,
+				A1000073 /* OnboardingView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -283,7 +286,8 @@
 				A1000064 /* GoogleLogoView.swift in Sources */,
 				A1000066 /* UpgradeView.swift in Sources */,
 				A1000068 /* StoreKitService.swift in Sources */,
-				A1000070 /* CategoryDefinitions.swift in Sources */,);
+				A1000070 /* CategoryDefinitions.swift in Sources */,
+				A1000072 /* OnboardingView.swift in Sources */,);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */

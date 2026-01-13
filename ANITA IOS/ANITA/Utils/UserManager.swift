@@ -11,13 +11,16 @@ class UserManager: ObservableObject {
     static let shared = UserManager()
     
     private let userIdKey = "anita_user_id"
+    private let onboardingCompletedKey = "anita_onboarding_completed"
     private let supabaseService = SupabaseService.shared
     
     @Published var isAuthenticated = false
     @Published var currentUser: User?
+    @Published var hasCompletedOnboarding = false
     
     private init() {
         supabaseService.loadSavedToken()
+        hasCompletedOnboarding = UserDefaults.standard.bool(forKey: onboardingCompletedKey)
         Task {
             await checkAuthStatus()
         }
@@ -45,6 +48,8 @@ class UserManager: ObservableObject {
         await MainActor.run {
             self.currentUser = authResponse.user
             self.isAuthenticated = true
+            // Preserve existing onboarding status for returning users
+            self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: onboardingCompletedKey)
         }
     }
     
@@ -53,6 +58,9 @@ class UserManager: ObservableObject {
         await MainActor.run {
             self.currentUser = authResponse.user
             self.isAuthenticated = true
+            // New users need to complete onboarding
+            self.hasCompletedOnboarding = false
+            UserDefaults.standard.set(false, forKey: onboardingCompletedKey)
         }
     }
     
@@ -61,6 +69,12 @@ class UserManager: ObservableObject {
         await MainActor.run {
             self.currentUser = authResponse.user
             self.isAuthenticated = true
+            // Check if this is a new user (first time signing in with Google)
+            // If user doesn't exist in our system, they need onboarding
+            // For now, we'll check if onboarding was already completed
+            if !UserDefaults.standard.bool(forKey: onboardingCompletedKey) {
+                self.hasCompletedOnboarding = false
+            }
         }
     }
     
@@ -69,6 +83,12 @@ class UserManager: ObservableObject {
         await MainActor.run {
             self.currentUser = authResponse.user
             self.isAuthenticated = true
+            // Check if this is a new user (first time signing in with Apple)
+            // If user doesn't exist in our system, they need onboarding
+            // For now, we'll check if onboarding was already completed
+            if !UserDefaults.standard.bool(forKey: onboardingCompletedKey) {
+                self.hasCompletedOnboarding = false
+            }
         }
     }
     
@@ -86,6 +106,8 @@ class UserManager: ObservableObject {
                 await MainActor.run {
                     self.currentUser = user
                     self.isAuthenticated = true
+                    // Preserve existing onboarding status
+                    self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: onboardingCompletedKey)
                 }
             } else {
                 await MainActor.run {
@@ -99,9 +121,16 @@ class UserManager: ObservableObject {
         }
     }
     
+    func completeOnboarding() {
+        hasCompletedOnboarding = true
+        UserDefaults.standard.set(true, forKey: onboardingCompletedKey)
+    }
+    
     func reset() {
         signOut()
         UserDefaults.standard.removeObject(forKey: userIdKey)
+        UserDefaults.standard.removeObject(forKey: onboardingCompletedKey)
+        hasCompletedOnboarding = false
     }
 }
 

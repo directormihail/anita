@@ -6,14 +6,51 @@
 //
 
 import SwiftUI
+import Foundation
 
 struct WelcomeView: View {
+    // Computed properties for gradient points
+    private var gradientStartPoint: UnitPoint {
+        let radians = gradientRotation * .pi / 180
+        return UnitPoint(
+            x: 0.5 + 0.5 * CGFloat(cos(radians)),
+            y: 0.5 + 0.5 * CGFloat(sin(radians))
+        )
+    }
+    
+    private var gradientEndPoint: UnitPoint {
+        let radians = gradientRotation * .pi / 180
+        return UnitPoint(
+            x: 0.5 - 0.5 * CGFloat(cos(radians)),
+            y: 0.5 - 0.5 * CGFloat(sin(radians))
+        )
+    }
+    
+    private var gradientStartPointSlow: UnitPoint {
+        let radians = (gradientRotation * 0.5) * .pi / 180
+        return UnitPoint(
+            x: 0.5 + 0.3 * CGFloat(cos(radians)),
+            y: 0.5 + 0.3 * CGFloat(sin(radians))
+        )
+    }
+    
+    private var gradientEndPointSlow: UnitPoint {
+        let radians = (gradientRotation * 0.5) * .pi / 180
+        return UnitPoint(
+            x: 0.5 - 0.3 * CGFloat(cos(radians)),
+            y: 0.5 - 0.3 * CGFloat(sin(radians))
+        )
+    }
+    
     var onShowLogin: () -> Void
     var onShowSignUp: () -> Void
     
     @State private var logoScale: CGFloat = 0.8
     @State private var logoOpacity: Double = 0
     @State private var contentOffset: CGFloat = 50
+    @State private var logoRotation: Double = -5
+    @State private var glowIntensity: Double = 0.3
+    @State private var gradientRotation: Double = 0
     
     var body: some View {
         ZStack {
@@ -26,23 +63,24 @@ struct WelcomeView: View {
                 
                 // Logo and Title with animation
                 VStack(spacing: 24) {
-                    // Glass liquid logo
+                    // Glass liquid logo with premium animations
                     ZStack {
-                        // Outer glow
+                        // Animated outer glow
                         RoundedRectangle(cornerRadius: 22)
                             .fill(
                                 LinearGradient(
                                     colors: [
-                                        Color(white: 0.3).opacity(0.4),
-                                        Color(white: 0.2).opacity(0.2)
+                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(glowIntensity),
+                                        Color(red: 0.6, green: 0.4, blue: 0.8).opacity(glowIntensity * 0.7)
                                     ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
+                                    startPoint: gradientStartPoint,
+                                    endPoint: gradientEndPoint
                                 )
                             )
                             .frame(width: 110, height: 110)
                             .blur(radius: 25)
                             .offset(y: 12)
+                            .opacity(logoOpacity)
                         
                         // Glass liquid effect
                         RoundedRectangle(cornerRadius: 22)
@@ -52,8 +90,8 @@ struct WelcomeView: View {
                                         Color(white: 0.25).opacity(0.6),
                                         Color(white: 0.15).opacity(0.4)
                                     ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
+                                    startPoint: gradientStartPointSlow,
+                                    endPoint: gradientEndPointSlow
                                 )
                             )
                             .frame(width: 96, height: 96)
@@ -72,7 +110,7 @@ struct WelcomeView: View {
                                         )
                                     )
                                 
-                                // Border
+                                // Animated border
                                 RoundedRectangle(cornerRadius: 22)
                                     .stroke(
                                         LinearGradient(
@@ -81,16 +119,16 @@ struct WelcomeView: View {
                                                 Color.white.opacity(0.1),
                                                 Color.white.opacity(0.15)
                                             ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
+                                            startPoint: gradientStartPoint,
+                                            endPoint: gradientEndPoint
                                         ),
                                         lineWidth: 1.5
                                     )
                             }
-                            .shadow(color: Color.black.opacity(0.5), radius: 20, x: 0, y: 10)
+                            .shadow(color: Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.4 * glowIntensity), radius: 20, x: 0, y: 10)
                             .shadow(color: Color.white.opacity(0.1), radius: 5, x: 0, y: -2)
                         
-                        // Letter A
+                        // Letter A with gradient
                         Text("A")
                             .font(.system(size: 56, weight: .bold, design: .rounded))
                             .foregroundStyle(
@@ -103,6 +141,7 @@ struct WelcomeView: View {
                                     endPoint: .bottomTrailing
                                 )
                             )
+                            .rotationEffect(.degrees(logoRotation))
                     }
                     .scaleEffect(logoScale)
                     .opacity(logoOpacity)
@@ -127,26 +166,26 @@ struct WelcomeView: View {
                 }
                 .padding(.bottom, 52)
                 
-                // Features as bullet points with descriptions
-                VStack(alignment: .leading, spacing: 20) {
+                // Features - simplified and premium
+                VStack(alignment: .leading, spacing: 24) {
                     FeatureBullet(
                         icon: "message.fill",
-                        title: "AI-Powered Chat",
-                        description: "Get instant financial advice and answers to your money questions through intelligent conversations",
+                        title: "AI Chat",
+                        description: "Talk naturally, track automatically",
                         delay: 0.1
                     )
                     
                     FeatureBullet(
                         icon: "chart.line.uptrend.xyaxis",
-                        title: "Financial Insights",
-                        description: "Track your spending patterns, income trends, and receive personalized recommendations",
+                        title: "Finance Dashboard",
+                        description: "See where money goes, stop leaks",
                         delay: 0.2
                     )
                     
                     FeatureBullet(
                         icon: "target",
-                        title: "Goal Tracking",
-                        description: "Set and monitor your financial goals with real-time progress updates and milestones",
+                        title: "Smart Goals",
+                        description: "AI breaks down goals into steps",
                         delay: 0.3
                     )
                 }
@@ -275,10 +314,33 @@ struct WelcomeView: View {
             }
         }
         .onAppear {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+            // Reset animations
+            logoScale = 0.8
+            logoOpacity = 0
+            contentOffset = 50
+            logoRotation = -5
+            glowIntensity = 0.3
+            
+            // Logo entrance animation
+            withAnimation(.spring(response: 0.7, dampingFraction: 0.75)) {
                 logoScale = 1.0
                 logoOpacity = 1.0
+                logoRotation = 0
+            }
+            
+            // Content entrance animation
+            withAnimation(.spring(response: 0.7, dampingFraction: 0.75).delay(0.15)) {
                 contentOffset = 0
+            }
+            
+            // Continuous glow pulse
+            withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
+                glowIntensity = 0.5
+            }
+            
+            // Continuous gradient rotation
+            withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) {
+                gradientRotation = 360
             }
         }
     }
@@ -292,68 +354,65 @@ struct FeatureBullet: View {
     
     @State private var opacity: Double = 0
     @State private var offset: CGFloat = 20
+    @State private var iconScale: CGFloat = 0.8
     
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            // Bullet point icon
-            VStack {
-                ZStack {
-                    // Glass circle background
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color(white: 0.2).opacity(0.3),
-                                    Color(white: 0.15).opacity(0.2)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
+        HStack(alignment: .center, spacing: 16) {
+            // Premium icon with animation
+            ZStack {
+                // Glass circle background with glow
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(white: 0.2).opacity(0.4),
+                                Color(white: 0.15).opacity(0.3)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
                         )
-                        .frame(width: 40, height: 40)
-                        .overlay {
-                            Circle()
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white.opacity(0.2),
-                                            Color.white.opacity(0.1)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 1
-                                )
-                        }
-                    
-                    Image(systemName: icon)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.9),
-                                    Color.white.opacity(0.75)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+                    )
+                    .frame(width: 48, height: 48)
+                    .overlay {
+                        Circle()
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.25),
+                                        Color.white.opacity(0.1)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1
                             )
-                        )
-                }
+                    }
+                    .shadow(color: Color.white.opacity(0.1), radius: 8, x: 0, y: 4)
                 
-                Spacer()
+                Image(systemName: icon)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.95),
+                                Color.white.opacity(0.8)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
             }
-            .padding(.top, 2)
+            .scaleEffect(iconScale)
             
-            // Text content
-            VStack(alignment: .leading, spacing: 6) {
+            // Text content - simplified
+            VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    .font(.system(size: 19, weight: .semibold, design: .rounded))
                     .foregroundColor(.white.opacity(0.95))
                 
                 Text(description)
                     .font(.system(size: 15, weight: .regular))
-                    .foregroundColor(.white.opacity(0.65))
-                    .lineSpacing(2)
+                    .foregroundColor(.white.opacity(0.7))
                     .fixedSize(horizontal: false, vertical: true)
             }
             
@@ -362,9 +421,10 @@ struct FeatureBullet: View {
         .opacity(opacity)
         .offset(y: offset)
         .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(delay)) {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.75).delay(delay)) {
                 opacity = 1.0
                 offset = 0
+                iconScale = 1.0
             }
         }
     }

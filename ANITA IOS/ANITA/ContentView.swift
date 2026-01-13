@@ -15,13 +15,20 @@ enum AuthViewState {
 
 struct ContentView: View {
     @StateObject private var authViewModel = AuthViewModel()
+    @StateObject private var userManager = UserManager.shared
     @State private var selectedTab = 0
     @State private var authViewState: AuthViewState = .welcome
     
     var body: some View {
         Group {
             if authViewModel.isAuthenticated {
-                mainContentView
+                if userManager.hasCompletedOnboarding {
+                    mainContentView
+                } else {
+                    OnboardingView {
+                        userManager.completeOnboarding()
+                    }
+                }
             } else {
                 authContentView
             }
