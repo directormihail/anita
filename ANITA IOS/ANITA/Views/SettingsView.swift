@@ -39,6 +39,11 @@ struct SettingsView: View {
     }()
     @State private var emailNotifications: Bool = UserDefaults.standard.bool(forKey: "anita_email_notifications")
     
+    // Backend URL
+    @State private var backendURL: String = UserDefaults.standard.string(forKey: "backendURL") ?? Config.backendURL
+    @State private var showBackendURLAlert = false
+    @State private var backendURLError: String?
+    
     // Subscription
     @State private var subscriptionPlan: String? = nil
     @State private var isLoadingSubscription = false
@@ -70,8 +75,24 @@ struct SettingsView: View {
             Color.black
                 .ignoresSafeArea()
             
-            ScrollView {
-                VStack(spacing: 28) {
+            GeometryReader { geometry in
+                VStack(spacing: 0) {
+                    // Fixed safe area bar - smooth gradient from transparent (bottom) to darker (top/status bar)
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color.black.opacity(0),
+                            Color.black.opacity(0.5),
+                            Color.black.opacity(0.9),
+                            Color.black
+                        ]),
+                        startPoint: .bottom,
+                        endPoint: .top
+                    )
+                    .frame(height: 0.5)
+                    .frame(maxWidth: .infinity)
+                    
+                    ScrollView {
+                        VStack(spacing: 28) {
                     // Profile Section
                     SettingsCategorySection(title: "PROFILE", icon: "person.fill") {
                             VStack(spacing: 0) {
@@ -228,6 +249,8 @@ struct SettingsView: View {
                         loadProfile()
                         loadSubscription()
                         loadPreferences()
+                        // Load backend URL
+                        backendURL = UserDefaults.standard.string(forKey: "backendURL") ?? Config.backendURL
                     }
                     
                     // Preferences Section
@@ -296,6 +319,40 @@ struct SettingsView: View {
                                 value: numberFormats.first(where: { $0.0 == numberFormat })?.1 ?? numberFormat,
                                 showChevron: false
                             ) {}
+                        }
+                    }
+                    
+                    // Development Section
+                    SettingsCategorySection(title: "DEVELOPMENT", icon: "wrench.and.screwdriver.fill") {
+                        VStack(spacing: 0) {
+                            Button(action: {
+                                showBackendURLAlert = true
+                            }) {
+                                SettingsRowWithIcon(
+                                    icon: "server.rack",
+                                    iconColor: Color.orange.opacity(0.8),
+                                    title: "Backend URL",
+                                    value: backendURL,
+                                    showChevron: true
+                                ) {}
+                            }
+                            .buttonStyle(PremiumSettingsButtonStyle())
+                            
+                            PremiumDivider()
+                                .padding(.leading, 76)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("For iPhone: Use your Mac's IP address")
+                                    .font(.system(size: 11, weight: .regular, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.4))
+                                    .padding(.horizontal, 20)
+                                    .padding(.top, 8)
+                                Text("Example: http://192.168.1.100:3001")
+                                    .font(.system(size: 11, weight: .regular, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.4))
+                                    .padding(.horizontal, 20)
+                                    .padding(.bottom, 8)
+                            }
                         }
                     }
                     
@@ -444,6 +501,8 @@ struct SettingsView: View {
                     }
                     
                     Spacer(minLength: 100)
+                        }
+                    }
                 }
             }
         }
@@ -540,6 +599,20 @@ struct SettingsView: View {
             }
         } message: {
             Text("Are you sure you want to clear all data? This action cannot be undone.")
+        }
+        .alert("Backend URL", isPresented: $showBackendURLAlert) {
+            TextField("Backend URL", text: $backendURL)
+                .autocapitalization(.none)
+                .autocorrectionDisabled()
+            Button("Cancel", role: .cancel) {
+                // Reset to saved value
+                backendURL = UserDefaults.standard.string(forKey: "backendURL") ?? Config.backendURL
+            }
+            Button("Save") {
+                saveBackendURL()
+            }
+        } message: {
+            Text("Enter your backend server URL.\n\nFor iPhone: Use your Mac's IP address (e.g., http://192.168.178.45:3001)\nFor Simulator: Use http://localhost:3001")
         }
         .alert("Export Successful", isPresented: $showExportSuccess) {
             Button("OK", role: .cancel) {}
@@ -688,6 +761,25 @@ struct SettingsView: View {
         emailNotifications = enabled
         UserDefaults.standard.set(enabled, forKey: "anita_email_notifications")
         savePreferencesToSupabase(emailNotifications: enabled)
+    }
+    
+    func saveBackendURL() {
+        // Validate URL format
+        guard let url = URL(string: backendURL),
+              let scheme = url.scheme,
+              (scheme == "http" || scheme == "https"),
+              url.host != nil else {
+            backendURLError = "Invalid URL format. Use http:// or https://"
+            return
+        }
+        
+        // Save to UserDefaults
+        UserDefaults.standard.set(backendURL, forKey: "backendURL")
+        
+        // Update NetworkService
+        networkService.updateBaseURL(backendURL)
+        
+        print("[SettingsView] Backend URL saved: \(backendURL)")
     }
     
     func savePreferencesToSupabase(currency: String? = nil, dateFormat: String? = nil, numberFormat: String? = nil, emailNotifications: Bool? = nil) {

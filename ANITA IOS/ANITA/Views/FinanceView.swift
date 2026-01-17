@@ -39,8 +39,11 @@ struct FinanceView: View {
     @State private var isSavingGoalsExpanded = false
     @State private var isCategoryAnalysisExpanded = false
     @State private var isAssetsExpanded = false
+    @State private var isTransactionsExpanded = false
+    @State private var isAnitaInsightsExpanded = false
     @State private var selectedCategory: String? = nil
     @State private var showAddAssetSheet = false
+    @State private var showAddTransactionSheet = false
     @State private var showMonthPicker = false
     @State private var tempSelectedMonth: Date = Date()
     @State private var targetToScrollTo: String? = nil
@@ -278,10 +281,9 @@ struct FinanceView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)
-        .padding(.horizontal, 32)
-        .liquidGlass(cornerRadius: 24)
         .padding(.horizontal, 20)
-        .padding(.top, 12)
+        .liquidGlass(cornerRadius: 18)
+        .padding(.horizontal, 20)
     }
     
     private var categoryAnalysisView: some View {
@@ -1063,41 +1065,14 @@ struct FinanceView: View {
         }
     }
     
-    private var xpLevelWidgetView: some View {
-        Group {
-            if let xpStats = viewModel.xpStats {
-                XPLevelWidget(xpStats: xpStats)
-                    .padding(.horizontal, 20)
-            }
-        }
-    }
-    
-    private var transactionsView: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Add ID for scrolling
-            Color.clear
-                .frame(height: 0)
-                .id("transactions-section")
-            HStack {
-                Text("Recent Transactions")
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.98),
-                                Color.white.opacity(0.9)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                
-                Spacer()
-                
-                Button(action: {
-                    // TODO: Implement add transaction
-                    // This could open a sheet or navigate to add transaction view
-                }) {
+    private var anitaInsightsView: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Button(action: {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.75, blendDuration: 0.25)) {
+                    isAnitaInsightsExpanded.toggle()
+                }
+            }) {
+                HStack(spacing: 16) {
                     ZStack {
                         // Premium glass circle background with gradient
                         Circle()
@@ -1111,7 +1086,7 @@ struct FinanceView: View {
                                     endPoint: .bottomTrailing
                                 )
                             )
-                            .frame(width: 40, height: 40)
+                            .frame(width: 44, height: 44)
                             .overlay {
                                 Circle()
                                     .stroke(
@@ -1127,8 +1102,311 @@ struct FinanceView: View {
                                     )
                             }
                         
-                        Image(systemName: "plus")
-                            .font(.system(size: 16, weight: .semibold))
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.9, green: 0.6, blue: 0.2).opacity(0.95),
+                                        Color(red: 0.9, green: 0.6, blue: 0.2).opacity(0.8)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    }
+                    
+                    Text("Anita Insights")
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white.opacity(0.95))
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.4))
+                        .rotationEffect(.degrees(isAnitaInsightsExpanded ? 90 : 0))
+                        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isAnitaInsightsExpanded)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 18)
+                .liquidGlass(cornerRadius: 18)
+                .padding(.horizontal, 20)
+            }
+            .buttonStyle(PremiumSettingsButtonStyle())
+            
+            if isAnitaInsightsExpanded {
+                VStack(spacing: 20) {
+                    // AI Recommendations Section
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("AI Recommendations")
+                                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                .foregroundColor(.white.opacity(0.6))
+                                .tracking(0.8)
+                            
+                            Spacer()
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 16)
+                        
+                        // Get recommendations from transactions and goals
+                        let recommendations = getAIRecommendations()
+                        
+                        if recommendations.isEmpty {
+                            VStack(spacing: 8) {
+                                Image(systemName: "lightbulb")
+                                    .font(.system(size: 32, weight: .light))
+                                    .foregroundColor(.white.opacity(0.3))
+                                Text("No recommendations yet")
+                                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.5))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 24)
+                        } else {
+                            ScrollView {
+                                VStack(spacing: 0) {
+                                    ForEach(Array(recommendations.enumerated()), id: \.offset) { index, recommendation in
+                                        RecommendationRow(recommendation: recommendation)
+                                            .opacity(isAnitaInsightsExpanded ? 1 : 0)
+                                            .animation(
+                                                .spring(response: 0.4, dampingFraction: 0.8)
+                                                    .delay(Double(index) * 0.025),
+                                                value: isAnitaInsightsExpanded
+                                            )
+                                        
+                                        if index < recommendations.count - 1 {
+                                            PremiumDivider()
+                                                .padding(.leading, 76)
+                                                .opacity(isAnitaInsightsExpanded ? 1 : 0)
+                                                .animation(
+                                                    .spring(response: 0.4, dampingFraction: 0.8)
+                                                        .delay(Double(index) * 0.025 + 0.01),
+                                                    value: isAnitaInsightsExpanded
+                                                )
+                                        }
+                                    }
+                                }
+                            }
+                            .frame(maxHeight: 200)
+                        }
+                    }
+                    
+                    // Tracked Categories Section
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Tracked Categories")
+                                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                .foregroundColor(.white.opacity(0.6))
+                                .tracking(0.8)
+                            
+                            Spacer()
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
+                        
+                        let trackedCategories = getTrackedCategories()
+                        
+                        if trackedCategories.isEmpty {
+                            VStack(spacing: 8) {
+                                Image(systemName: "tag")
+                                    .font(.system(size: 32, weight: .light))
+                                    .foregroundColor(.white.opacity(0.3))
+                                Text("No tracked categories yet")
+                                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.5))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 24)
+                        } else {
+                            ScrollView {
+                                VStack(spacing: 0) {
+                                    ForEach(Array(trackedCategories.enumerated()), id: \.offset) { index, category in
+                                        TrackedCategoryRow(category: category, viewModel: viewModel)
+                                            .opacity(isAnitaInsightsExpanded ? 1 : 0)
+                                            .animation(
+                                                .spring(response: 0.4, dampingFraction: 0.8)
+                                                    .delay(Double(index) * 0.025),
+                                                value: isAnitaInsightsExpanded
+                                            )
+                                        
+                                        if index < trackedCategories.count - 1 {
+                                            PremiumDivider()
+                                                .padding(.leading, 76)
+                                                .opacity(isAnitaInsightsExpanded ? 1 : 0)
+                                                .animation(
+                                                    .spring(response: 0.4, dampingFraction: 0.8)
+                                                        .delay(Double(index) * 0.025 + 0.01),
+                                                    value: isAnitaInsightsExpanded
+                                                )
+                                        }
+                                    }
+                                }
+                            }
+                            .frame(maxHeight: 200)
+                        }
+                    }
+                }
+                .liquidGlass(cornerRadius: 18)
+                .padding(.horizontal, 20)
+                .transition(.expandSection)
+            }
+        }
+    }
+    
+    // MARK: - Helper Functions for Anita Insights
+    
+    private func getAIRecommendations() -> [AIRecommendation] {
+        var recommendations: [AIRecommendation] = []
+        
+        // Analyze spending patterns and create recommendations
+        let calendar = Calendar.current
+        let month = calendar.component(.month, from: viewModel.selectedMonth)
+        let year = calendar.component(.year, from: viewModel.selectedMonth)
+        
+        // Get current month expenses
+        let currentMonthExpenses = viewModel.transactions
+            .filter { $0.type == "expense" }
+            .reduce(0.0) { $0 + $1.amount }
+        
+        // Get income
+        let currentMonthIncome = viewModel.monthlyIncome
+        
+        // Recommendation 1: Savings rate
+        if currentMonthIncome > 0 {
+            let savingsRate = ((currentMonthIncome - currentMonthExpenses) / currentMonthIncome) * 100
+            if savingsRate < 20 && savingsRate >= 0 {
+                recommendations.append(AIRecommendation(
+                    title: "Increase Savings Rate",
+                    description: "Your current savings rate is \(String(format: "%.1f", savingsRate))%. Consider saving at least 20% of your income.",
+                    priority: savingsRate < 10 ? "high" : "medium",
+                    category: "Savings"
+                ))
+            }
+        }
+        
+        // Recommendation 2: Category spending
+        let categorySpending = Dictionary(grouping: viewModel.transactions.filter { $0.type == "expense" }, by: { $0.category ?? "Uncategorized" })
+        for (category, transactions) in categorySpending {
+            let total = transactions.reduce(0.0) { $0 + $1.amount }
+            if total > currentMonthIncome * 0.3 && category != "Uncategorized" {
+                recommendations.append(AIRecommendation(
+                    title: "Review \(category) Spending",
+                    description: "You're spending \(formatCurrency(total)) on \(category) this month. Consider setting a budget limit.",
+                    priority: "medium",
+                    category: category
+                ))
+            }
+        }
+        
+        // Recommendation 3: Goals progress
+        for goal in viewModel.targets {
+            if goal.targetAmount > 0 {
+                let progress = (goal.currentAmount / goal.targetAmount) * 100
+                if progress < 50, let targetDateString = goal.targetDate {
+                    // Parse the date string
+                    let formatter = ISO8601DateFormatter()
+                    formatter.formatOptions = [.withFullDate, .withTime, .withDashSeparatorInDate, .withColonSeparatorInTime]
+                    if let targetDate = formatter.date(from: targetDateString) ?? ISO8601DateFormatter().date(from: targetDateString) {
+                        let daysRemaining = Calendar.current.dateComponents([.day], from: Date(), to: targetDate).day ?? 0
+                        if daysRemaining > 0 && daysRemaining < 90 {
+                            recommendations.append(AIRecommendation(
+                                title: "Accelerate \(goal.title)",
+                                description: "You're \(String(format: "%.0f", progress))% towards your goal with \(daysRemaining) days remaining. Consider increasing monthly contributions.",
+                                priority: "medium",
+                                category: "Goals"
+                            ))
+                        }
+                    }
+                }
+            }
+        }
+        
+        return recommendations
+    }
+    
+    private func getTrackedCategories() -> [TrackedCategory] {
+        var trackedCategories: [TrackedCategory] = []
+        
+        // Get unique categories from transactions
+        let categorySpending = Dictionary(grouping: viewModel.transactions.filter { $0.type == "expense" }, by: { $0.category ?? "Uncategorized" })
+        
+        for (categoryName, transactions) in categorySpending {
+            if categoryName != "Uncategorized" && !transactions.isEmpty {
+                let total = transactions.reduce(0.0) { $0 + $1.amount }
+                let transactionCount = transactions.count
+                
+                // Check if there's a spending limit for this category
+                let hasLimit = viewModel.goals.contains { $0.category?.lowercased() == categoryName.lowercased() }
+                
+                trackedCategories.append(TrackedCategory(
+                    name: categoryName,
+                    totalSpent: total,
+                    transactionCount: transactionCount,
+                    hasLimit: hasLimit
+                ))
+            }
+        }
+        
+        // Sort by total spent (descending)
+        trackedCategories.sort { $0.totalSpent > $1.totalSpent }
+        
+        return trackedCategories
+    }
+    
+    private var xpLevelWidgetView: some View {
+        Group {
+            if let xpStats = viewModel.xpStats {
+                XPLevelWidget(xpStats: xpStats)
+            }
+        }
+    }
+    
+    private var transactionsView: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            // Add ID for scrolling
+            Color.clear
+                .frame(height: 0)
+                .id("transactions-section")
+            
+            Button(action: {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.75, blendDuration: 0.25)) {
+                    isTransactionsExpanded.toggle()
+                }
+            }) {
+                HStack(spacing: 16) {
+                    ZStack {
+                        // Premium glass circle background with gradient
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(white: 0.2).opacity(0.3),
+                                        Color(white: 0.15).opacity(0.2)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 44, height: 44)
+                            .overlay {
+                                Circle()
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.white.opacity(0.2),
+                                                Color.white.opacity(0.1)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 1
+                                    )
+                            }
+                        
+                        Image(systemName: "list.bullet.rectangle.fill")
+                            .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(
                                 LinearGradient(
                                     colors: [
@@ -1140,101 +1418,183 @@ struct FinanceView: View {
                                 )
                             )
                     }
-                }
-                .buttonStyle(PremiumSettingsButtonStyle())
-            }
-            .padding(.horizontal, 20)
-            
-            if viewModel.isLoading {
-                ProgressView()
-                    .tint(Color(red: 0.4, green: 0.49, blue: 0.92))
-                    .padding()
-                    .frame(height: 200)
-                    .frame(maxWidth: .infinity)
-                    .liquidGlass(cornerRadius: 18)
-                    .padding(.horizontal, 20)
-            } else if viewModel.transactions.isEmpty {
-                VStack(spacing: 16) {
-                    Image(systemName: "chart.bar.doc.horizontal")
-                        .font(.system(size: 48, weight: .light))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.4),
-                                    Color.white.opacity(0.3)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
                     
-                    Text("No transactions yet")
-                        .font(.system(size: 18, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white.opacity(0.7))
+                    Text("Transactions")
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white.opacity(0.95))
                     
-                    Text("Add your first transaction to start tracking")
-                        .font(.system(size: 14, weight: .regular, design: .rounded))
-                        .foregroundColor(.white.opacity(0.5))
-                        .multilineTextAlignment(.center)
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.4))
+                        .rotationEffect(.degrees(isTransactionsExpanded ? 90 : 0))
+                        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isTransactionsExpanded)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 52)
-                .frame(height: 200)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 18)
                 .liquidGlass(cornerRadius: 18)
                 .padding(.horizontal, 20)
-            } else {
-                // Filter transactions by category if selected
-                let filteredTransactions = selectedCategory != nil 
-                    ? viewModel.transactions.filter { $0.category.lowercased() == selectedCategory!.lowercased() }
-                    : viewModel.transactions
-                
-                ScrollView {
-                    VStack(spacing: 0) {
-                        // Show filter indicator if category is selected
-                        if selectedCategory != nil {
-                            HStack {
-                                Text("Filtered: \(selectedCategory!)")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.6))
-                                
-                                Spacer()
-                                
-                                Button(action: {
-                                    withAnimation {
-                                        selectedCategory = nil
-                                    }
-                                }) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 16))
-                                        .foregroundColor(.white.opacity(0.6))
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                        }
+            }
+            .buttonStyle(PremiumSettingsButtonStyle())
+            
+            if isTransactionsExpanded {
+                if viewModel.isLoading {
+                    ProgressView()
+                        .tint(Color(red: 0.4, green: 0.49, blue: 0.92))
+                        .padding()
+                        .frame(height: 200)
+                        .frame(maxWidth: .infinity)
+                        .liquidGlass(cornerRadius: 18)
+                        .padding(.horizontal, 20)
+                        .transition(.expandSection)
+                } else if viewModel.transactions.isEmpty {
+                    VStack(spacing: 16) {
+                        Image(systemName: "chart.bar.doc.horizontal")
+                            .font(.system(size: 48, weight: .light))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.4),
+                                        Color.white.opacity(0.3)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
                         
-                        if filteredTransactions.isEmpty && selectedCategory != nil {
-                            VStack(spacing: 12) {
-                                Text("No transactions found")
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.6))
-                                
-                                Text("No transactions in \(selectedCategory!) category")
-                                    .font(.system(size: 14, weight: .regular))
-                                    .foregroundColor(.white.opacity(0.4))
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 40)
+                        Text("No transactions yet")
+                            .font(.system(size: 15, weight: .medium, design: .rounded))
+                            .foregroundColor(.white.opacity(0.5))
+                        
+                        Text("Add your first transaction to start tracking")
+                            .font(.system(size: 13, weight: .regular, design: .rounded))
+                            .foregroundColor(.white.opacity(0.4))
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 36)
+                    .liquidGlass(cornerRadius: 18)
+                    .padding(.horizontal, 20)
+                    .transition(.expandSection)
+                } else {
+                    // Filter transactions by category if selected
+                    let filteredTransactions = selectedCategory != nil 
+                        ? viewModel.transactions.filter { $0.category.lowercased() == selectedCategory!.lowercased() }
+                        : viewModel.transactions
+                    
+                    // Row height: ~85px (28px vertical padding + ~57px content height)
+                    let rowHeight: CGFloat = 85
+                    let dividerHeight: CGFloat = 1
+                    let maxVisibleRows: CGFloat = 3.5
+                    let itemCount = CGFloat(filteredTransactions.count)
+                    let calculatedHeight: CGFloat = {
+                        if itemCount <= maxVisibleRows {
+                            // Show all items with dividers
+                            let fullRows = floor(itemCount)
+                            let partialRow = itemCount - fullRows
+                            let dividers = max(0, fullRows - 1)
+                            return fullRows * rowHeight + partialRow * rowHeight + CGFloat(dividers) * dividerHeight
                         } else {
-                            ForEach(filteredTransactions) { transaction in
-                                TransactionRow(transaction: transaction)
+                            // Show exactly 3.5 rows (3 full + 0.5 partial = 297.5px + 2px dividers)
+                            // This ensures the 4th row is only partially visible
+                            return 3 * rowHeight + 0.5 * rowHeight + 2 * dividerHeight
+                        }
+                    }()
+                    
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            // Show filter indicator if category is selected
+                            if selectedCategory != nil {
+                                HStack {
+                                    Text("Filtered: \(selectedCategory!)")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.6))
+                                    
+                                    Spacer()
+                                    
+                                    Button(action: {
+                                        withAnimation {
+                                            selectedCategory = nil
+                                        }
+                                    }) {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.system(size: 16))
+                                            .foregroundColor(.white.opacity(0.6))
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                            }
+                            
+                            if filteredTransactions.isEmpty && selectedCategory != nil {
+                                VStack(spacing: 12) {
+                                    Text("No transactions found")
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.6))
+                                    
+                                    Text("No transactions in \(selectedCategory!) category")
+                                        .font(.system(size: 14, weight: .regular))
+                                        .foregroundColor(.white.opacity(0.4))
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 40)
+                            } else {
+                                // Add Transaction button as first item (inline with transactions)
+                                AddTransactionRow(action: {
+                                    let impact = UIImpactFeedbackGenerator(style: .light)
+                                    impact.impactOccurred()
+                                    showAddTransactionSheet = true
+                                })
+                                .opacity(isTransactionsExpanded ? 1 : 0)
+                                .animation(
+                                    .spring(response: 0.4, dampingFraction: 0.8)
+                                        .delay(0.01),
+                                    value: isTransactionsExpanded
+                                )
+                                
+                                // Divider after Add Transaction button
+                                if !filteredTransactions.isEmpty {
+                                    PremiumDivider()
+                                        .padding(.leading, 82)
+                                        .opacity(isTransactionsExpanded ? 1 : 0)
+                                        .animation(
+                                            .spring(response: 0.4, dampingFraction: 0.8)
+                                                .delay(0.02),
+                                            value: isTransactionsExpanded
+                                        )
+                                }
+                                
+                                // Transaction list
+                                ForEach(Array(filteredTransactions.enumerated()), id: \.element.id) { index, transaction in
+                                    TransactionRow(transaction: transaction)
+                                        .opacity(isTransactionsExpanded ? 1 : 0)
+                                        .animation(
+                                            .spring(response: 0.4, dampingFraction: 0.8)
+                                                .delay(Double(index + 1) * 0.025),
+                                            value: isTransactionsExpanded
+                                        )
+                                    
+                                    if index < filteredTransactions.count - 1 {
+                                        PremiumDivider()
+                                            .padding(.leading, 82)
+                                            .opacity(isTransactionsExpanded ? 1 : 0)
+                                            .animation(
+                                                .spring(response: 0.4, dampingFraction: 0.8)
+                                                    .delay(Double(index + 1) * 0.025 + 0.01),
+                                                value: isTransactionsExpanded
+                                            )
+                                    }
+                                }
                             }
                         }
                     }
+                    .frame(height: calculatedHeight)
+                    .clipped()
+                    .liquidGlass(cornerRadius: 18)
+                    .padding(.horizontal, 20)
+                    .transition(.expandSection)
                 }
-                .frame(height: 400)
-                .liquidGlass(cornerRadius: 18)
-                .padding(.horizontal, 20)
             }
             
             if let errorMessage = viewModel.errorMessage {
@@ -1255,33 +1615,70 @@ struct FinanceView: View {
             
             NavigationView {
                 ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(spacing: 24) {
-                            monthPickerView
-                            balanceCardView
-                            categoryAnalysisView
-                            spendingLimitsView
-                            savingGoalsView
-                            assetsView
-                            xpLevelWidgetView
-                            transactionsView
+                    GeometryReader { geometry in
+                        VStack(spacing: 0) {
+                            // Fixed safe area bar - smooth gradient from transparent (bottom) to darker (top/status bar)
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color.black.opacity(0),
+                                    Color.black.opacity(0.5),
+                                    Color.black.opacity(0.9),
+                                    Color.black
+                                ]),
+                                startPoint: .bottom,
+                                endPoint: .top
+                            )
+                            .frame(height: 0.5)
+                            .frame(maxWidth: .infinity)
                             
-                            Spacer(minLength: 40)
-                    }
-                }
-                .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToTarget"))) { notification in
-                    if let targetId = notification.object as? String {
-                        targetToScrollTo = targetId
-                        // Expand Saving Goals section if not already expanded
-                        if !isSavingGoalsExpanded {
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                                isSavingGoalsExpanded = true
+                            ScrollView {
+                                VStack(spacing: 24) {
+                                    monthPickerView
+                                    balanceCardView
+                                    categoryAnalysisView
+                                    spendingLimitsView
+                                    savingGoalsView
+                                    assetsView
+                                    anitaInsightsView
+                                    xpLevelWidgetView
+                                    
+                                    // Reduced spacing before transactions
+                                    transactionsView
+                                        .padding(.top, -8)
+                                    
+                                    Spacer(minLength: 40)
+                                }
                             }
-                        }
-                        // Wait a bit for the section to expand, then scroll
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                proxy.scrollTo("target-\(targetId)", anchor: .center)
+                            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToTarget"))) { notification in
+                                if let targetId = notification.object as? String {
+                                    targetToScrollTo = targetId
+                                    // Expand Saving Goals section if not already expanded
+                                    if !isSavingGoalsExpanded {
+                                        withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                                            isSavingGoalsExpanded = true
+                                        }
+                                    }
+                                    // Wait a bit for the section to expand, then scroll
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                            proxy.scrollTo("target-\(targetId)", anchor: .center)
+                                        }
+                                    }
+                                }
+                            }
+                            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("FilterTransactionsByCategory"))) { notification in
+                                // Filter transactions by category when limit button is clicked
+                                if let category = notification.object as? String {
+                                    withAnimation {
+                                        selectedCategory = category
+                                        // Scroll to transactions section
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                            withAnimation {
+                                                proxy.scrollTo("transactions-section", anchor: .top)
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -1293,20 +1690,6 @@ struct FinanceView: View {
                     // Refresh targets when a new one is created
                     Task {
                         await viewModel.loadTargets()
-                    }
-                }
-                .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("FilterTransactionsByCategory"))) { notification in
-                    // Filter transactions by category when limit button is clicked
-                    if let category = notification.object as? String {
-                        withAnimation {
-                            selectedCategory = category
-                            // Scroll to transactions section
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                withAnimation {
-                                    proxy.scrollTo("transactions-section", anchor: .top)
-                                }
-                            }
-                        }
                     }
                 }
                 .toolbarBackground(Color.black, for: .navigationBar)
@@ -1342,6 +1725,9 @@ struct FinanceView: View {
         .sheet(isPresented: $showAddAssetSheet) {
             AddAssetSheet(viewModel: viewModel)
         }
+        .sheet(isPresented: $showAddTransactionSheet) {
+            AddTransactionSheet(viewModel: viewModel)
+        }
         .sheet(isPresented: $showMonthPicker) {
             MonthPickerSheet(
                 selectedMonth: $tempSelectedMonth,
@@ -1362,7 +1748,6 @@ struct FinanceView: View {
             )
         }
     }
-}
 }
 
 // TransactionItem is now defined in Models.swift
@@ -1469,11 +1854,6 @@ struct TransactionRow: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
         .background(Color.clear)
-        
-        if transaction.id != "last" {
-            PremiumDivider()
-                .padding(.leading, 82)
-        }
     }
     
     private func categoryIcon(_ category: String) -> String {
@@ -1537,6 +1917,89 @@ struct TransactionRow: View {
         }
         
         return displayFormatter.string(from: date)
+    }
+}
+
+// Add Transaction Row - matches TransactionRow design exactly
+struct AddTransactionRow: View {
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 16) {
+                // Plus icon with premium glass effect (matching TransactionRow exactly)
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(white: 0.2).opacity(0.3),
+                                    Color(white: 0.15).opacity(0.2)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 48, height: 48)
+                        .overlay {
+                            Circle()
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(0.2),
+                                            Color.white.opacity(0.1)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1
+                                )
+                        }
+                    
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.95),
+                                    Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.8)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                }
+                
+                // Transaction details (matching TransactionRow layout exactly)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Add Transaction")
+                        .font(.system(size: 16, weight: .medium, design: .rounded))
+                        .foregroundColor(.white.opacity(0.95))
+                        .lineLimit(1)
+                    
+                    HStack(spacing: 6) {
+                        Text("NEW")
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .foregroundColor(.white.opacity(0.5))
+                            .tracking(0.3)
+                        
+                        Text("•")
+                            .foregroundColor(.white.opacity(0.4))
+                            .font(.system(size: 11))
+                        
+                        Text("Tap to add")
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                }
+                
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+            .background(Color.clear)
+        }
+        .buttonStyle(PremiumSettingsButtonStyle())
     }
 }
 
@@ -4836,9 +5299,10 @@ struct XPLevelWidget: View {
                 .frame(height: 10)
             }
         }
-        .padding(.horizontal, 28)
-        .padding(.vertical, 24)
-        .liquidGlass(cornerRadius: 20)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 18)
+        .liquidGlass(cornerRadius: 18)
+        .padding(.horizontal, 20)
     }
 }
 
@@ -5375,6 +5839,435 @@ struct MonthPickerSheet: View {
         formatter.dateFormat = "MMMM"
         let date = Calendar.current.date(from: DateComponents(year: 2000, month: month, day: 1))!
         return formatter.string(from: date)
+    }
+}
+
+// Add Transaction Sheet
+struct AddTransactionSheet: View {
+    @ObservedObject var viewModel: FinanceViewModel
+    @Environment(\.dismiss) var dismiss
+    @State private var transactionType: String = "expense"
+    @State private var amount: String = ""
+    @State private var selectedCategory: String = "Other"
+    @State private var description: String = ""
+    @State private var selectedDate: Date = Date()
+    @State private var isAdding = false
+    @State private var errorMessage: String?
+    
+    private let transactionTypes = ["expense", "income"]
+    private let categories = CategoryDefinitions.shared.categories.map { $0.name }
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black
+                    .ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(spacing: 24) {
+                        headerView
+                        typeSelectorView
+                        amountFieldView
+                        categoryPickerView
+                        descriptionFieldView
+                        datePickerView
+                        errorMessageView
+                        addButtonView
+                    }
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.black, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                }
+            }
+        }
+    }
+    
+    // MARK: - View Components
+    
+    private var headerView: some View {
+        VStack(spacing: 8) {
+            Text("Add Transaction")
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+        }
+        .padding(.top, 20)
+        .padding(.bottom, 8)
+    }
+    
+    private var typeSelectorView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Type")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundColor(.white.opacity(0.6))
+                .textCase(.uppercase)
+                .tracking(0.8)
+            
+            HStack(spacing: 12) {
+                ForEach(transactionTypes, id: \.self) { type in
+                    typeButton(for: type)
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+    
+    private func typeButton(for type: String) -> some View {
+        Button(action: {
+            transactionType = type
+        }) {
+            HStack {
+                Spacer()
+                Text(type.capitalized)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundColor(transactionType == type ? .white : .white.opacity(0.6))
+                Spacer()
+            }
+            .padding(.vertical, 12)
+            .background(typeButtonBackground(for: type))
+            .overlay(typeButtonOverlay(for: type))
+        }
+    }
+    
+    private func typeButtonBackground(for type: String) -> some View {
+        RoundedRectangle(cornerRadius: 12)
+            .fill(transactionType == type ? 
+                  (type == "expense" ? Color.red.opacity(0.2) : Color.green.opacity(0.2)) :
+                  Color.white.opacity(0.1))
+    }
+    
+    private func typeButtonOverlay(for type: String) -> some View {
+        RoundedRectangle(cornerRadius: 12)
+            .stroke(transactionType == type ? 
+                    (type == "expense" ? Color.red.opacity(0.5) : Color.green.opacity(0.5)) :
+                    Color.clear, lineWidth: 1)
+    }
+    
+    private var amountFieldView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Amount")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundColor(.white.opacity(0.6))
+                .textCase(.uppercase)
+                .tracking(0.8)
+            
+            TextField("0.00", text: $amount)
+                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .foregroundColor(.white)
+                .keyboardType(.decimalPad)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.white.opacity(0.1))
+                )
+        }
+        .padding(.horizontal, 20)
+    }
+    
+    private var categoryPickerView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Category")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundColor(.white.opacity(0.6))
+                .textCase(.uppercase)
+                .tracking(0.8)
+            
+            Menu {
+                ForEach(categories, id: \.self) { category in
+                    Button(action: {
+                        selectedCategory = category
+                    }) {
+                        HStack {
+                            Text(category)
+                            if selectedCategory == category {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                HStack {
+                    Text(selectedCategory)
+                        .font(.system(size: 16, weight: .medium, design: .rounded))
+                        .foregroundColor(.white)
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.5))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.white.opacity(0.1))
+                )
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+    
+    private var descriptionFieldView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Description")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundColor(.white.opacity(0.6))
+                .textCase(.uppercase)
+                .tracking(0.8)
+            
+            TextField("e.g., Groceries at Walmart", text: $description)
+                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .foregroundColor(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.white.opacity(0.1))
+                )
+        }
+        .padding(.horizontal, 20)
+    }
+    
+    private var datePickerView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Date")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundColor(.white.opacity(0.6))
+                .textCase(.uppercase)
+                .tracking(0.8)
+            
+            DatePicker("", selection: $selectedDate, displayedComponents: .date)
+                .datePickerStyle(.compact)
+                .colorScheme(.dark)
+                .accentColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+        }
+        .padding(.horizontal, 20)
+    }
+    
+    @ViewBuilder
+    private var errorMessageView: some View {
+        if let error = errorMessage {
+            Text(error)
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundColor(.red.opacity(0.8))
+                .padding(.horizontal, 20)
+        }
+    }
+    
+    private var addButtonView: some View {
+        Button(action: {
+            addTransaction()
+        }) {
+            HStack {
+                Spacer()
+                if isAdding {
+                    ProgressView()
+                        .tint(.white)
+                } else {
+                    Text("Add Transaction")
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white)
+                }
+                Spacer()
+            }
+            .frame(height: 56)
+            .background(addButtonBackground)
+        }
+        .disabled(isAdding || amount.isEmpty || description.isEmpty)
+        .opacity(isAdding || amount.isEmpty || description.isEmpty ? 0.6 : 1.0)
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 20)
+    }
+    
+    private var addButtonBackground: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.4, green: 0.49, blue: 0.92),
+                            Color(red: 0.5, green: 0.55, blue: 0.95)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        }
+    }
+    
+    private func addTransaction() {
+        guard let amountValue = Double(amount), amountValue > 0 else {
+            errorMessage = "Please enter a valid amount"
+            return
+        }
+        
+        isAdding = true
+        errorMessage = nil
+        
+        Task {
+            do {
+                try await viewModel.addTransaction(
+                    type: transactionType,
+                    amount: amountValue,
+                    category: selectedCategory,
+                    description: description.isEmpty ? "Transaction" : description,
+                    date: selectedDate
+                )
+                
+                await MainActor.run {
+                    isAdding = false
+                    dismiss()
+                }
+            } catch {
+                await MainActor.run {
+                    isAdding = false
+                    errorMessage = "Failed to add transaction: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Anita Insights Data Structures
+
+struct AIRecommendation: Identifiable {
+    let id = UUID()
+    let title: String
+    let description: String
+    let priority: String // "low", "medium", "high"
+    let category: String
+}
+
+struct TrackedCategory: Identifiable {
+    let id = UUID()
+    let name: String
+    let totalSpent: Double
+    let transactionCount: Int
+    let hasLimit: Bool
+}
+
+// MARK: - Recommendation Row
+
+struct RecommendationRow: View {
+    let recommendation: AIRecommendation
+    
+    private var priorityColor: Color {
+        switch recommendation.priority {
+        case "high":
+            return Color.red.opacity(0.8)
+        case "medium":
+            return Color.orange.opacity(0.8)
+        default:
+            return Color.blue.opacity(0.8)
+        }
+    }
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            // Priority indicator
+            Circle()
+                .fill(priorityColor)
+                .frame(width: 8, height: 8)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(recommendation.title)
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundColor(.white.opacity(0.95))
+                
+                Text(recommendation.description)
+                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                    .foregroundColor(.white.opacity(0.6))
+                    .lineLimit(2)
+            }
+            
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+    }
+}
+
+// MARK: - Tracked Category Row
+
+struct TrackedCategoryRow: View {
+    let category: TrackedCategory
+    @ObservedObject var viewModel: FinanceViewModel
+    
+    private func formatCurrency(_ amount: Double) -> String {
+        let currency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currency
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+    }
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            // Category icon
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(white: 0.2).opacity(0.3),
+                                Color(white: 0.15).opacity(0.2)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 36, height: 36)
+                
+                Image(systemName: "tag.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.7))
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(category.name)
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white.opacity(0.95))
+                    
+                    if category.hasLimit {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.green.opacity(0.8))
+                    }
+                }
+                
+                HStack(spacing: 8) {
+                    Text(formatCurrency(category.totalSpent))
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundColor(.white.opacity(0.7))
+                    
+                    Text("•")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundColor(.white.opacity(0.4))
+                    
+                    Text("\(category.transactionCount) transaction\(category.transactionCount == 1 ? "" : "s")")
+                        .font(.system(size: 13, weight: .regular, design: .rounded))
+                        .foregroundColor(.white.opacity(0.5))
+                }
+            }
+            
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
     }
 }
 

@@ -29,12 +29,41 @@ struct Config {
     }()
     
     // Backend API Configuration
+    // Production backend URL - Update this with your actual deployed backend URL
+    // 
+    // The iOS app uses a separate Express backend (in "ANITA backend" folder)
+    // You need to deploy this backend to a hosting service before TestFlight
+    //
+    // Common deployment platforms:
+    // - Railway: https://anita-backend.railway.app (recommended - easy setup)
+    // - Render: https://anita-backend.onrender.com (free tier available)
+    // - Fly.io: https://anita-backend.fly.dev
+    // - Custom domain: https://api.anita.app
+    //
+    // IMPORTANT: Replace the URL below with your actual deployed backend URL
+    // before building for TestFlight!
+    static let productionBackendURL: String = {
+        if let url = ProcessInfo.processInfo.environment["PRODUCTION_BACKEND_URL"] {
+            return url
+        }
+        // Default: Railway deployment (update this to your actual backend URL)
+        // This is just a placeholder - you MUST deploy your backend and update this URL
+        return "https://anita-backend.railway.app"
+    }()
+    
     static let backendURL: String = {
+        // Check environment variable first
         if let url = ProcessInfo.processInfo.environment["BACKEND_URL"] {
             return url
         }
-        // Default to localhost for development
+        
+        #if DEBUG
+        // Debug builds: Use localhost for development
         return "http://localhost:3001"
+        #else
+        // Release builds (TestFlight/App Store): Use production URL
+        return productionBackendURL
+        #endif
     }()
     
     // Google Sign-In Configuration

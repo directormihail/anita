@@ -210,7 +210,13 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
       try {
         const targetInfo = parseTargetFromConversation(sanitizedMessages, aiResponse);
         if (targetInfo) {
-          logger.info('Target detected in conversation, creating automatically', { requestId, userId, title: targetInfo.title });
+          logger.info('Target detected in conversation, creating automatically', { 
+            requestId, 
+            userId, 
+            title: targetInfo.title,
+            amount: targetInfo.amount,
+            currency: targetInfo.currency
+          });
           
           // Get user currency preference
           let userCurrency = 'EUR';
@@ -258,6 +264,18 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
             logger.info('Target auto-created successfully', { requestId, targetId: createdTarget.id, title: targetInfo.title });
             // Store target ID to include in response
             (res as any).createdTargetId = createdTarget.id;
+            (res as any).createdTargetType = 'savings'; // Explicitly set type
+          }
+        } else {
+          // Log when target is not detected (for debugging)
+          const lastUserMessage = sanitizedMessages.filter(m => m.role === 'user').pop()?.content || '';
+          const aiConfirms = /(?:got it|noted|saved|created|set|great|perfect|done).*?(?:target|goal|savings goal)/i.test(aiResponse);
+          if (aiConfirms) {
+            logger.debug('AI confirmed target but parsing failed', { 
+              requestId, 
+              lastUserMessage: lastUserMessage.substring(0, 100),
+              aiResponsePreview: aiResponse.substring(0, 200)
+            });
           }
         }
       } catch (error) {
@@ -611,16 +629,20 @@ function extractCategoryFromMessage(message: string): string | null {
  * Looks for patterns like "I want to save X for Y by Z" or "For X" then "Y" (amount)
  */
 function parseTargetFromConversation(messages: Array<{ role: string; content: string }>, aiResponse: string): { title: string; amount: number; currency?: string; date?: string; description?: string } | null {
-  // Check if AI response confirms a target was set (indicates we should create one)
-  const aiConfirmsTarget = /(?:got it|noted|saved|created|set).*?target/i.test(aiResponse);
+  // Check if AI response confirms a target/goal was set (indicates we should create one)
+  // Updated to also match "goal" in addition to "target"
+  const aiConfirmsTarget = /(?:got it|noted|saved|created|set|great|perfect|done).*?(?:target|goal|savings goal)/i.test(aiResponse);
   if (!aiConfirmsTarget) {
     return null; // Only create target if AI confirms it
   }
 
-  // Get user messages
+  // Get user messages and AI messages
   const userMessages = messages.filter(m => m.role === 'user').map(m => m.content);
+  const aiMessages = messages.filter(m => m.role === 'assistant' || m.role === 'system').map(m => m.content);
   const lastUserMessage = userMessages[userMessages.length - 1] || '';
   const secondLastUserMessage = userMessages[userMessages.length - 2] || '';
+  const lastAiMessage = aiMessages[aiMessages.length - 1] || '';
+  const secondLastAiMessage = aiMessages[aiMessages.length - 2] || '';
 
   let title = '';
   let amount = 0;
@@ -646,7 +668,7 @@ function parseTargetFromConversation(messages: Array<{ role: string; content: st
   } else {
     // Pattern 2: "For X" (description) in one message, then "Y" (amount) in next
     // Example: "For the Hotel room for me and my gf on february" then "100"
-    const descriptionPattern = /(?:for|to buy|to get|for a|for an)\s*(.+?)(?:\s+(?:in|by|on)\s+([a-z]+|\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{1,2}-\d{1,2}))?/i;
+    const descriptionPattern = /(?:for|to buy|to get|for a|for an|save for|saving for)\s*(.+?)(?:\s+(?:in|by|on)\s+([a-z]+|\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{1,2}-\d{1,2}))?/i;
     const amountPattern = /^(\d+(?:\.\d+)?)\s*(?:euros?|dollars?|usd|eur|\$|€)?$/i;
     
     const descMatch = secondLastUserMessage.match(descriptionPattern);
@@ -659,63 +681,103 @@ function parseTargetFromConversation(messages: Array<{ role: string; content: st
       if (descMatch[2]) {
         date = parseTargetDate(descMatch[2]);
       }
-    } else if (amountMatch && secondLastUserMessage.toLowerCase().includes('for')) {
-      // Fallback: amount in last message, extract description from previous
+    } else if (amountMatch) {
+      // User just provided a number - try to extract title from AI's question or response
       amount = parseFloat(amountMatch[1]);
-      const descText = secondLastUserMessage;
-      const forMatch = descText.match(/(?:for|to buy|to get|for a|for an)\s*(.+?)(?:\s+(?:in|by|on)\s+([a-z]+|\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{1,2}-\d{1,2}))?/i);
-      if (forMatch) {
-        title = forMatch[1]?.trim() || '';
-        if (forMatch[2]) {
-          date = parseTargetDate(forMatch[2]);
+      
+      // Try to extract from AI's question (e.g., "How much would you like to save for your new iPhone?")
+      const aiQuestionPattern = /(?:how much|what|save|saving).*?(?:for|to buy|to get|for a|for an|your)\s*(.+?)(?:\?|$)/i;
+      const aiQuestionMatch = (lastAiMessage || secondLastAiMessage).match(aiQuestionPattern);
+      if (aiQuestionMatch) {
+        title = aiQuestionMatch[1]?.trim() || '';
+        // Clean up common prefixes
+        title = title.replace(/^(?:your|a|an|the)\s+/i, '').trim();
+      }
+      
+      // If still no title, try to extract from AI's confirmation response
+      if (!title) {
+        const aiConfirmPattern = /(?:for|to buy|to get|for a|for an)\s*(.+?)(?:\.|!|,|$)/i;
+        const aiConfirmMatch = aiResponse.match(aiConfirmPattern);
+        if (aiConfirmMatch) {
+          title = aiConfirmMatch[1]?.trim() || '';
+          // Clean up common prefixes
+          title = title.replace(/^(?:your|a|an|the)\s+/i, '').trim();
+        }
+      }
+      
+      // Fallback: try to extract from previous user message if it contains "for"
+      if (!title && secondLastUserMessage.toLowerCase().includes('for')) {
+        const descText = secondLastUserMessage;
+        const forMatch = descText.match(/(?:for|to buy|to get|for a|for an)\s*(.+?)(?:\s+(?:in|by|on)\s+([a-z]+|\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{1,2}-\d{1,2}))?/i);
+        if (forMatch) {
+          title = forMatch[1]?.trim() || '';
+          if (forMatch[2]) {
+            date = parseTargetDate(forMatch[2]);
+          }
         }
       }
     }
   }
 
   // Also try to extract from AI response if it mentions the target details
+  // This is especially useful when the AI confirms the target in its response
   if (!title || !amount) {
-    const aiPattern = /(?:target|goal).*?(\d+(?:\.\d+)?)\s*(?:euros?|dollars?|usd|eur|\$|€)?.*?(?:for|to buy|to get|for a|for an)\s*(.+?)(?:\s+(?:in|by|on)\s+([a-z]+|\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{1,2}-\d{1,2}))?/i;
+    // Enhanced pattern to extract from AI confirmation (e.g., "Your savings goal is set for $1,500 for a new iPhone")
+    const aiPattern = /(?:target|goal|savings goal).*?(\d+(?:[,\.]\d+)?)\s*(?:euros?|dollars?|usd|eur|\$|€)?.*?(?:for|to buy|to get|for a|for an)\s*(.+?)(?:\s+(?:in|by|on)\s+([a-z]+|\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{1,2}-\d{1,2}))?/i;
     const aiMatch = aiResponse.match(aiPattern);
     if (aiMatch) {
-      if (!amount) amount = parseFloat(aiMatch[1]) || 0;
+      // Handle comma-separated numbers (e.g., "1,500")
+      const amountStr = aiMatch[1].replace(/,/g, '');
+      if (!amount) amount = parseFloat(amountStr) || 0;
       if (!title) title = aiMatch[2]?.trim() || '';
       if (!date && aiMatch[3]) date = parseTargetDate(aiMatch[3]);
+      
+      // Extract currency from AI response
+      if (aiResponse.includes('$') || aiResponse.toLowerCase().includes('dollar') || aiResponse.toLowerCase().includes('usd')) {
+        currency = 'USD';
+      } else if (aiResponse.includes('€') || aiResponse.toLowerCase().includes('euro') || aiResponse.toLowerCase().includes('eur')) {
+        currency = 'EUR';
+      }
     }
   }
 
   // If we found amount and title, create target
   if (amount > 0 && title) {
     // Clean up title - remove "for" prefix if present
-    title = title.replace(/^(?:for|to buy|to get|for a|for an)\s+/i, '').trim();
+    title = title.replace(/^(?:for|to buy|to get|for a|for an|your)\s+/i, '').trim();
     // Remove trailing date references
     title = title.replace(/\s+(?:in|by|on)\s+[a-z]+$/i, '').trim();
-    // Remove extra words like "for me and my gf" etc
-    title = title.replace(/\s+(?:for|with|and)\s+(?:me|my|the|a|an)\s+.*$/i, '').trim();
-    // Remove common filler words at the end
-    title = title.replace(/\s+(?:room|fund|goal|target|savings)$/i, '').trim();
+    // Remove extra words like "for me and my gf" etc, but preserve "new iPhone", "new car", etc.
+    // Only remove if it's clearly a personal reference, not a product descriptor
+    title = title.replace(/\s+(?:for|with|and)\s+(?:me|my|the)\s+(?:gf|boyfriend|girlfriend|partner|spouse|wife|husband).*$/i, '').trim();
+    // Remove common filler words at the end (but not if they're part of the product name)
+    title = title.replace(/\s+(?:room|fund|goal|target|savings)(?:\s|$)/i, '').trim();
     
     // Generate proper name if title is too short or generic
     if (title.length < 2 || /^[a-z]$/i.test(title)) {
       // If title is just a single letter or very short, try to extract from context
       const allText = userMessages.join(' ').toLowerCase();
+      const allAiText = aiMessages.join(' ').toLowerCase();
+      const combinedText = (allText + ' ' + allAiText).toLowerCase();
       
       // Look for common patterns
-      if (allText.includes('hotel') || allText.includes('room')) {
+      if (combinedText.includes('iphone') || combinedText.includes('phone')) {
+        title = 'New iPhone';
+      } else if (combinedText.includes('hotel') || combinedText.includes('room')) {
         title = 'Hotel Room';
-      } else if (allText.includes('vacation') || allText.includes('trip') || allText.includes('travel')) {
+      } else if (combinedText.includes('vacation') || combinedText.includes('trip') || combinedText.includes('travel')) {
         title = 'Vacation Fund';
-      } else if (allText.includes('emergency')) {
+      } else if (combinedText.includes('emergency')) {
         title = 'Emergency Fund';
-      } else if (allText.includes('car') || allText.includes('vehicle')) {
-        title = 'Car Fund';
-      } else if (allText.includes('house') || allText.includes('home') || allText.includes('apartment')) {
+      } else if (combinedText.includes('car') || combinedText.includes('vehicle')) {
+        title = 'New Car';
+      } else if (combinedText.includes('house') || combinedText.includes('home') || combinedText.includes('apartment')) {
         title = 'Home Fund';
-      } else if (allText.includes('wedding')) {
+      } else if (combinedText.includes('wedding')) {
         title = 'Wedding Fund';
-      } else if (allText.includes('education') || allText.includes('school') || allText.includes('university')) {
+      } else if (combinedText.includes('education') || combinedText.includes('school') || combinedText.includes('university')) {
         title = 'Education Fund';
-      } else if (allText.includes('retirement')) {
+      } else if (combinedText.includes('retirement')) {
         title = 'Retirement Fund';
       } else {
         // Default to a descriptive name based on amount

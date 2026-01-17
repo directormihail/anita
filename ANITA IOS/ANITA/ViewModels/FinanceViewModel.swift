@@ -164,6 +164,34 @@ class FinanceViewModel: ObservableObject {
         }
     }
     
+    func addTransaction(type: String, amount: Double, category: String?, description: String, date: Date?) async throws {
+        let userId = self.userId
+        
+        // Format date as ISO string if provided
+        let dateString: String?
+        if let date = date {
+            let formatter = ISO8601DateFormatter()
+            dateString = formatter.string(from: date)
+        } else {
+            dateString = nil
+        }
+        
+        let newTransaction = try await networkService.createTransaction(
+            userId: userId,
+            type: type,
+            amount: amount,
+            category: category,
+            description: description,
+            date: dateString
+        )
+        
+        await MainActor.run {
+            self.transactions.append(newTransaction)
+            // Recalculate metrics
+            refresh()
+        }
+    }
+    
     func updateAsset(assetId: String, currentValue: Double? = nil, name: String? = nil, type: String? = nil, description: String? = nil) async throws {
         let userId = self.userId
         

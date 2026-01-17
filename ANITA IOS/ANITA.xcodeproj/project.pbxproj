@@ -13,7 +13,6 @@
 		A1000008 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000007 /* Preview Assets.xcassets */; };
 		A1000010 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000009 /* Models.swift */; };
 		A1000012 /* NetworkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000011 /* NetworkService.swift */; };
-		A1000049 /* SupabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000050 /* SupabaseService.swift */; };
 		A1000014 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000013 /* ChatView.swift */; };
 		A1000020 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000019 /* SettingsView.swift */; };
 		A1000022 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000021 /* ChatViewModel.swift */; };
@@ -25,8 +24,8 @@
 		A1000043 /* CategoryAnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000044 /* CategoryAnalyticsView.swift */; };
 		A1000045 /* CategoryAnalyticsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000046 /* CategoryAnalyticsViewModel.swift */; };
 		A1000047 /* LiquidGlassModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000048 /* LiquidGlassModifier.swift */; };
+		A1000049 /* SupabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000050 /* SupabaseService.swift */; };
 		A1000051 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000052 /* Config.swift */; };
-		Aa31fd725f3f /* TextFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = Af035dc2b2fe /* TextFormatter.swift */; };
 		A1000053 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000054 /* WelcomeView.swift */; };
 		A1000055 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000056 /* LoginView.swift */; };
 		A1000057 /* SignUpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000058 /* SignUpView.swift */; };
@@ -37,7 +36,8 @@
 		A1000068 /* StoreKitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000069 /* StoreKitService.swift */; };
 		A1000070 /* CategoryDefinitions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000071 /* CategoryDefinitions.swift */; };
 		A1000072 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000073 /* OnboardingView.swift */; };
-		/* End PBXBuildFile section */
+		Aa31fd725f3f /* TextFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = Af035dc2b2fe /* TextFormatter.swift */; };
+/* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		A0FFFFFF /* ANITA.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ANITA.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -47,7 +47,6 @@
 		A1000007 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		A1000009 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		A1000011 /* NetworkService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkService.swift; sourceTree = "<group>"; };
-		A1000050 /* SupabaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseService.swift; sourceTree = "<group>"; };
 		A1000013 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		A1000019 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A1000021 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
@@ -60,8 +59,8 @@
 		A1000044 /* CategoryAnalyticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryAnalyticsView.swift; sourceTree = "<group>"; };
 		A1000046 /* CategoryAnalyticsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryAnalyticsViewModel.swift; sourceTree = "<group>"; };
 		A1000048 /* LiquidGlassModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlassModifier.swift; sourceTree = "<group>"; };
+		A1000050 /* SupabaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseService.swift; sourceTree = "<group>"; };
 		A1000052 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
-		Af035dc2b2fe /* TextFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFormatter.swift; sourceTree = "<group>"; };
 		A1000054 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
 		A1000056 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		A1000058 /* SignUpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignUpView.swift; sourceTree = "<group>"; };
@@ -71,7 +70,8 @@
 		A1000069 /* StoreKitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreKitService.swift; sourceTree = "<group>"; };
 		A1000071 /* CategoryDefinitions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryDefinitions.swift; sourceTree = "<group>"; };
 		A1000073 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
-		/* End PBXFileReference section */
+		Af035dc2b2fe /* TextFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFormatter.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		A0FFFFFC /* Frameworks */ = {
@@ -110,6 +110,14 @@
 			path = ANITA;
 			sourceTree = "<group>";
 		};
+		A0FFFFFD /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A0FFFFFF /* ANITA.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
 		A1000006 /* Preview Content */ = {
 			isa = PBXGroup;
 			children = (
@@ -136,18 +144,6 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
-		A1000032 /* ViewModels */ = {
-			isa = PBXGroup;
-			children = (
-				A1000021 /* ChatViewModel.swift */,
-				A1000037 /* FinanceViewModel.swift */,
-				A1000039 /* SidebarViewModel.swift */,
-				A1000046 /* CategoryAnalyticsViewModel.swift */,
-				A1000060 /* AuthViewModel.swift */,
-			);
-			path = ViewModels;
-			sourceTree = "<group>";
-		};
 		A1000030 /* Services */ = {
 			isa = PBXGroup;
 			children = (
@@ -166,6 +162,18 @@
 			path = Models;
 			sourceTree = "<group>";
 		};
+		A1000032 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				A1000021 /* ChatViewModel.swift */,
+				A1000037 /* FinanceViewModel.swift */,
+				A1000039 /* SidebarViewModel.swift */,
+				A1000046 /* CategoryAnalyticsViewModel.swift */,
+				A1000060 /* AuthViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
 		A1000042 /* Utils */ = {
 			isa = PBXGroup;
 			children = (
@@ -173,16 +181,9 @@
 				A1000048 /* LiquidGlassModifier.swift */,
 				A1000052 /* Config.swift */,
 				A1000071 /* CategoryDefinitions.swift */,
-					Af035dc2b2fe /* TextFormatter.swift */,);
-			path = Utils;
-			sourceTree = "<group>";
-		};
-		A0FFFFFD /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				A0FFFFFF /* ANITA.app */,
+				Af035dc2b2fe /* TextFormatter.swift */,
 			);
-			name = Products;
+			path = Utils;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -287,7 +288,8 @@
 				A1000066 /* UpgradeView.swift in Sources */,
 				A1000068 /* StoreKitService.swift in Sources */,
 				A1000070 /* CategoryDefinitions.swift in Sources */,
-				A1000072 /* OnboardingView.swift in Sources */,);
+				A1000072 /* OnboardingView.swift in Sources */,
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
@@ -417,12 +419,16 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"ANITA/Preview Content\"";
+				DEVELOPMENT_TEAM = 6CN83R7KSQ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ANITA/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ANITA;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "ANITA needs microphone access to transcribe your voice messages.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "ANITA needs access to your photo library to analyze financial documents.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -434,9 +440,10 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.anita.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -447,13 +454,18 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				"ASSETCATALOG_COMPILER_APPICON_NAME[sdk=iphoneos*]" = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"ANITA/Preview Content\"";
+				DEVELOPMENT_TEAM = 6CN83R7KSQ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ANITA/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ANITA;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "ANITA needs microphone access to transcribe your voice messages.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "ANITA needs access to your photo library to analyze financial documents.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -465,9 +477,10 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.anita.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -518,4 +531,3 @@
 	};
 	rootObject = A0FFFFF6 /* Project object */;
 }
-
