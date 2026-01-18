@@ -36,6 +36,8 @@
 		A1000068 /* StoreKitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000069 /* StoreKitService.swift */; };
 		A1000070 /* CategoryDefinitions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000071 /* CategoryDefinitions.swift */; };
 		A1000072 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000073 /* OnboardingView.swift */; };
+		A1000074 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000075 /* NotificationService.swift */; };
+		A1000076 /* NotificationPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000077 /* NotificationPreviewView.swift */; };
 		Aa31fd725f3f /* TextFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = Af035dc2b2fe /* TextFormatter.swift */; };
 /* End PBXBuildFile section */
 
@@ -70,6 +72,8 @@
 		A1000069 /* StoreKitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreKitService.swift; sourceTree = "<group>"; };
 		A1000071 /* CategoryDefinitions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryDefinitions.swift; sourceTree = "<group>"; };
 		A1000073 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		A1000075 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
+		A1000077 /* NotificationPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPreviewView.swift; sourceTree = "<group>"; };
 		Af035dc2b2fe /* TextFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFormatter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -140,6 +144,7 @@
 				A1000065 /* GoogleLogoView.swift */,
 				A1000067 /* UpgradeView.swift */,
 				A1000073 /* OnboardingView.swift */,
+				A1000077 /* NotificationPreviewView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -150,6 +155,7 @@
 				A1000011 /* NetworkService.swift */,
 				A1000050 /* SupabaseService.swift */,
 				A1000069 /* StoreKitService.swift */,
+				A1000075 /* NotificationService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -289,6 +295,8 @@
 				A1000068 /* StoreKitService.swift in Sources */,
 				A1000070 /* CategoryDefinitions.swift in Sources */,
 				A1000072 /* OnboardingView.swift in Sources */,
+				A1000074 /* NotificationService.swift in Sources */,
+				A1000076 /* NotificationPreviewView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

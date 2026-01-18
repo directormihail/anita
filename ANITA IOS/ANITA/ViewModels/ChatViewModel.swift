@@ -557,10 +557,13 @@ class ChatViewModel: ObservableObject {
                                 description: messageText,
                                 date: nil
                             )
-                            print("[ChatViewModel] Transaction saved successfully: \(savedTransaction.id)")
-                            
-                            // Notify FinanceViewModel to refresh
-                            NotificationCenter.default.post(name: NSNotification.Name("TransactionAdded"), object: nil)
+                        print("[ChatViewModel] Transaction saved successfully: \(savedTransaction.id)")
+                        
+                        // Record transaction added for reminder tracking
+                        NotificationService.shared.recordTransactionAdded()
+                        
+                        // Notify FinanceViewModel to refresh
+                        NotificationCenter.default.post(name: NSNotification.Name("TransactionAdded"), object: nil)
                             
                             // Clear pending transaction
                             pendingTransactionType = nil
@@ -613,6 +616,9 @@ class ChatViewModel: ObservableObject {
                             date: nil
                         )
                         print("[ChatViewModel] Transaction saved successfully: \(savedTransaction.id)")
+                        
+                        // Record transaction added for reminder tracking
+                        NotificationService.shared.recordTransactionAdded()
                         
                         // Notify FinanceViewModel to refresh
                         NotificationCenter.default.post(name: NSNotification.Name("TransactionAdded"), object: nil)

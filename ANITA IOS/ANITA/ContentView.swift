@@ -98,6 +98,11 @@ struct ContentView: View {
                     .foregroundColor: UIColor(red: 0.4, green: 0.49, blue: 0.92, alpha: 1.0)
                 ]
                 
+                // Schedule monthly summary notifications
+                Task { @MainActor in
+                    NotificationService.shared.scheduleMonthlySummary()
+                }
+                
                 // Normal item styling with slight transparency
                 appearance.stackedLayoutAppearance.normal.iconColor = UIColor(white: 0.8, alpha: 0.8)
                 appearance.stackedLayoutAppearance.normal.titleTextAttributes = [

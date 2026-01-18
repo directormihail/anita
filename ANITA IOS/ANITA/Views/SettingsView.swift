@@ -11,6 +11,7 @@ import AuthenticationServices
 
 struct SettingsView: View {
     @ObservedObject private var userManager = UserManager.shared
+    @ObservedObject private var notificationService = NotificationService.shared
     @State private var showPrivacyPolicy = false
     @State private var privacyPolicy: PrivacyResponse?
     @State private var showAuthSheet = false
@@ -53,6 +54,9 @@ struct SettingsView: View {
     @State private var showExportSuccess = false
     @State private var showImportPicker = false
     @State private var showClearDataConfirm = false
+    
+    // Notification preview
+    @State private var showNotificationPreview = false
     
     private let networkService = NetworkService.shared
     private let supabaseService = SupabaseService.shared
@@ -392,6 +396,65 @@ struct SettingsView: View {
                                     .tint(Color(red: 0.4, green: 0.49, blue: 0.92))
                                 }
                             }
+                            
+                            Divider()
+                                .background(Color.white.opacity(0.1))
+                                .padding(.leading, 60)
+                            
+                            HStack {
+                                SettingsRowWithIcon(
+                                    icon: "bell.badge.fill",
+                                    iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
+                                    title: "Push Notifications",
+                                    value: nil,
+                                    showChevron: false
+                                ) {
+                                    Toggle("", isOn: Binding(
+                                        get: { notificationService.pushNotificationsEnabled },
+                                        set: { enabled in
+                                            notificationService.pushNotificationsEnabled = enabled
+                                            if enabled {
+                                                notificationService.requestAuthorization()
+                                            }
+                                        }
+                                    ))
+                                    .tint(Color(red: 0.4, green: 0.49, blue: 0.92))
+                                }
+                            }
+                            
+                            Divider()
+                                .background(Color.white.opacity(0.1))
+                                .padding(.leading, 60)
+                            
+                            Button(action: {
+                                notificationService.sendTestNotification()
+                            }) {
+                                SettingsRowWithIcon(
+                                    icon: "bell.badge",
+                                    iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
+                                    title: "Test Notification",
+                                    value: nil,
+                                    showChevron: true
+                                ) {}
+                            }
+                            .buttonStyle(PremiumSettingsButtonStyle())
+                            
+                            Divider()
+                                .background(Color.white.opacity(0.1))
+                                .padding(.leading, 60)
+                            
+                            Button(action: {
+                                showNotificationPreview = true
+                            }) {
+                                SettingsRowWithIcon(
+                                    icon: "eye.fill",
+                                    iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
+                                    title: "View All Notifications",
+                                    value: nil,
+                                    showChevron: true
+                                ) {}
+                            }
+                            .buttonStyle(PremiumSettingsButtonStyle())
                         }
                     }
                     
@@ -515,6 +578,9 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showUpgradeView) {
             UpgradeView()
+        }
+        .sheet(isPresented: $showNotificationPreview) {
+            NotificationPreviewView()
         }
         .sheet(isPresented: $showAuthSheet) {
             AuthSheet(

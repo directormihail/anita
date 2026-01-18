@@ -6,10 +6,19 @@
 //
 
 import SwiftUI
+import UserNotifications
 
 @main
 struct ANITAApp: App {
     init() {
+        // Initialize notification service and request permissions
+        Task { @MainActor in
+            NotificationService.shared.checkAuthorizationStatus()
+            if NotificationService.shared.pushNotificationsEnabled {
+                NotificationService.shared.requestAuthorization()
+            }
+        }
+        
         // Configure navigation bar appearance globally for transparent glassy effect
         let navBarAppearance = UINavigationBarAppearance()
         navBarAppearance.configureWithTransparentBackground()
