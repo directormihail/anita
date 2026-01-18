@@ -32,6 +32,92 @@ extension AnyTransition {
     }
 }
 
+// Extension to dismiss keyboard
+extension View {
+    func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+    
+    func dismissKeyboardOnSwipe() -> some View {
+        self.simultaneousGesture(
+            DragGesture(minimumDistance: 30, coordinateSpace: .local)
+                .onEnded { value in
+                    // Dismiss on downward swipe
+                    if value.translation.height > 50 {
+                        hideKeyboard()
+                    }
+                }
+        )
+    }
+    
+    func dismissKeyboardOnTap() -> some View {
+        self.background(KeyboardDismissingBackground())
+    }
+}
+
+// UIViewRepresentable to handle tap gesture for keyboard dismissal
+struct KeyboardDismissingBackground: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .clear
+        view.isUserInteractionEnabled = false
+        
+        // Add tap gesture to the window after view appears
+        DispatchQueue.main.async {
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let window = windowScene.windows.first {
+                let tapGesture = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.dismissKeyboard))
+                tapGesture.cancelsTouchesInView = false
+                tapGesture.delegate = context.coordinator
+                window.addGestureRecognizer(tapGesture)
+                context.coordinator.gestureRecognizer = tapGesture
+            }
+        }
+        
+        return view
+    }
+    
+    func updateUIView(_ uiView: UIView, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+    
+    static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
+        // Remove gesture recognizer when view is dismantled
+        if let gesture = coordinator.gestureRecognizer,
+           let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = windowScene.windows.first {
+            window.removeGestureRecognizer(gesture)
+        }
+    }
+    
+    class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var gestureRecognizer: UITapGestureRecognizer?
+        
+        @objc func dismissKeyboard() {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
+        
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            // Don't intercept taps on text fields, text views, or buttons
+            let view = touch.view
+            if view is UITextField || view is UITextView {
+                return false
+            }
+            // Check if the view or any of its superviews is a button
+            var currentView: UIView? = view
+            while currentView != nil {
+                if currentView is UIButton {
+                    return false
+                }
+                currentView = currentView?.superview
+            }
+            return true
+        }
+    }
+}
+
 struct FinanceView: View {
     @StateObject private var viewModel = FinanceViewModel()
     @StateObject private var categoryViewModel = CategoryAnalyticsViewModel()
@@ -41,6 +127,7 @@ struct FinanceView: View {
     @State private var isAssetsExpanded = false
     @State private var isTransactionsExpanded = false
     @State private var isAnitaInsightsExpanded = false
+    @State private var isTrendsAndComparisonsExpanded = false
     @State private var selectedCategory: String? = nil
     @State private var showAddAssetSheet = false
     @State private var showAddTransactionSheet = false
@@ -286,6 +373,111 @@ struct FinanceView: View {
         .padding(.horizontal, 20)
     }
     
+    private var trendsAndComparisonsView: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Button(action: {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.75, blendDuration: 0.25)) {
+                    isTrendsAndComparisonsExpanded.toggle()
+                    if isTrendsAndComparisonsExpanded {
+                        // Load historical data when expanded
+                        viewModel.loadHistoricalData()
+                    }
+                }
+            }) {
+                HStack(spacing: 16) {
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(white: 0.2).opacity(0.3),
+                                        Color(white: 0.15).opacity(0.2)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 44, height: 44)
+                            .overlay {
+                                Circle()
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.white.opacity(0.2),
+                                                Color.white.opacity(0.1)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 1
+                                    )
+                            }
+                        
+                        Image(systemName: "chart.line.uptrend.xyaxis")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.95),
+                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.8)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    }
+                    
+                    Text("Trends & Comparisons")
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white.opacity(0.95))
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.4))
+                        .rotationEffect(.degrees(isTrendsAndComparisonsExpanded ? 90 : 0))
+                        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isTrendsAndComparisonsExpanded)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 18)
+                .liquidGlass(cornerRadius: 18)
+                .padding(.horizontal, 20)
+            }
+            
+            if isTrendsAndComparisonsExpanded {
+                VStack(spacing: 20) {
+                    // Period Selector
+                    ComparisonPeriodSelectorView(viewModel: viewModel)
+                        .padding(.horizontal, 20)
+                        .transition(.expandSection)
+                    
+                // Income vs Expenses Bar Chart
+                VStack(alignment: .leading, spacing: 16) {
+                    if viewModel.isLoading {
+                        ProgressView()
+                            .tint(Color(red: 0.4, green: 0.49, blue: 0.92))
+                            .frame(height: 300)
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        EnhancedIncomeExpenseBarChart(
+                            data: viewModel.getComparisonData(for: viewModel.comparisonPeriod),
+                            currency: userCurrency
+                        )
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 20)
+                        .liquidGlass(cornerRadius: 16)
+                        .padding(.horizontal, 20)
+                    }
+                }
+                .transition(.expandSection)
+                
+                }
+                .padding(.top, 8)
+            }
+        }
+    }
+    
     private var categoryAnalysisView: some View {
         VStack(alignment: .leading, spacing: 14) {
             Button(action: {
@@ -350,10 +542,10 @@ struct FinanceView: View {
                     
                     Spacer()
                     
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.down")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white.opacity(0.4))
-                        .rotationEffect(.degrees(isCategoryAnalysisExpanded ? 90 : 0))
+                        .rotationEffect(.degrees(isCategoryAnalysisExpanded ? 180 : 0))
                         .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isCategoryAnalysisExpanded)
                 }
                 .padding(.horizontal, 20)
@@ -463,7 +655,7 @@ struct FinanceView: View {
                             }()
                             
                             ScrollView {
-                                VStack(spacing: 8) {
+                                VStack(spacing: 0) {
                                     ForEach(Array(data.categories.enumerated()), id: \.element.id) { index, category in
                                         Button(action: {
                                             let impact = UIImpactFeedbackGenerator(style: .light)
@@ -474,7 +666,8 @@ struct FinanceView: View {
                                         }) {
                                             FinanceCategoryRow(
                                                 category: category,
-                                                isSelected: selectedCategory == category.name
+                                                isSelected: selectedCategory == category.name,
+                                                trend: categoryViewModel.categoryTrends[category.name]
                                             )
                                         }
                                         .buttonStyle(PlainButtonStyle())
@@ -486,8 +679,6 @@ struct FinanceView: View {
                                         )
                                     }
                                 }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 4)
                             }
                             .frame(height: calculatedHeight)
                             .clipped()
@@ -1635,6 +1826,7 @@ struct FinanceView: View {
                                 VStack(spacing: 24) {
                                     monthPickerView
                                     balanceCardView
+                                    trendsAndComparisonsView
                                     categoryAnalysisView
                                     spendingLimitsView
                                     savingGoalsView
@@ -5310,152 +5502,66 @@ struct XPLevelWidget: View {
 struct FinanceCategoryRow: View {
     let category: CategoryAnalytics
     var isSelected: Bool = false
+    var trend: CategoryTrend? = nil
     
     private var userCurrency: String {
         UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
     }
     
+    private func formatCurrency(_ amount: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = userCurrency
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+    }
+    
     var body: some View {
-        HStack(spacing: 16) {
-            // Premium glass circle with category color
+        HStack(spacing: 12) {
+            // Color indicator circle with double ring when selected
             ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(white: 0.2).opacity(isSelected ? 0.5 : 0.3),
-                                Color(white: 0.15).opacity(isSelected ? 0.4 : 0.2)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 44, height: 44)
-                    .overlay {
-                        Circle()
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(isSelected ? 0.4 : 0.2),
-                                        Color.white.opacity(isSelected ? 0.3 : 0.1)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: isSelected ? 2 : 1
-                            )
-                    }
-                    .scaleEffect(isSelected ? 1.12 : 1.0)
-                    .shadow(color: isSelected ? category.color.opacity(0.3) : Color.clear, radius: 8, x: 0, y: 2)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
-                
+                if isSelected {
+                    // Outer light grey ring
+                    Circle()
+                        .stroke(Color.white.opacity(0.3), lineWidth: 2)
+                        .frame(width: 22, height: 22)
+                    // Inner white ring
+                    Circle()
+                        .stroke(Color.white.opacity(0.6), lineWidth: 1)
+                        .frame(width: 18, height: 18)
+                }
+                // Colored circle
                 Circle()
                     .fill(category.color)
-                    .frame(width: 32, height: 32)
-                    .scaleEffect(isSelected ? 1.2 : 1.0)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+                    .frame(width: 14, height: 14)
             }
             
             // Category details
             VStack(alignment: .leading, spacing: 4) {
                 Text(category.name)
-                    .font(.system(size: 16, weight: isSelected ? .bold : .medium, design: .rounded))
-                    .foregroundColor(.white.opacity(isSelected ? 1.0 : 0.95))
+                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                    .foregroundColor(.white)
                     .lineLimit(1)
                 
                 Text(String(format: "%.1f%%", category.percentage))
-                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular, design: .rounded))
-                    .foregroundColor(.white.opacity(isSelected ? 0.8 : 0.5))
+                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                    .foregroundColor(.white.opacity(0.5))
             }
             
             Spacer()
             
             // Amount
             Text(formatCurrency(category.amount))
-                .font(.system(size: 17, weight: isSelected ? .bold : .semibold, design: .rounded))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(isSelected ? 1.0 : 0.98),
-                            Color.white.opacity(isSelected ? 0.95 : 0.9)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .foregroundColor(.white)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
         .background(
-            Group {
-                if isSelected {
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    category.color.opacity(0.15),
-                                    category.color.opacity(0.08)
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .overlay(
-                            Capsule()
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [
-                                            category.color.opacity(0.4),
-                                            category.color.opacity(0.2)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 1.5
-                                )
-                        )
-                        .shadow(color: category.color.opacity(0.2), radius: 8, x: 0, y: 2)
-                } else {
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.03),
-                                    Color.white.opacity(0.01)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .overlay(
-                            Capsule()
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white.opacity(0.08),
-                                            Color.white.opacity(0.04)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 0.5
-                                )
-                        )
-                        .shadow(color: Color.black.opacity(0.3), radius: 2, x: 0, y: 1)
-                }
-            }
+            RoundedRectangle(cornerRadius: 12)
+                .fill(isSelected ? Color(white: 0.15) : Color.clear)
         )
-        .contentShape(Capsule())
-    }
-    
-    private func formatCurrency(_ amount: Double) -> String {
-        let currency = userCurrency
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = currency
-        formatter.minimumFractionDigits = 2
-        formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
     }
 }
 
@@ -5640,9 +5746,19 @@ struct AddAssetSheet: View {
                         .padding(.horizontal, 20)
                         .padding(.top, 8)
                         .padding(.bottom, 20)
+                        
+                        // Spacer to allow tapping empty space to dismiss keyboard
+                        Spacer()
+                            .frame(height: 100)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                hideKeyboard()
+                            }
                     }
                 }
+                .dismissKeyboardOnSwipe()
             }
+            .dismissKeyboardOnTap()
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Color.black, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
@@ -5873,9 +5989,19 @@ struct AddTransactionSheet: View {
                         datePickerView
                         errorMessageView
                         addButtonView
+                        
+                        // Spacer to allow tapping empty space to dismiss keyboard
+                        Spacer()
+                            .frame(height: 100)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                hideKeyboard()
+                            }
                     }
                 }
+                .dismissKeyboardOnSwipe()
             }
+            .dismissKeyboardOnTap()
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Color.black, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
@@ -6268,6 +6394,1955 @@ struct TrackedCategoryRow: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
+    }
+}
+
+// MARK: - Chart Components
+
+struct BalanceLineChart: View {
+    let data: [MonthlyBalance]
+    let currency: String
+    
+    private func formatCurrency(_ amount: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currency
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: amount)) ?? "$0"
+    }
+    
+    private func formatMonth(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM"
+        return formatter.string(from: date)
+    }
+    
+    var body: some View {
+        if data.isEmpty {
+            VStack(spacing: 12) {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .font(.system(size: 32, weight: .light))
+                    .foregroundColor(.white.opacity(0.3))
+                Text("No data available")
+                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                    .foregroundColor(.white.opacity(0.5))
+            }
+            .frame(height: 200)
+        } else {
+            GeometryReader { geometry in
+                let width = geometry.size.width
+                let height = geometry.size.height
+                let maxBalance = data.map { $0.balance }.max() ?? 1
+                let minBalance = data.map { $0.balance }.min() ?? 0
+                let range = max(maxBalance - minBalance, 1)
+                
+                ZStack {
+                    // Grid lines
+                    VStack(spacing: 0) {
+                        ForEach(0..<5) { i in
+                            Rectangle()
+                                .fill(Color.white.opacity(0.05))
+                                .frame(height: 1)
+                            if i < 4 {
+                                Spacer()
+                            }
+                        }
+                    }
+                    
+                    // Chart line
+                    Path { path in
+                        for (index, point) in data.enumerated() {
+                            let x = CGFloat(index) / CGFloat(max(data.count - 1, 1)) * width
+                            let normalizedBalance = (point.balance - minBalance) / range
+                            let y = height - (normalizedBalance * height * 0.8) - (height * 0.1)
+                            
+                            if index == 0 {
+                                path.move(to: CGPoint(x: x, y: y))
+                            } else {
+                                path.addLine(to: CGPoint(x: x, y: y))
+                            }
+                        }
+                    }
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.9),
+                                Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.6)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round)
+                    )
+                    
+                    // Data points
+                    ForEach(Array(data.enumerated()), id: \.element.id) { index, point in
+                        let x = CGFloat(index) / CGFloat(max(data.count - 1, 1)) * width
+                        let normalizedBalance = (point.balance - minBalance) / range
+                        let y = height - (normalizedBalance * height * 0.8) - (height * 0.1)
+                        
+                        Circle()
+                            .fill(Color(red: 0.4, green: 0.49, blue: 0.92))
+                            .frame(width: 8, height: 8)
+                            .position(x: x, y: y)
+                    }
+                    
+                    // X-axis labels
+                    VStack {
+                        Spacer()
+                        HStack(spacing: 0) {
+                            ForEach(Array(data.enumerated()), id: \.element.id) { index, point in
+                                Text(formatMonth(point.month))
+                                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.6))
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                        .padding(.top, 8)
+                    }
+                }
+            }
+            .frame(height: 200)
+        }
+    }
+}
+
+struct IncomeExpenseBarChart: View {
+    let data: [MonthlyIncomeExpense]
+    let currency: String
+    
+    private func formatCurrency(_ amount: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currency
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: amount)) ?? "$0"
+    }
+    
+    private func formatMonth(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM"
+        return formatter.string(from: date)
+    }
+    
+    var body: some View {
+        if data.isEmpty {
+            VStack(spacing: 12) {
+                Image(systemName: "chart.bar.fill")
+                    .font(.system(size: 32, weight: .light))
+                    .foregroundColor(.white.opacity(0.3))
+                Text("No data available")
+                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                    .foregroundColor(.white.opacity(0.5))
+            }
+            .frame(height: 200)
+        } else {
+            GeometryReader { geometry in
+                let width = geometry.size.width
+                let height = geometry.size.height
+                let maxValue = data.map { max($0.income, $0.expenses) }.max() ?? 1
+                let barWidth = (width - CGFloat((data.count - 1) * 8)) / CGFloat(data.count)
+                
+                HStack(alignment: .bottom, spacing: 8) {
+                    ForEach(Array(data.enumerated()), id: \.element.id) { index, point in
+                        VStack(spacing: 4) {
+                            // Bars
+                            ZStack(alignment: .bottom) {
+                                // Income bar
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.green.opacity(0.8),
+                                                Color.green.opacity(0.6)
+                                            ],
+                                            startPoint: .top,
+                                            endPoint: .bottom
+                                        )
+                                    )
+                                    .frame(width: barWidth * 0.45, height: max(2, (point.income / maxValue) * height * 0.7))
+                                
+                                // Expense bar
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.red.opacity(0.8),
+                                                Color.red.opacity(0.6)
+                                            ],
+                                            startPoint: .top,
+                                            endPoint: .bottom
+                                        )
+                                    )
+                                    .frame(width: barWidth * 0.45, height: max(2, (point.expenses / maxValue) * height * 0.7))
+                                    .offset(x: barWidth * 0.45 + 2)
+                            }
+                            
+                            // Month label
+                            Text(formatMonth(point.month))
+                                .font(.system(size: 9, weight: .medium, design: .rounded))
+                                .foregroundColor(.white.opacity(0.6))
+                                .frame(width: barWidth)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            }
+            .frame(height: 200)
+        }
+    }
+}
+
+// MARK: - Comparison Views
+
+struct TrendIndicator: View {
+    let change: Double
+    let isPositive: Bool
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: isPositive ? "arrow.up" : "arrow.down")
+                .font(.system(size: 10, weight: .bold))
+            Text(String(format: "%.1f%%", abs(change)))
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+        }
+        .foregroundColor(isPositive ? Color.green.opacity(0.9) : Color.red.opacity(0.9))
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(
+            Capsule()
+                .fill((isPositive ? Color.green : Color.red).opacity(0.15))
+        )
+    }
+}
+
+struct PremiumTrendIndicator: View {
+    let change: Double
+    let isPositive: Bool
+    
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: isPositive ? "arrow.up" : "arrow.down")
+                .font(.system(size: 12, weight: .bold))
+            Text(String(format: "%.1f%%", abs(change)))
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: isPositive ? [
+                            Color.green.opacity(0.9),
+                            Color.green.opacity(0.7)
+                        ] : [
+                            Color.red.opacity(0.9),
+                            Color.red.opacity(0.7)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(
+                            LinearGradient(
+                                colors: isPositive ? [
+                                    Color.green.opacity(0.5),
+                                    Color.green.opacity(0.3)
+                                ] : [
+                                    Color.red.opacity(0.5),
+                                    Color.red.opacity(0.3)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+        )
+        .shadow(color: (isPositive ? Color.green : Color.red).opacity(0.3), radius: 6, x: 0, y: 3)
+    }
+}
+
+struct MonthToMonthComparisonView: View {
+    @ObservedObject var viewModel: FinanceViewModel
+    let currency: String
+    
+    private func formatCurrency(_ amount: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currency
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+    }
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Text("Month to Month")
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundColor(.white.opacity(0.9))
+                Spacer()
+            }
+            
+            VStack(spacing: 12) {
+                // Income comparison
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Income")
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundColor(.white.opacity(0.6))
+                        Text(formatCurrency(viewModel.monthlyIncome))
+                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white.opacity(0.95))
+                    }
+                    Spacer()
+                    let change = viewModel.getMonthToMonthChange(type: .income)
+                    TrendIndicator(change: change.percentage, isPositive: change.value >= 0)
+                }
+                
+                Divider()
+                    .background(Color.white.opacity(0.1))
+                
+                // Expenses comparison
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Expenses")
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundColor(.white.opacity(0.6))
+                        Text(formatCurrency(viewModel.monthlyExpenses))
+                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white.opacity(0.95))
+                    }
+                    Spacer()
+                    let change = viewModel.getMonthToMonthChange(type: .expenses)
+                    TrendIndicator(change: change.percentage, isPositive: change.value <= 0)
+                }
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.08),
+                            Color.white.opacity(0.04)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        )
+    }
+}
+
+// MARK: - Enhanced Comparison Components
+
+struct ComparisonPeriodSelectorView: View {
+    @ObservedObject var viewModel: FinanceViewModel
+    @State private var isDragging: Bool = false
+    
+    // Convert slider value to ComparisonPeriod
+    private func valueToPeriod(_ value: Double) -> ComparisonPeriod {
+        let rounded = Int(value.rounded())
+        let clamped = max(1, min(12, rounded))
+        return ComparisonPeriod(rawValue: clamped) ?? .threeMonths
+    }
+    
+    // Convert ComparisonPeriod to slider value
+    private func periodToValue(_ period: ComparisonPeriod) -> Double {
+        return Double(period.rawValue)
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack {
+                Image(systemName: "calendar")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 0.4, green: 0.49, blue: 0.92),
+                                Color(red: 0.5, green: 0.55, blue: 0.95)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                
+                Text("Timeline")
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundColor(.white.opacity(0.95))
+                
+                Spacer()
+            }
+            
+            VStack(spacing: 0) {
+                // Ruler-style month labels on top
+                GeometryReader { geometry in
+                    let width = geometry.size.width
+                    let sliderPadding: CGFloat = 16
+                    let availableWidth = width - sliderPadding * 2
+                    
+                    ZStack(alignment: .leading) {
+                        // Draw ruler marks for all months 1-12
+                        ForEach(1...12, id: \.self) { month in
+                            let normalizedPosition = (Double(month - 1) / Double(12 - 1))
+                            let position = sliderPadding + normalizedPosition * availableWidth
+                            
+                            VStack(spacing: 2) {
+                                // Month number - show all but style differently for major marks
+                                let isMajorMark = month == 1 || month == 3 || month == 6 || month == 9 || month == 12
+                                Text("\(month)")
+                                    .font(.system(size: isMajorMark ? 11 : 9, weight: isMajorMark ? .semibold : .regular, design: .rounded))
+                                    .foregroundColor(isMajorMark ? .white.opacity(0.8) : .white.opacity(0.4))
+                                    .frame(width: 20)
+                                
+                                // Ruler tick mark
+                                Rectangle()
+                                    .fill(isMajorMark ? Color.white.opacity(0.5) : Color.white.opacity(0.2))
+                                    .frame(width: isMajorMark ? 2 : 1, height: isMajorMark ? 8 : 4)
+                            }
+                            .offset(x: position - 10) // Center the text
+                        }
+                    }
+                }
+                .frame(height: 32)
+                .padding(.bottom, 8)
+                
+                // Custom slider with better touch handling
+                VStack(spacing: 0) {
+                    Slider(
+                        value: Binding(
+                            get: { periodToValue(viewModel.comparisonPeriod) },
+                            set: { newValue in
+                                if !isDragging {
+                                    isDragging = true
+                                }
+                                let newPeriod = valueToPeriod(newValue)
+                                // Only update if period actually changed to avoid unnecessary updates
+                                if viewModel.comparisonPeriod != newPeriod {
+                                    let impact = UIImpactFeedbackGenerator(style: .light)
+                                    impact.impactOccurred()
+                                    // Update period without reloading data immediately for smooth interaction
+                                    viewModel.comparisonPeriod = newPeriod
+                                }
+                            }
+                        ),
+                        in: 1...12,
+                        step: 1
+                    )
+                    .tint(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 0.4, green: 0.49, blue: 0.92),
+                                Color(red: 0.5, green: 0.55, blue: 0.95)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .onChange(of: viewModel.comparisonPeriod) { _ in
+                        // Reset dragging state when period changes externally
+                        isDragging = false
+                    }
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 0)
+                            .onEnded { _ in
+                                isDragging = false
+                                // Reload data when drag ends to ensure graphs have correct data
+                                // But don't show loading state if we already have data
+                                viewModel.loadHistoricalData()
+                            }
+                    )
+                    .onAppear {
+                        // Ensure default is 3 months
+                        if viewModel.comparisonPeriod != .threeMonths {
+                            viewModel.comparisonPeriod = .threeMonths
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
+        .liquidGlass(cornerRadius: 18)
+    }
+}
+
+struct EnhancedMonthToMonthComparisonView: View {
+    @ObservedObject var viewModel: FinanceViewModel
+    let currency: String
+    
+    private func formatCurrency(_ amount: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currency
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+    }
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Month to Month")
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundColor(.white.opacity(0.95))
+                }
+                Spacer()
+            }
+            
+            VStack(spacing: 16) {
+                // Income comparison
+                HStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.green.opacity(0.9))
+                            Text("Income")
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                        
+                        Text(formatCurrency(viewModel.monthlyIncome))
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .foregroundColor(.white.opacity(0.95))
+                    }
+                    
+                    Spacer()
+                    
+                    let change = viewModel.getMonthToMonthChange(type: .income)
+                    VStack(alignment: .trailing, spacing: 4) {
+                        PremiumTrendIndicator(change: change.percentage, isPositive: change.value >= 0)
+                        Text(formatCurrency(abs(change.value)))
+                            .font(.system(size: 11, weight: .regular, design: .rounded))
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                }
+                .padding(18)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.green.opacity(0.2),
+                                    Color.green.opacity(0.12)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.green.opacity(0.4),
+                                            Color.green.opacity(0.2)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1
+                                )
+                        )
+                        .shadow(color: Color.green.opacity(0.15), radius: 12, x: 0, y: 4)
+                )
+                
+                // Expenses comparison
+                HStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.down.circle.fill")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.red.opacity(0.9))
+                            Text("Expenses")
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                        
+                        Text(formatCurrency(viewModel.monthlyExpenses))
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .foregroundColor(.white.opacity(0.95))
+                    }
+                    
+                    Spacer()
+                    
+                    let change = viewModel.getMonthToMonthChange(type: .expenses)
+                    VStack(alignment: .trailing, spacing: 4) {
+                        PremiumTrendIndicator(change: change.percentage, isPositive: change.value <= 0)
+                        Text(formatCurrency(abs(change.value)))
+                            .font(.system(size: 11, weight: .regular, design: .rounded))
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                }
+                .padding(18)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.red.opacity(0.2),
+                                    Color.red.opacity(0.12)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.red.opacity(0.4),
+                                            Color.red.opacity(0.2)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1
+                                )
+                        )
+                        .shadow(color: Color.red.opacity(0.15), radius: 12, x: 0, y: 4)
+                )
+            }
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.12),
+                            Color.white.opacity(0.06)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.2),
+                                    Color.white.opacity(0.1)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+                .shadow(color: Color.black.opacity(0.2), radius: 20, x: 0, y: 8)
+        )
+    }
+}
+
+struct EnhancedInteractiveBalanceChart: View {
+    let data: [ComparisonPeriodData]
+    let currency: String
+    @ObservedObject var viewModel: FinanceViewModel
+    
+    @State private var selectedIndex: Int? = nil
+    @State private var animatedProgress: CGFloat = 0
+    
+    private func formatCurrency(_ amount: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currency
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: amount)) ?? "$0"
+    }
+    
+    private func formatMonth(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM"
+        return formatter.string(from: date)
+    }
+    
+    // Calculate cumulative cash available for each month
+    private func getCashAvailableData() -> [(month: Date, value: Double)] {
+        let sortedData = data.sorted { $0.month < $1.month }
+        var cumulative: Double = 0
+        return sortedData.map { point in
+            cumulative += point.balance
+            return (month: point.month, value: cumulative)
+        }
+    }
+    
+    // Calculate net worth for each month (assets + cumulative cash)
+    private func getNetWorthData() -> [(month: Date, value: Double)] {
+        let sortedData = data.sorted { $0.month < $1.month }
+        var cumulative: Double = 0
+        return sortedData.map { point in
+            cumulative += point.balance
+            return (month: point.month, value: totalAssets + cumulative)
+        }
+    }
+    
+    // Get total assets value (including goals and targets)
+    private var totalAssets: Double {
+        let assetsValue = viewModel.assets.reduce(0) { $0 + $1.currentValue }
+        let goalsValue = viewModel.goals.reduce(0) { $0 + $1.currentAmount }
+        let targetsValue = viewModel.targets.reduce(0) { $0 + $1.currentAmount }
+        return assetsValue + goalsValue + targetsValue
+    }
+    
+    var body: some View {
+        if data.isEmpty {
+            VStack(spacing: 12) {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .font(.system(size: 32, weight: .light))
+                    .foregroundColor(.white.opacity(0.3))
+                Text("No data available")
+                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                    .foregroundColor(.white.opacity(0.5))
+            }
+            .frame(height: 280)
+        } else {
+            VStack(spacing: 0) {
+                // Balance chart content removed - showing empty state
+                EmptyView()
+            }
+            .onAppear {
+                withAnimation(.easeInOut(duration: 1.2)) {
+                    animatedProgress = 1.0
+                }
+            }
+            .onTapGesture {
+                if selectedIndex != nil {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                        selectedIndex = nil
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Detail sheet for showing balance information
+struct BalanceDetailSheet: View {
+    let data: ComparisonPeriodData
+    let cashAvailable: Double
+    let assets: Double
+    let currency: String
+    
+    @Environment(\.dismiss) var dismiss
+    
+    private func formatCurrency(_ amount: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currency
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+    }
+    
+    private func formatFullDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter.string(from: date)
+    }
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Header
+                    VStack(spacing: 8) {
+                        Text(formatFullDate(data.month))
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                        Text("Financial Overview")
+                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                            .foregroundColor(.white.opacity(0.6))
+                    }
+                    .padding(.top, 20)
+                    
+                    // Balance Card
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Image(systemName: "chart.line.uptrend.xyaxis")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                            Text("Monthly Balance")
+                                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                .foregroundColor(.white.opacity(0.9))
+                        }
+                        Text(formatCurrency(data.balance))
+                            .font(.system(size: 32, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.25),
+                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.15)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.4), lineWidth: 1.5)
+                            )
+                    )
+                    
+                    // Income and Expenses
+                    HStack(spacing: 12) {
+                        // Income
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "arrow.up.circle.fill")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
+                                Text("Income")
+                                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.7))
+                            }
+                            Text(formatCurrency(data.income))
+                                .font(.system(size: 20, weight: .bold, design: .rounded))
+                                .foregroundColor(.white)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(Color(red: 0.2, green: 0.8, blue: 0.4).opacity(0.15))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .stroke(Color(red: 0.2, green: 0.8, blue: 0.4).opacity(0.3), lineWidth: 1)
+                                )
+                        )
+                        
+                        // Expenses
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "arrow.down.circle.fill")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(Color(red: 1.0, green: 0.3, blue: 0.3))
+                                Text("Expenses")
+                                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.7))
+                            }
+                            Text(formatCurrency(data.expenses))
+                                .font(.system(size: 20, weight: .bold, design: .rounded))
+                                .foregroundColor(.white)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(Color(red: 1.0, green: 0.3, blue: 0.3).opacity(0.15))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .stroke(Color(red: 1.0, green: 0.3, blue: 0.3).opacity(0.3), lineWidth: 1)
+                                )
+                        )
+                    }
+                    
+                    // Cash Available
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Image(systemName: "dollarsign.circle.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
+                            Text("Cash Available")
+                                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                .foregroundColor(.white.opacity(0.9))
+                        }
+                        Text(formatCurrency(cashAvailable))
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                        Text("Cumulative balance up to this month")
+                            .font(.system(size: 12, weight: .regular, design: .rounded))
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.2, green: 0.8, blue: 0.4).opacity(0.2),
+                                        Color(red: 0.2, green: 0.8, blue: 0.4).opacity(0.1)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color(red: 0.2, green: 0.8, blue: 0.4).opacity(0.3), lineWidth: 1.5)
+                            )
+                    )
+                    
+                    // Assets
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Image(systemName: "building.columns.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                            Text("Total Assets")
+                                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                .foregroundColor(.white.opacity(0.9))
+                        }
+                        Text(formatCurrency(assets))
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                        Text("All assets and savings goals")
+                            .font(.system(size: 12, weight: .regular, design: .rounded))
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.2),
+                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.1)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.3), lineWidth: 1.5)
+                            )
+                    )
+                }
+                .padding(20)
+            }
+            .background(Color.black.ignoresSafeArea())
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct EnhancedNetWorthChart: View {
+    let data: [ComparisonPeriodData]
+    let currency: String
+    @ObservedObject var viewModel: FinanceViewModel
+    
+    @State private var selectedIndex: Int? = nil
+    @State private var animatedProgress: CGFloat = 0
+    
+    private func formatCurrency(_ amount: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currency
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: amount)) ?? "$0"
+    }
+    
+    private func formatMonth(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM"
+        return formatter.string(from: date)
+    }
+    
+    // Get total assets value (including goals and targets)
+    private var totalAssets: Double {
+        let assetsValue = viewModel.assets.reduce(0) { $0 + $1.currentValue }
+        let goalsValue = viewModel.goals.reduce(0) { $0 + $1.currentAmount }
+        let targetsValue = viewModel.targets.reduce(0) { $0 + $1.currentAmount }
+        return assetsValue + goalsValue + targetsValue
+    }
+    
+    // Calculate net worth for each month (assets + cumulative cash)
+    private func getNetWorthData() -> [(month: Date, value: Double)] {
+        let sortedData = data.sorted { $0.month < $1.month }
+        var cumulative: Double = 0
+        return sortedData.map { point in
+            cumulative += point.balance
+            return (month: point.month, value: totalAssets + cumulative)
+        }
+    }
+    
+    // Calculate cumulative income for each month
+    private func getIncomeData() -> [(month: Date, value: Double)] {
+        let sortedData = data.sorted { $0.month < $1.month }
+        var cumulative: Double = 0
+        return sortedData.map { point in
+            cumulative += point.income
+            return (month: point.month, value: cumulative)
+        }
+    }
+    
+    // Calculate cumulative expenses for each month
+    private func getExpensesData() -> [(month: Date, value: Double)] {
+        let sortedData = data.sorted { $0.month < $1.month }
+        var cumulative: Double = 0
+        return sortedData.map { point in
+            cumulative += point.expenses
+            return (month: point.month, value: cumulative)
+        }
+    }
+    
+    var body: some View {
+        if data.isEmpty {
+            VStack(spacing: 12) {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .font(.system(size: 32, weight: .light))
+                    .foregroundColor(.white.opacity(0.3))
+                Text("No data available")
+                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                    .foregroundColor(.white.opacity(0.5))
+            }
+            .frame(height: 280)
+        } else {
+            VStack(spacing: 0) {
+                // Two separate info cards with big icons - Always visible, show income/expenses when selected
+                let sortedData = data.sorted { $0.month < $1.month }
+                let netWorthData = getNetWorthData()
+                let displayData: ComparisonPeriodData? = {
+                    if let selectedIndex = selectedIndex, selectedIndex < sortedData.count {
+                        return sortedData[selectedIndex]
+                    }
+                    return nil
+                }()
+                
+                // Single Net Worth Card - Full width
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "chart.line.uptrend.xyaxis.circle.fill")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Net Worth")
+                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .foregroundColor(.white.opacity(0.6))
+                            if let displayData = displayData {
+                                Text("Income: \(formatCurrency(displayData.income)) | Expenses: \(formatCurrency(displayData.expenses))")
+                                    .font(.system(size: 9, weight: .regular, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.5))
+                            }
+                        }
+                    }
+                    if let selectedIndex = selectedIndex, selectedIndex < netWorthData.count {
+                        Text(formatCurrency(netWorthData[selectedIndex].value))
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                    } else {
+                        let latestNetWorth = netWorthData.last?.value ?? totalAssets
+                        Text(formatCurrency(latestNetWorth))
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(14)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.15),
+                                    Color(red: 0.6, green: 0.4, blue: 0.9).opacity(0.1)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [
+                                            Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.25),
+                                            Color(red: 0.6, green: 0.4, blue: 0.9).opacity(0.25)
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    ),
+                                    lineWidth: 1
+                                )
+                        )
+                )
+                .padding(.horizontal, 20)
+                .padding(.bottom, 16)
+                
+                // Premium Line Chart
+                GeometryReader { geometry in
+                    let width = geometry.size.width
+                    let height = geometry.size.height
+                    let horizontalPadding: CGFloat = 20
+                    let chartWidth = width - (horizontalPadding * 2)
+                    let chartHeight = height - 35 // Space for month labels
+                    
+                    let netWorthData = getNetWorthData()
+                    let incomeData = getIncomeData()
+                    let expensesData = getExpensesData()
+                    
+                    if netWorthData.isEmpty {
+                        EmptyView()
+                    } else {
+                        // Calculate range including all data to handle negatives properly
+                        let allValues = netWorthData.map { $0.value } + incomeData.map { $0.value } + expensesData.map { $0.value }
+                        let maxValue = allValues.max() ?? 1
+                        let minValue = allValues.min() ?? 0
+                        // Add padding to ensure values don't touch borders
+                        let padding = max(abs(maxValue - minValue) * 0.1, abs(minValue) * 0.1)
+                        let adjustedMin = minValue - padding
+                        let adjustedMax = maxValue + padding
+                        let range = max(adjustedMax - adjustedMin, 1)
+                        
+                        ZStack {
+                        // Premium grid lines with gradient
+                        VStack(spacing: 0) {
+                            ForEach(0..<5) { i in
+                                Rectangle()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.white.opacity(0.08),
+                                                Color.white.opacity(0.02)
+                                            ],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                                    .frame(height: 1)
+                                if i < 4 {
+                                    Spacer()
+                                }
+                            }
+                        }
+                        .padding(.horizontal, horizontalPadding)
+                        
+                        // Blue gradient fill under income line (reduced opacity)
+                        Path { path in
+                            for (index, point) in incomeData.enumerated() {
+                                let x = CGFloat(index) / CGFloat(max(incomeData.count - 1, 1)) * chartWidth + horizontalPadding
+                                let normalizedValue = (point.value - adjustedMin) / range
+                                let y = chartHeight - (normalizedValue * chartHeight * 0.8) - (chartHeight * 0.1)
+                                
+                                if index == 0 {
+                                    path.move(to: CGPoint(x: x, y: chartHeight))
+                                    path.addLine(to: CGPoint(x: x, y: y))
+                                } else {
+                                    path.addLine(to: CGPoint(x: x, y: y))
+                                }
+                            }
+                            if let lastPoint = incomeData.last {
+                                let lastIndex = incomeData.count - 1
+                                let x = CGFloat(lastIndex) / CGFloat(max(incomeData.count - 1, 1)) * chartWidth + horizontalPadding
+                                path.addLine(to: CGPoint(x: x, y: chartHeight))
+                                path.closeSubpath()
+                            }
+                        }
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.2),
+                                    Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.08),
+                                    Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.03)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .opacity(animatedProgress)
+                        
+                        // Purple gradient fill under expenses line (reduced opacity)
+                        Path { path in
+                            for (index, point) in expensesData.enumerated() {
+                                let x = CGFloat(index) / CGFloat(max(expensesData.count - 1, 1)) * chartWidth + horizontalPadding
+                                let normalizedValue = (point.value - adjustedMin) / range
+                                let y = chartHeight - (normalizedValue * chartHeight * 0.8) - (chartHeight * 0.1)
+                                
+                                if index == 0 {
+                                    path.move(to: CGPoint(x: x, y: chartHeight))
+                                    path.addLine(to: CGPoint(x: x, y: y))
+                                } else {
+                                    path.addLine(to: CGPoint(x: x, y: y))
+                                }
+                            }
+                            if let lastPoint = expensesData.last {
+                                let lastIndex = expensesData.count - 1
+                                let x = CGFloat(lastIndex) / CGFloat(max(expensesData.count - 1, 1)) * chartWidth + horizontalPadding
+                                path.addLine(to: CGPoint(x: x, y: chartHeight))
+                                path.closeSubpath()
+                            }
+                        }
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.6, green: 0.4, blue: 0.9).opacity(0.2),
+                                    Color(red: 0.6, green: 0.4, blue: 0.9).opacity(0.08),
+                                    Color(red: 0.6, green: 0.4, blue: 0.9).opacity(0.03)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .opacity(animatedProgress)
+                        
+                        // Blue income line (reduced glow)
+                        Path { path in
+                            for (index, point) in incomeData.enumerated() {
+                                let x = CGFloat(index) / CGFloat(max(incomeData.count - 1, 1)) * chartWidth + horizontalPadding
+                                let normalizedValue = (point.value - adjustedMin) / range
+                                let y = chartHeight - (normalizedValue * chartHeight * 0.8) - (chartHeight * 0.1)
+                                
+                                if index == 0 {
+                                    path.move(to: CGPoint(x: x, y: y))
+                                } else {
+                                    path.addLine(to: CGPoint(x: x, y: y))
+                                }
+                            }
+                        }
+                        .trim(from: 0, to: animatedProgress)
+                        .stroke(
+                            Color(red: 0.4, green: 0.49, blue: 0.92),
+                            style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round)
+                        )
+                        .shadow(color: Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.2), radius: 3, x: 0, y: 0)
+                        
+                        // Purple expenses line (reduced glow)
+                        Path { path in
+                            for (index, point) in expensesData.enumerated() {
+                                let x = CGFloat(index) / CGFloat(max(expensesData.count - 1, 1)) * chartWidth + horizontalPadding
+                                let normalizedValue = (point.value - adjustedMin) / range
+                                let y = chartHeight - (normalizedValue * chartHeight * 0.8) - (chartHeight * 0.1)
+                                
+                                if index == 0 {
+                                    path.move(to: CGPoint(x: x, y: y))
+                                } else {
+                                    path.addLine(to: CGPoint(x: x, y: y))
+                                }
+                            }
+                        }
+                        .trim(from: 0, to: animatedProgress)
+                        .stroke(
+                            Color(red: 0.6, green: 0.4, blue: 0.9),
+                            style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round)
+                        )
+                        .shadow(color: Color(red: 0.6, green: 0.4, blue: 0.9).opacity(0.2), radius: 3, x: 0, y: 0)
+                        
+                        // Interactive data points for income line (blue)
+                        ForEach(Array(incomeData.enumerated()), id: \.offset) { index, point in
+                            let x = CGFloat(index) / CGFloat(max(incomeData.count - 1, 1)) * chartWidth + horizontalPadding
+                            let normalizedValue = (point.value - adjustedMin) / range
+                            let y = chartHeight - (normalizedValue * chartHeight * 0.8) - (chartHeight * 0.1)
+                            let isSelected = selectedIndex == index
+                            
+                            Button(action: {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    if selectedIndex == index {
+                                        selectedIndex = nil
+                                    } else {
+                                        selectedIndex = index
+                                    }
+                                }
+                                let impact = UIImpactFeedbackGenerator(style: .medium)
+                                impact.impactOccurred()
+                            }) {
+                                ZStack {
+                                    // Reduced glow effect when selected
+                                    if isSelected {
+                                        Circle()
+                                            .fill(
+                                                RadialGradient(
+                                                    colors: [
+                                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.3),
+                                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.0)
+                                                    ],
+                                                    center: .center,
+                                                    startRadius: 6,
+                                                    endRadius: 15
+                                                )
+                                            )
+                                            .frame(width: 30, height: 30)
+                                    }
+                                    
+                                    // Outer glow (reduced)
+                                    Circle()
+                                        .fill(
+                                            RadialGradient(
+                                                colors: [
+                                                    Color(red: 0.4, green: 0.49, blue: 0.92).opacity(isSelected ? 0.25 : 0.15),
+                                                    Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.0)
+                                                ],
+                                                center: .center,
+                                                startRadius: 4,
+                                                endRadius: 12
+                                            )
+                                        )
+                                        .frame(width: 24, height: 24)
+                                    
+                                    // Middle ring
+                                    Circle()
+                                        .fill(Color.white.opacity(isSelected ? 0.3 : 0.2))
+                                        .frame(width: isSelected ? 16 : 14, height: isSelected ? 16 : 14)
+                                    
+                                    // Inner point (blue)
+                                    Circle()
+                                        .fill(Color(red: 0.4, green: 0.49, blue: 0.92))
+                                        .frame(width: isSelected ? 10 : 8, height: isSelected ? 10 : 8)
+                                        .overlay(
+                                            Circle()
+                                                .stroke(Color.white.opacity(0.5), lineWidth: isSelected ? 1.5 : 1)
+                                        )
+                                }
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            .position(x: x, y: y)
+                        }
+                        
+                        // Interactive data points for expenses line (purple)
+                        ForEach(Array(expensesData.enumerated()), id: \.offset) { index, point in
+                            let x = CGFloat(index) / CGFloat(max(expensesData.count - 1, 1)) * chartWidth + horizontalPadding
+                            let normalizedValue = (point.value - adjustedMin) / range
+                            let y = chartHeight - (normalizedValue * chartHeight * 0.8) - (chartHeight * 0.1)
+                            let isSelected = selectedIndex == index
+                            
+                            Button(action: {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    if selectedIndex == index {
+                                        selectedIndex = nil
+                                    } else {
+                                        selectedIndex = index
+                                    }
+                                }
+                                let impact = UIImpactFeedbackGenerator(style: .medium)
+                                impact.impactOccurred()
+                            }) {
+                                ZStack {
+                                    // Reduced glow effect when selected
+                                    if isSelected {
+                                        Circle()
+                                            .fill(
+                                                RadialGradient(
+                                                    colors: [
+                                                        Color(red: 0.6, green: 0.4, blue: 0.9).opacity(0.3),
+                                                        Color(red: 0.6, green: 0.4, blue: 0.9).opacity(0.0)
+                                                    ],
+                                                    center: .center,
+                                                    startRadius: 6,
+                                                    endRadius: 15
+                                                )
+                                            )
+                                            .frame(width: 30, height: 30)
+                                    }
+                                    
+                                    // Outer glow (reduced)
+                                    Circle()
+                                        .fill(
+                                            RadialGradient(
+                                                colors: [
+                                                    Color(red: 0.6, green: 0.4, blue: 0.9).opacity(isSelected ? 0.25 : 0.15),
+                                                    Color(red: 0.6, green: 0.4, blue: 0.9).opacity(0.0)
+                                                ],
+                                                center: .center,
+                                                startRadius: 4,
+                                                endRadius: 12
+                                            )
+                                        )
+                                        .frame(width: 24, height: 24)
+                                    
+                                    // Middle ring
+                                    Circle()
+                                        .fill(Color.white.opacity(isSelected ? 0.3 : 0.2))
+                                        .frame(width: isSelected ? 16 : 14, height: isSelected ? 16 : 14)
+                                    
+                                    // Inner point (purple)
+                                    Circle()
+                                        .fill(Color(red: 0.6, green: 0.4, blue: 0.9))
+                                        .frame(width: isSelected ? 10 : 8, height: isSelected ? 10 : 8)
+                                        .overlay(
+                                            Circle()
+                                                .stroke(Color.white.opacity(0.5), lineWidth: isSelected ? 1.5 : 1)
+                                        )
+                                }
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            .position(x: x, y: y)
+                        }
+                        
+                        // X-axis labels
+                        VStack {
+                            Spacer()
+                            HStack(spacing: 0) {
+                                ForEach(Array(incomeData.enumerated()), id: \.offset) { index, point in
+                                    Text(formatMonth(point.month))
+                                        .font(.system(size: 11, weight: selectedIndex == index ? .semibold : .medium, design: .rounded))
+                                        .foregroundColor(selectedIndex == index ? Color(red: 0.4, green: 0.49, blue: 0.92) : .white.opacity(0.7))
+                                        .frame(maxWidth: .infinity)
+                                }
+                            }
+                            .padding(.top, 10)
+                        }
+                    }
+                    }
+                }
+                .frame(height: 200)
+            }
+            .onAppear {
+                withAnimation(.easeInOut(duration: 1.2)) {
+                    animatedProgress = 1.0
+                }
+            }
+            .onTapGesture {
+                if selectedIndex != nil {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                        selectedIndex = nil
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Detail sheet for showing net worth information
+struct NetWorthDetailSheet: View {
+    let data: MonthlyNetWorth
+    let currency: String
+    
+    @Environment(\.dismiss) var dismiss
+    
+    private func formatCurrency(_ amount: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currency
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+    }
+    
+    private func formatFullDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter.string(from: date)
+    }
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Header
+                    VStack(spacing: 8) {
+                        Text(formatFullDate(data.month))
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                        Text("Net Worth Overview")
+                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                            .foregroundColor(.white.opacity(0.6))
+                    }
+                    .padding(.top, 20)
+                    
+                    // Net Worth Card
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Image(systemName: "chart.line.uptrend.xyaxis")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(Color(red: 0.6, green: 0.4, blue: 0.9))
+                            Text("Total Net Worth")
+                                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                .foregroundColor(.white.opacity(0.9))
+                        }
+                        Text(formatCurrency(data.netWorth))
+                            .font(.system(size: 32, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                        Text("Assets + Cash Available")
+                            .font(.system(size: 12, weight: .regular, design: .rounded))
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.6, green: 0.4, blue: 0.9).opacity(0.25),
+                                        Color(red: 0.6, green: 0.4, blue: 0.9).opacity(0.15)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color(red: 0.6, green: 0.4, blue: 0.9).opacity(0.4), lineWidth: 1.5)
+                            )
+                    )
+                    
+                    // Breakdown
+                    HStack(spacing: 12) {
+                        // Assets
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "building.columns.fill")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                                Text("Assets")
+                                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.7))
+                            }
+                            Text(formatCurrency(data.assets))
+                                .font(.system(size: 20, weight: .bold, design: .rounded))
+                                .foregroundColor(.white)
+                            Text("All assets & goals")
+                                .font(.system(size: 11, weight: .regular, design: .rounded))
+                                .foregroundColor(.white.opacity(0.5))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.15))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .stroke(Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.3), lineWidth: 1)
+                                )
+                        )
+                        
+                        // Cash Available
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "dollarsign.circle.fill")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
+                                Text("Cash")
+                                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.7))
+                            }
+                            Text(formatCurrency(data.cashAvailable))
+                                .font(.system(size: 20, weight: .bold, design: .rounded))
+                                .foregroundColor(.white)
+                            Text("Cumulative balance")
+                                .font(.system(size: 11, weight: .regular, design: .rounded))
+                                .foregroundColor(.white.opacity(0.5))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(Color(red: 0.2, green: 0.8, blue: 0.4).opacity(0.15))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .stroke(Color(red: 0.2, green: 0.8, blue: 0.4).opacity(0.3), lineWidth: 1)
+                                )
+                        )
+                    }
+                }
+                .padding(20)
+            }
+            .background(Color.black.ignoresSafeArea())
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct EnhancedIncomeExpenseBarChart: View {
+    let data: [ComparisonPeriodData]
+    let currency: String
+    
+    @State private var selectedIndex: Int? = nil
+    
+    private func formatCurrency(_ amount: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currency
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: amount)) ?? "$0"
+    }
+    
+    private func formatMonth(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM"
+        return formatter.string(from: date)
+    }
+    
+    private func formatFullMonth(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter.string(from: date)
+    }
+    
+    var body: some View {
+        if data.isEmpty {
+            VStack(spacing: 12) {
+                Image(systemName: "chart.bar.fill")
+                    .font(.system(size: 32, weight: .light))
+                    .foregroundColor(.white.opacity(0.3))
+                Text("No data available")
+                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                    .foregroundColor(.white.opacity(0.5))
+            }
+            .frame(height: 300)
+        } else {
+            GeometryReader { geometry in
+                let width = geometry.size.width
+                let chartHeight: CGFloat = 200
+                let infoCardsHeight: CGFloat = 80
+                let monthLabelHeight: CGFloat = 35
+                let totalHeight = chartHeight + infoCardsHeight + monthLabelHeight
+                // Filter out months with no meaningful data (all values are zero or very small)
+                let filteredData = data.filter { point in
+                    point.income > 0.01 || point.expenses > 0.01 || abs(point.balance) > 0.01
+                }
+                let maxValue = max(filteredData.map { max($0.income, $0.expenses, abs($0.balance)) }.max() ?? 1, 1)
+                let sortedData = filteredData.sorted { $0.month < $1.month }
+                let barSpacing: CGFloat = 12
+                let horizontalPadding: CGFloat = 16
+                let chartWidth = width - (horizontalPadding * 2)
+                let totalSpacing = barSpacing * CGFloat(max(0, sortedData.count - 1))
+                let availableWidth = chartWidth - totalSpacing
+                let barGroupWidth = availableWidth / CGFloat(sortedData.count)
+                // Optimized bar width: ensure bars are visible but not too wide, with good separation
+                let barWidth = min(barGroupWidth * 0.25, 20)
+                // Optimal gap between bars: ensures clear separation while keeping bars centered
+                let gapBetweenBars: CGFloat = max(barGroupWidth * 0.06, 4)
+                
+                VStack(spacing: 0) {
+                    // Two separate info cards (like Net Worth and Assets + Cash) - Always visible
+                    let displayData: ComparisonPeriodData = {
+                        if let selectedIndex = selectedIndex, selectedIndex < sortedData.count {
+                            return sortedData[selectedIndex]
+                        } else {
+                            // Show totals when nothing is selected
+                            let totalIncome = sortedData.reduce(0) { $0 + $1.income }
+                            let totalExpenses = sortedData.reduce(0) { $0 + $1.expenses }
+                            let totalBalance = totalIncome - totalExpenses
+                            return ComparisonPeriodData(
+                                id: "total",
+                                month: sortedData.last?.month ?? Date(),
+                                income: totalIncome,
+                                expenses: totalExpenses,
+                                balance: totalBalance,
+                                incomeChange: 0,
+                                expensesChange: 0,
+                                balanceChange: 0
+                            )
+                        }
+                    }()
+                    
+                    HStack(spacing: 8) {
+                        // Income Card
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.up.circle.fill")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(Color(red: 0.3, green: 0.7, blue: 0.4))
+                                Text("Income")
+                                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.6))
+                            }
+                            Text(formatCurrency(displayData.income))
+                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                                .foregroundColor(.white)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color(red: 0.3, green: 0.7, blue: 0.4).opacity(0.2),
+                                            Color(red: 0.3, green: 0.7, blue: 0.4).opacity(0.1)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color(red: 0.3, green: 0.7, blue: 0.4).opacity(0.3), lineWidth: 1)
+                                )
+                        )
+                        
+                        // Expense Card
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.down.circle.fill")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(Color(red: 0.9, green: 0.3, blue: 0.3))
+                                Text("Expense")
+                                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.6))
+                            }
+                            Text(formatCurrency(displayData.expenses))
+                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                                .foregroundColor(.white)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color(red: 0.9, green: 0.3, blue: 0.3).opacity(0.2),
+                                            Color(red: 0.9, green: 0.3, blue: 0.3).opacity(0.1)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color(red: 0.9, green: 0.3, blue: 0.3).opacity(0.3), lineWidth: 1)
+                                )
+                        )
+                        
+                        // Balance Card
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 4) {
+                                Image(systemName: displayData.balance >= 0 ? "equal.circle.fill" : "minus.circle.fill")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(displayData.balance >= 0 ? Color(red: 0.4, green: 0.49, blue: 0.92) : Color(red: 0.9, green: 0.5, blue: 0.3))
+                                Text("Balance")
+                                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.6))
+                            }
+                            Text(formatCurrency(displayData.balance))
+                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                                .foregroundColor(.white)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            (displayData.balance >= 0 ? Color(red: 0.4, green: 0.49, blue: 0.92) : Color(red: 0.9, green: 0.5, blue: 0.3)).opacity(0.2),
+                                            (displayData.balance >= 0 ? Color(red: 0.4, green: 0.49, blue: 0.92) : Color(red: 0.9, green: 0.5, blue: 0.3)).opacity(0.1)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke((displayData.balance >= 0 ? Color(red: 0.4, green: 0.49, blue: 0.92) : Color(red: 0.9, green: 0.5, blue: 0.3)).opacity(0.3), lineWidth: 1)
+                                )
+                        )
+                    }
+                    .padding(.horizontal, horizontalPadding)
+                    .padding(.bottom, 12)
+                    
+                    // Chart area with bars
+                    ZStack(alignment: .bottom) {
+                        // Background grid lines - start from baseline (top of month labels) and extend upward
+                        let numberOfGridLines: Int = 5 // Number of horizontal grid lines
+                        let lineSpacing = chartHeight / CGFloat(numberOfGridLines - 1)
+                        
+                        // Grid lines: baseline at bottom (top of month labels), extending upward
+                        ForEach(0..<numberOfGridLines, id: \.self) { index in
+                            Rectangle()
+                                .fill(index == 0 ? Color.white.opacity(0.1) : Color.white.opacity(0.06))
+                                .frame(height: 1)
+                                .frame(maxWidth: .infinity)
+                                .offset(y: -CGFloat(index) * lineSpacing)
+                        }
+                        .frame(height: chartHeight, alignment: .bottom)
+                        .padding(.horizontal, horizontalPadding)
+                        
+                        // Bars - Clean and professional, perfectly centered and separated
+                        let totalBarsWidth = barGroupWidth * CGFloat(sortedData.count) + barSpacing * CGFloat(max(0, sortedData.count - 1))
+                        
+                        // Calculate the total width of the three bars group (3 bars + 2 gaps)
+                        let threeBarsGroupWidth = (barWidth * 3) + (gapBetweenBars * 2)
+                        
+                        HStack {
+                            Spacer()
+                            HStack(alignment: .bottom, spacing: barSpacing) {
+                            ForEach(Array(sortedData.enumerated()), id: \.element.id) { index, point in
+                                VStack(spacing: 0) {
+                                    // Bar group container
+                                    let isSelected = selectedIndex == index
+                                    let hasSelection = selectedIndex != nil
+                                    let shouldGreyOut = hasSelection && !isSelected
+                                    
+                                    // Use HStack to properly separate the three bars horizontally
+                                    HStack(alignment: .bottom, spacing: gapBetweenBars) {
+                                        // Income bar - Green
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(
+                                                shouldGreyOut
+                                                    ? Color.white.opacity(0.15)
+                                                    : Color(red: 0.3, green: 0.7, blue: 0.4)
+                                            )
+                                            .frame(width: barWidth, height: max(8, (point.income / maxValue) * chartHeight * 0.85))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 8)
+                                                    .stroke(
+                                                        shouldGreyOut
+                                                            ? Color.white.opacity(0.08)
+                                                            : Color.white.opacity(isSelected ? 0.25 : 0.15),
+                                                        lineWidth: isSelected ? 1.5 : 1
+                                                    )
+                                            )
+                                            .shadow(
+                                                color: Color.black.opacity(shouldGreyOut ? 0.05 : (isSelected ? 0.15 : 0.1)),
+                                                radius: shouldGreyOut ? 2 : (isSelected ? 6 : 4),
+                                                x: 0,
+                                                y: shouldGreyOut ? 1 : (isSelected ? 2 : 1.5)
+                                            )
+                                        
+                                        // Expense bar - Red
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(
+                                                shouldGreyOut
+                                                    ? Color.white.opacity(0.15)
+                                                    : Color(red: 0.9, green: 0.3, blue: 0.3)
+                                            )
+                                            .frame(width: barWidth, height: max(8, (point.expenses / maxValue) * chartHeight * 0.85))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 8)
+                                                    .stroke(
+                                                        shouldGreyOut
+                                                            ? Color.white.opacity(0.08)
+                                                            : Color.white.opacity(isSelected ? 0.25 : 0.15),
+                                                        lineWidth: isSelected ? 1.5 : 1
+                                                    )
+                                            )
+                                            .shadow(
+                                                color: Color.black.opacity(shouldGreyOut ? 0.05 : (isSelected ? 0.15 : 0.1)),
+                                                radius: shouldGreyOut ? 2 : (isSelected ? 6 : 4),
+                                                x: 0,
+                                                y: shouldGreyOut ? 1 : (isSelected ? 2 : 1.5)
+                                            )
+                                        
+                                        // Balance bar - Blue/Orange
+                                        let balanceHeight = abs(point.balance) / maxValue * chartHeight * 0.85
+                                        let balanceColor = point.balance >= 0 
+                                            ? Color(red: 0.4, green: 0.49, blue: 0.92) 
+                                            : Color(red: 0.9, green: 0.5, blue: 0.3)
+                                        
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(
+                                                shouldGreyOut
+                                                    ? Color.white.opacity(0.15)
+                                                    : balanceColor
+                                            )
+                                            .frame(width: barWidth, height: max(8, balanceHeight))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 8)
+                                                    .stroke(
+                                                        shouldGreyOut
+                                                            ? Color.white.opacity(0.08)
+                                                            : Color.white.opacity(isSelected ? 0.25 : 0.15),
+                                                        lineWidth: isSelected ? 1.5 : 1
+                                                    )
+                                            )
+                                            .shadow(
+                                                color: Color.black.opacity(shouldGreyOut ? 0.05 : (isSelected ? 0.15 : 0.1)),
+                                                radius: shouldGreyOut ? 2 : (isSelected ? 6 : 4),
+                                                x: 0,
+                                                y: shouldGreyOut ? 1 : (isSelected ? 2 : 1.5)
+                                            )
+                                    }
+                                    .frame(width: threeBarsGroupWidth)
+                                    .frame(width: barGroupWidth, alignment: .center) // Center the three bars within the group
+                                    .opacity(shouldGreyOut ? 0.35 : 1.0)
+                                    .frame(height: chartHeight, alignment: .bottom)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                            if selectedIndex == index {
+                                                selectedIndex = nil
+                                            } else {
+                                                selectedIndex = index
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Selection indicator line - positioned under the center of the three bars
+                                    if isSelected {
+                                        Rectangle()
+                                            .fill(Color(red: 0.4, green: 0.49, blue: 0.92))
+                                            .frame(width: threeBarsGroupWidth * 0.9, height: 3)
+                                            .cornerRadius(1.5)
+                                            .frame(width: barGroupWidth, alignment: .center)
+                                            .padding(.top, 4)
+                                    }
+                                    
+                                    // Month label - Positioned below the selection line
+                                    Text(formatMonth(point.month))
+                                        .font(.system(size: 13, weight: isSelected ? .semibold : .medium, design: .rounded))
+                                        .foregroundColor(
+                                            isSelected 
+                                                ? Color(red: 0.4, green: 0.49, blue: 0.92) 
+                                                : (shouldGreyOut ? .white.opacity(0.3) : .white.opacity(0.7))
+                                        )
+                                        .frame(width: barGroupWidth, alignment: .center)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.8)
+                                        .padding(.top, isSelected ? 4 : 12)
+                                }
+                            }
+                            }
+                            .frame(width: totalBarsWidth, height: chartHeight + monthLabelHeight, alignment: .bottom)
+                            Spacer()
+                        }
+                        .padding(.horizontal, horizontalPadding)
+                    }
+                    .frame(height: chartHeight + monthLabelHeight)
+                }
+                .frame(width: width, height: totalHeight)
+                .clipped()
+            }
+            .frame(height: 300)
+            .onTapGesture {
+                if selectedIndex != nil {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                        selectedIndex = nil
+                    }
+                }
+            }
+        }
     }
 }
 
