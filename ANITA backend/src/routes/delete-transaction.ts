@@ -1,6 +1,6 @@
 /**
- * Create Target API Route
- * Creates a new target/goal in Supabase targets table
+ * Delete Transaction API Route
+ * Deletes a transaction from Supabase anita_data table
  */
 
 import { Request, Response } from 'express';
@@ -19,7 +19,7 @@ function getSupabaseClient() {
   return null;
 }
 
-export async function handleCreateTarget(req: Request, res: Response): Promise<void> {
+export async function handleDeleteTransaction(req: Request, res: Response): Promise<void> {
   applySecurityHeaders(res);
 
   if (req.method === 'OPTIONS') {
@@ -53,12 +53,12 @@ export async function handleCreateTarget(req: Request, res: Response): Promise<v
       }
     }
 
-    const { userId, title, description, targetAmount, currentAmount, currency, targetDate, targetType, category, priority } = body;
+    const { transactionId, userId } = body;
 
-    if (!userId || !title || !targetAmount) {
+    if (!transactionId || !userId) {
       res.status(400).json({
         error: 'Missing required fields',
-        message: 'userId, title, and targetAmount are required',
+        message: 'transactionId and userId are required',
         requestId
       });
       return;
@@ -75,74 +75,32 @@ export async function handleCreateTarget(req: Request, res: Response): Promise<v
       return;
     }
 
-    // Build target data
-    const targetData: any = {
-      account_id: userId,
-      title: title,
-      description: description || null,
-      target_amount: Number(targetAmount),
-      current_amount: Number(currentAmount) || 0,
-      currency: currency || 'EUR',
-      status: 'active',
-      target_type: targetType || 'savings',
-      priority: priority || 'medium',
-      auto_update: false
-    };
-
-    if (targetDate) {
-      targetData.target_date = targetDate;
-    }
-
-    if (category) {
-      targetData.category = category;
-    }
-
-    // Create the target
-    const { data, error } = await supabase
-      .from('targets')
-      .insert([targetData])
-      .select()
-      .single();
+    // Delete the transaction (using message_id as the identifier)
+    const { error } = await supabase
+      .from('anita_data')
+      .delete()
+      .eq('message_id', transactionId)
+      .eq('account_id', userId)
+      .eq('data_type', 'transaction');
 
     if (error) {
-      logger.error('Error creating target', { error: error.message, requestId, userId, title });
+      logger.error('Error deleting transaction', { error: error.message, requestId, transactionId, userId });
       res.status(500).json({
         error: 'Database error',
-        message: 'Failed to create target',
+        message: 'Failed to delete transaction',
         requestId
       });
       return;
     }
 
-    // Transform data to match expected format
-    const createdTarget = {
-      id: data.id,
-      accountId: data.account_id,
-      title: data.title,
-      description: data.description || '',
-      targetAmount: Number(data.target_amount) || 0,
-      currentAmount: Number(data.current_amount) || 0,
-      currency: data.currency || 'EUR',
-      targetDate: data.target_date || null,
-      status: data.status || 'active',
-      targetType: data.target_type || 'savings',
-      category: data.category || null,
-      priority: data.priority || 'medium',
-      autoUpdate: data.auto_update || false,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at
-    };
-
-    logger.info('Target created successfully', { requestId, targetId: data.id, userId, title });
-
     res.status(200).json({
       success: true,
-      target: createdTarget,
+      message: 'Transaction deleted successfully',
       requestId
     });
   } catch (error) {
     const requestId = req.requestId || 'unknown';
-    logger.error('Unexpected error in create-target', { 
+    logger.error('Unexpected error in delete-transaction', { 
       error: error instanceof Error ? error.message : 'Unknown error',
       requestId 
     });

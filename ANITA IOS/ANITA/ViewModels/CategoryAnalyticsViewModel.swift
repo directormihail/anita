@@ -13,6 +13,7 @@ class CategoryAnalyticsViewModel: ObservableObject {
     @Published var categoryData: CategoryAnalyticsData?
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var categoryTrends: [String: CategoryTrend] = [:]
     
     private let networkService = NetworkService.shared
     private let userId: String
@@ -54,6 +55,7 @@ class CategoryAnalyticsViewModel: ObservableObject {
         
         Task {
             do {
+                let calendar = Calendar.current
                 // Load transactions filtered by period
                 let transactionsResponse = try await networkService.getTransactions(
                     userId: userId,
@@ -62,8 +64,34 @@ class CategoryAnalyticsViewModel: ObservableObject {
                 )
                 let analyticsData = calculateCategoryAnalytics(from: transactionsResponse.transactions)
                 
+                // Load previous month data for trend comparison
+                var previousMonthData: [TransactionItem] = []
+                if let month = month, let year = year,
+                   let currentMonthDate = calendar.date(from: DateComponents(year: year, month: month, day: 1)),
+                   let previousMonthDate = calendar.date(byAdding: .month, value: -1, to: currentMonthDate) {
+                    let prevMonth = calendar.component(.month, from: previousMonthDate)
+                    let prevYear = calendar.component(.year, from: previousMonthDate)
+                    do {
+                        let prevResponse = try await networkService.getTransactions(
+                            userId: userId,
+                            month: prevMonth,
+                            year: prevYear
+                        )
+                        previousMonthData = prevResponse.transactions
+                    } catch {
+                        print("[CategoryAnalyticsViewModel] Error loading previous month data: \(error.localizedDescription)")
+                    }
+                }
+                
+                // Calculate trends
+                let trends = calculateCategoryTrends(
+                    current: transactionsResponse.transactions,
+                    previous: previousMonthData
+                )
+                
                 await MainActor.run {
                     self.categoryData = analyticsData
+                    self.categoryTrends = trends
                     self.isLoading = false
                 }
             } catch {
@@ -128,6 +156,59 @@ class CategoryAnalyticsViewModel: ObservableObject {
             totalAmount: totalAmount,
             categoryCount: categories.count
         )
+    }
+    
+    private func calculateCategoryTrends(current: [TransactionItem], previous: [TransactionItem]) -> [String: CategoryTrend] {
+        var trends: [String: CategoryTrend] = [:]
+        
+        // Calculate current month spending by category
+        var currentSpending: [String: Double] = [:]
+        for transaction in current where transaction.type == "expense" {
+            let categoryName = CategoryDefinitions.shared.normalizeCategory(transaction.category)
+            currentSpending[categoryName, default: 0.0] += transaction.amount
+        }
+        
+        // Calculate previous month spending by category
+        var previousSpending: [String: Double] = [:]
+        for transaction in previous where transaction.type == "expense" {
+            let categoryName = CategoryDefinitions.shared.normalizeCategory(transaction.category)
+            previousSpending[categoryName, default: 0.0] += transaction.amount
+        }
+        
+        // Calculate trends for all categories that appear in either period
+        let allCategories = Set(currentSpending.keys).union(Set(previousSpending.keys))
+        
+        for category in allCategories {
+            let currentAmount = currentSpending[category] ?? 0.0
+            let previousAmount = previousSpending[category] ?? 0.0
+            
+            var percentageChange: Double = 0.0
+            if previousAmount > 0 {
+                percentageChange = ((currentAmount - previousAmount) / previousAmount) * 100.0
+            } else if currentAmount > 0 {
+                percentageChange = 100.0
+            }
+            
+            trends[category] = CategoryTrend(
+                currentAmount: currentAmount,
+                previousAmount: previousAmount,
+                change: currentAmount - previousAmount,
+                percentageChange: percentageChange
+            )
+        }
+        
+        return trends
+    }
+}
+
+struct CategoryTrend {
+    let currentAmount: Double
+    let previousAmount: Double
+    let change: Double
+    let percentageChange: Double
+    
+    var isPositive: Bool {
+        change >= 0
     }
 }
 

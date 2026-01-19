@@ -506,6 +506,10 @@ struct MessageBubble: View {
                                 .fill(Color(red: 0.25, green: 0.25, blue: 0.25)) // Dark gray
                         }
                         .frame(maxWidth: UIScreen.main.bounds.width * 0.75, alignment: .trailing)
+                        .onTapGesture {
+                            // Dismiss keyboard when tapping on message
+                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                        }
                 } else {
                     // ANITA message: Formatted structured text, left-aligned, no bubble
                     // Match webapp's structured message display with GPT-like spacing
@@ -517,11 +521,20 @@ struct MessageBubble: View {
                             .textSelection(.enabled)
                             .lineSpacing(6)
                             .kerning(0.2)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                // Dismiss keyboard when tapping on message content
+                                // This won't interfere with text selection (which uses long press)
+                                // or buttons (which are in a separate container below)
+                                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                            }
                     }
                     .padding(.vertical, 12)
                     .padding(.horizontal, 4)
                     
                     // Like/Dislike/Copy/Check Goal buttons (only for ANITA messages)
+                    // Buttons are placed outside the text VStack to ensure they have priority
+                    // Buttons will work even when keyboard is open - they have natural priority over background gestures
                     HStack(spacing: 16) {
                         FeedbackButton(
                             icon: "hand.thumbsup",
@@ -537,6 +550,7 @@ struct MessageBubble: View {
                                 }
                             }
                         )
+                        
                         FeedbackButton(
                             icon: "hand.thumbsdown",
                             isSelected: selectedFeedback == "dislike",
@@ -551,6 +565,7 @@ struct MessageBubble: View {
                                 }
                             }
                         )
+                        
                         // Copy button
                         Button(action: {
                             UIPasteboard.general.string = message.content
@@ -578,6 +593,8 @@ struct MessageBubble: View {
                             }
                         }
                     }
+                    // Buttons are in a separate container, so they won't be affected by the text tap gesture
+                    // Buttons have natural priority in SwiftUI and will work even when keyboard is open
                 }
             }
             

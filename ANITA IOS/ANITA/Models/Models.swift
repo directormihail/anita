@@ -289,6 +289,67 @@ struct GetXPStatsResponse: Codable {
     let requestId: String?
 }
 
+// MARK: - Historical Data Models
+
+struct MonthlyBalance: Identifiable {
+    let id: String
+    let month: Date
+    let balance: Double
+}
+
+struct MonthlyIncomeExpense: Identifiable {
+    let id: String
+    let month: Date
+    let income: Double
+    let expenses: Double
+}
+
+struct MonthlyNetWorth: Identifiable {
+    let id: String
+    let month: Date
+    let netWorth: Double
+    let assets: Double
+    let cashAvailable: Double
+}
+
+// MARK: - Comparison Period Models
+
+enum ComparisonPeriod: Int, CaseIterable {
+    case oneMonth = 1
+    case twoMonths = 2
+    case threeMonths = 3
+    case fourMonths = 4
+    case fiveMonths = 5
+    case sixMonths = 6
+    case sevenMonths = 7
+    case eightMonths = 8
+    case nineMonths = 9
+    case tenMonths = 10
+    case elevenMonths = 11
+    case twelveMonths = 12
+    
+    var displayName: String {
+        return "\(rawValue)"
+    }
+    
+    // Initialize from any Int value (1-12)
+    init?(months: Int) {
+        guard months >= 1 && months <= 12 else { return nil }
+        self.init(rawValue: months)
+    }
+}
+
+struct ComparisonPeriodData: Identifiable {
+    let id: String
+    let month: Date
+    let income: Double
+    let expenses: Double
+    let balance: Double
+    let incomeChange: Double
+    let expensesChange: Double
+    let balanceChange: Double
+}
+
 // MARK: - Category Analytics Models
 
 struct CategoryAnalytics: Identifiable {
@@ -352,6 +413,25 @@ struct GetTargetsResponse: Codable {
     let success: Bool
     let targets: [Target]
     let goals: [Target]?
+    let requestId: String?
+}
+
+struct CreateTargetRequest: Codable {
+    let userId: String
+    let title: String
+    let description: String?
+    let targetAmount: Double
+    let currentAmount: Double?
+    let currency: String?
+    let targetDate: String?
+    let targetType: String?
+    let category: String?
+    let priority: String?
+}
+
+struct CreateTargetResponse: Codable {
+    let success: Bool
+    let target: Target
     let requestId: String?
 }
 
@@ -437,6 +517,35 @@ struct DeleteAssetRequest: Codable {
 }
 
 struct DeleteAssetResponse: Codable {
+    let success: Bool
+    let message: String?
+    let requestId: String?
+}
+
+// MARK: - Transaction Management Models
+
+struct UpdateTransactionRequest: Codable {
+    let transactionId: String
+    let userId: String
+    let type: String?
+    let amount: Double?
+    let category: String?
+    let description: String?
+    let date: String?
+}
+
+struct UpdateTransactionResponse: Codable {
+    let success: Bool
+    let transaction: TransactionItem
+    let requestId: String?
+}
+
+struct DeleteTransactionRequest: Codable {
+    let transactionId: String
+    let userId: String
+}
+
+struct DeleteTransactionResponse: Codable {
     let success: Bool
     let message: String?
     let requestId: String?

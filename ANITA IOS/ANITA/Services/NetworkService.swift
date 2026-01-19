@@ -358,6 +358,71 @@ class NetworkService: ObservableObject {
         }
     }
     
+    func updateTransaction(userId: String, transactionId: String, type: String? = nil, amount: Double? = nil, category: String? = nil, description: String? = nil, date: String? = nil) async throws -> UpdateTransactionResponse {
+        let url = URL(string: "\(baseURL)/api/v1/update-transaction")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let requestBody = UpdateTransactionRequest(
+            transactionId: transactionId,
+            userId: userId,
+            type: type,
+            amount: amount,
+            category: category,
+            description: description,
+            date: date
+        )
+        
+        request.httpBody = try JSONEncoder().encode(requestBody)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 200 {
+            let decoder = JSONDecoder()
+            return try decoder.decode(UpdateTransactionResponse.self, from: data)
+        } else {
+            if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
+                throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)
+            }
+            throw NetworkError.httpError(httpResponse.statusCode)
+        }
+    }
+    
+    func deleteTransaction(userId: String, transactionId: String) async throws -> DeleteTransactionResponse {
+        let url = URL(string: "\(baseURL)/api/v1/delete-transaction")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let requestBody = DeleteTransactionRequest(
+            transactionId: transactionId,
+            userId: userId
+        )
+        
+        request.httpBody = try JSONEncoder().encode(requestBody)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 200 {
+            let decoder = JSONDecoder()
+            return try decoder.decode(DeleteTransactionResponse.self, from: data)
+        } else {
+            if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
+                throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)
+            }
+            throw NetworkError.httpError(httpResponse.statusCode)
+        }
+    }
+    
     // MARK: - Conversations
     
     func getConversations(userId: String) async throws -> GetConversationsResponse {
@@ -539,6 +604,49 @@ class NetworkService: ObservableObject {
         if httpResponse.statusCode == 200 {
             let decoder = JSONDecoder()
             return try decoder.decode(GetTargetsResponse.self, from: data)
+        } else {
+            if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
+                throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)
+            }
+            throw NetworkError.httpError(httpResponse.statusCode)
+        }
+    }
+    
+    func createTarget(userId: String, title: String, description: String?, targetAmount: Double, currentAmount: Double? = nil, currency: String? = nil, targetDate: String? = nil, targetType: String? = nil, category: String? = nil, priority: String? = nil) async throws -> Target {
+        let url = URL(string: "\(baseURL)/api/v1/create-target")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let requestBody = CreateTargetRequest(
+            userId: userId,
+            title: title,
+            description: description,
+            targetAmount: targetAmount,
+            currentAmount: currentAmount,
+            currency: currency,
+            targetDate: targetDate,
+            targetType: targetType,
+            category: category,
+            priority: priority
+        )
+        
+        request.httpBody = try JSONEncoder().encode(requestBody)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 200 || httpResponse.statusCode == 201 {
+            let decoder = JSONDecoder()
+            let createResponse = try decoder.decode(CreateTargetResponse.self, from: data)
+            if createResponse.success {
+                return createResponse.target
+            } else {
+                throw NetworkError.apiError("Failed to create target")
+            }
         } else {
             if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
                 throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)

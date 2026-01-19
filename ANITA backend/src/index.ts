@@ -33,6 +33,8 @@ import { handleGetMessages } from './routes/get-messages';
 import { handleSaveMessage } from './routes/save-message';
 import { handleSaveMessageFeedback } from './routes/save-message-feedback';
 import { handleSaveTransaction } from './routes/save-transaction';
+import { handleUpdateTransaction } from './routes/update-transaction';
+import { handleDeleteTransaction } from './routes/delete-transaction';
 import { handleVerifyIOSSubscription } from './routes/verify-ios-subscription';
 import { handleGetSubscription } from './routes/get-subscription';
 import { applySecurityHeaders } from './utils/securityHeaders';
@@ -124,6 +126,8 @@ app.get('/api/v1/messages', handleGetMessages);
 app.post('/api/v1/save-message', handleSaveMessage);
 app.post('/api/v1/save-message-feedback', handleSaveMessageFeedback);
 app.post('/api/v1/save-transaction', handleSaveTransaction);
+app.post('/api/v1/update-transaction', handleUpdateTransaction);
+app.post('/api/v1/delete-transaction', handleDeleteTransaction);
 app.get('/api/v1/financial-metrics', handleGetFinancialMetrics);
 app.get('/api/v1/xp-stats', handleGetXPStats);
 app.get('/api/v1/targets', handleGetTargets);
@@ -171,7 +175,8 @@ app.use((err: Error, req: Request, res: Response, _next: express.NextFunction) =
 });
 
 // Start server
-app.listen(PORT, () => {
+// Listen on 0.0.0.0 to allow connections from other devices on the network (e.g., iPhone)
+app.listen(PORT, '0.0.0.0', () => {
   logger.info('ANITA Backend Server started', {
     port: PORT,
     environment: process.env.NODE_ENV || 'development',
@@ -180,6 +185,7 @@ app.listen(PORT, () => {
   
   console.log('\n🚀 ANITA Backend API Server');
   console.log(`   Running on http://localhost:${PORT}`);
+  console.log(`   Accessible from network: http://0.0.0.0:${PORT}`);
   console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log('\n   API Endpoints (v1):');
   console.log('   - POST /api/v1/chat-completion');
@@ -195,6 +201,8 @@ app.listen(PORT, () => {
   console.log('   - POST /api/v1/save-message');
   console.log('   - POST /api/v1/save-message-feedback');
   console.log('   - POST /api/v1/save-transaction');
+  console.log('   - POST /api/v1/update-transaction');
+  console.log('   - POST /api/v1/delete-transaction');
   console.log('   - GET  /api/v1/financial-metrics');
   console.log('   - GET  /api/v1/xp-stats');
   console.log('   - GET  /api/v1/targets');
