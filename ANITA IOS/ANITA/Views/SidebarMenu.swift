@@ -54,6 +54,7 @@ struct SidebarMenu: View {
                                 Text("\(viewModel.xp) XP")
                                     .font(.system(size: 16, weight: .semibold))
                                     .foregroundColor(Color(red: 0.5, green: 0.6, blue: 0.85))
+                                    .digit3D(baseColor: Color(red: 0.5, green: 0.6, blue: 0.85))
                             }
                         }
                         
@@ -91,6 +92,7 @@ struct SidebarMenu: View {
                     Text("\(viewModel.xpToNextLevel) to next level")
                         .font(.system(size: 12))
                         .foregroundColor(.gray)
+                        .digit3D(baseColor: .gray)
                     
                     // Level Card
                     HStack {
@@ -98,6 +100,7 @@ struct SidebarMenu: View {
                             Text("Level \(viewModel.level)")
                                 .font(.system(size: 20, weight: .bold))
                                 .foregroundColor(Color(red: 0.5, green: 0.6, blue: 0.85))
+                                .digit3D(baseColor: Color(red: 0.5, green: 0.6, blue: 0.85))
                             
                             Text(viewModel.levelTitle)
                                 .font(.system(size: 12))
@@ -123,6 +126,7 @@ struct SidebarMenu: View {
                             Text("Conversations (\(viewModel.conversations.count))")
                                 .font(.system(size: 18, weight: .semibold))
                                 .foregroundColor(.white)
+                                .digit3D(baseColor: .white)
                         }
                         
                         Spacer()

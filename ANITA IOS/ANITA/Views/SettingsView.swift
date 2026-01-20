@@ -1169,6 +1169,7 @@ struct SettingsRowWithIcon<Content: View>: View {
                 Text(value)
                     .font(.system(size: 15, weight: .regular))
                     .foregroundColor(.white.opacity(0.6))
+                    .digit3D(baseColor: .white.opacity(0.6))
             }
             
             // Chevron

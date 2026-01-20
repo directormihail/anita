@@ -118,6 +118,40 @@ struct KeyboardDismissingBackground: UIViewRepresentable {
     }
 }
 
+// 3D Digit Effect Modifier
+struct Digit3DEffect: ViewModifier {
+    let baseColor: Color
+    
+    func body(content: Content) -> some View {
+        content
+            .foregroundStyle(
+                LinearGradient(
+                    gradient: Gradient(stops: [
+                        .init(color: baseColor.opacity(1.0), location: 0.0),
+                        .init(color: baseColor.opacity(0.98), location: 0.3),
+                        .init(color: baseColor.opacity(0.95), location: 0.7),
+                        .init(color: baseColor.opacity(0.92), location: 1.0)
+                    ]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            // Dark shadow below (depth) - reduced intensity
+            .shadow(color: .black.opacity(0.4), radius: 0, x: 0, y: 2)
+            .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1.5)
+            .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 1)
+            // Subtle highlight on top (embossed effect) - reduced shine
+            .shadow(color: baseColor.opacity(0.2), radius: 0, x: 0, y: -1)
+            .shadow(color: .white.opacity(0.08), radius: 0, x: 0, y: -0.5)
+    }
+}
+
+extension View {
+    func digit3D(baseColor: Color) -> some View {
+        self.modifier(Digit3DEffect(baseColor: baseColor))
+    }
+}
+
 struct FinanceView: View {
     @StateObject private var viewModel = FinanceViewModel()
     @StateObject private var categoryViewModel = CategoryAnalyticsViewModel()
@@ -327,24 +361,107 @@ struct FinanceView: View {
         }
         
         return VStack(spacing: 0) {
-            // Total Balance Section
+            // Health Score Section
             VStack(spacing: 12) {
-                Text("TOTAL BALANCE")
+                Text("HEALTH SCORE")
                     .font(.system(size: 10, weight: .semibold, design: .rounded))
                     .foregroundColor(.white.opacity(0.4))
                     .tracking(0.8)
                 
-                Text(formatCurrency(viewModel.totalBalance))
-                    .font(.system(size: 48, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                // Semicircle progress with score (premium iOS speedometer style)
+                ZStack(alignment: .bottom) {
+                    // Background semicircle track (refined iOS style)
+                    Circle()
+                        .trim(from: 0.0, to: 0.5)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.12),
+                                    Color.white.opacity(0.08),
+                                    Color.white.opacity(0.12)
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ),
+                            style: StrokeStyle(lineWidth: 10, lineCap: .round)
+                        )
+                        .rotationEffect(.degrees(180))
+                        .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
+                        .offset(y: 12)
+                    
+                    // Progress semicircle with red-to-orange-to-green gradient
+                    Circle()
+                        .trim(from: 0.0, to: 0.5 * CGFloat(healthScore.score) / 100)
+                        .stroke(
+                            LinearGradient(
+                                gradient: Gradient(stops: [
+                                    .init(color: .red, location: 0.0),
+                                    .init(color: .orange, location: 0.5),
+                                    .init(color: .green, location: 1.0)
+                                ]),
+                                startPoint: .trailing,
+                                endPoint: .leading
+                            ),
+                            style: StrokeStyle(lineWidth: 10, lineCap: .round)
+                        )
+                        .rotationEffect(.degrees(180))
+                        .shadow(color: scoreColor.opacity(0.4), radius: 8, x: 0, y: 2)
+                        .shadow(color: scoreColor.opacity(0.2), radius: 4, x: 0, y: 1)
+                        .offset(y: 12)
+                    
+                    // Inner glow effect with matching gradient
+                    Circle()
+                        .trim(from: 0.0, to: 0.5 * CGFloat(healthScore.score) / 100)
+                        .stroke(
+                            LinearGradient(
+                                gradient: Gradient(stops: [
+                                    .init(color: .red.opacity(0.4), location: 0.0),
+                                    .init(color: .orange.opacity(0.4), location: 0.5),
+                                    .init(color: .green.opacity(0.4), location: 1.0)
+                                ]),
+                                startPoint: .trailing,
+                                endPoint: .leading
+                            ),
+                            style: StrokeStyle(lineWidth: 4, lineCap: .round)
+                        )
+                        .rotationEffect(.degrees(180))
+                        .blur(radius: 4)
+                        .offset(y: 12)
+                    
+                    // Score number and status as one unified piece
+                    VStack(spacing: 2) {
+                        VStack(spacing: 0) {
+                            Text("\(healthScore.score)")
+                                .font(.system(size: 67, weight: .bold, design: .rounded))
+                                .foregroundColor(scoreColor)
+                                .digit3D(baseColor: scoreColor)
+                                .offset(y: 3)
+                            
+                            Text("/100")
+                                .font(.system(size: 16, weight: .heavy, design: .rounded))
+                                .foregroundColor(.white.opacity(0.5))
+                                .tracking(0.5)
+                                .digit3D(baseColor: .white.opacity(0.5))
+                                .frame(maxWidth: .infinity)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .multilineTextAlignment(.center)
+                        
+                        Text(statusText)
+                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                            .foregroundColor(scoreColor)
+                    }
+                    .offset(y: -30)
+                }
+                .frame(width: 320, height: 180)
             }
             .frame(maxWidth: .infinity)
-            .padding(.top, 28)
-            .padding(.bottom, 28)
+            .padding(.top, 12)
+            .padding(.bottom, 2)
             
-            // Metrics Grid: Income, Expenses, Balance, Health Score
+            // Metrics Grid: Income, Expenses, Balance, Total Balance
             VStack(spacing: 0) {
                 // First row: Income and Expenses
                 HStack(spacing: 0) {
@@ -358,6 +475,7 @@ struct FinanceView: View {
                         Text(formatCurrency(viewModel.monthlyIncome))
                             .font(.system(size: 22, weight: .bold, design: .rounded))
                             .foregroundColor(.green)
+                            .digit3D(baseColor: .green)
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
                     }
@@ -380,6 +498,7 @@ struct FinanceView: View {
                         Text(formatCurrency(viewModel.monthlyExpenses))
                             .font(.system(size: 22, weight: .bold, design: .rounded))
                             .foregroundColor(.red)
+                            .digit3D(baseColor: .red)
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
                     }
@@ -393,7 +512,7 @@ struct FinanceView: View {
                     .frame(height: 0.5)
                     .padding(.horizontal, 20)
                 
-                // Second row: Balance and Health Score
+                // Second row: Balance and Total Balance
                 HStack(spacing: 0) {
                     // Balance
                     VStack(spacing: 10) {
@@ -405,6 +524,7 @@ struct FinanceView: View {
                         Text(formatCurrency(monthlyBalance))
                             .font(.system(size: 22, weight: .bold, design: .rounded))
                             .foregroundColor(balanceColor)
+                            .digit3D(baseColor: balanceColor)
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
                     }
@@ -417,46 +537,19 @@ struct FinanceView: View {
                         .frame(width: 0.5)
                         .padding(.vertical, 8)
                     
-                    // Health Score with gamification
+                    // Total Balance
                     VStack(spacing: 10) {
-                        Text("HEALTH SCORE")
+                        Text("TOTAL BALANCE")
                             .font(.system(size: 10, weight: .semibold, design: .rounded))
                             .foregroundColor(.white.opacity(0.4))
                             .tracking(0.8)
                         
-                        // Score
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text("\(healthScore.score)")
-                                .font(.system(size: 22, weight: .bold, design: .rounded))
-                                .foregroundColor(scoreColor)
-                            
-                            Text("/ 100")
-                                .font(.system(size: 13, weight: .medium, design: .rounded))
-                                .foregroundColor(.white.opacity(0.4))
-                        }
-                        
-                        // Progress bar
-                        GeometryReader { geometry in
-                            ZStack(alignment: .leading) {
-                                // Background
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(Color.white.opacity(0.1))
-                                    .frame(height: 4)
-                                
-                                // Progress fill
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(scoreColor)
-                                    .frame(width: min(geometry.size.width * CGFloat(healthScore.score) / 100, geometry.size.width * 0.5), height: 4)
-                            }
-                        }
-                        .frame(height: 4)
-                        .frame(maxWidth: 80)
-                        
-                        // Status text
-                        Text(statusText)
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
-                            .foregroundColor(scoreColor)
-                            .padding(.top, 4)
+                        Text(formatCurrency(viewModel.totalBalance))
+                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                            .digit3D(baseColor: .white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 20)
@@ -524,7 +617,7 @@ struct FinanceView: View {
                             )
                     }
                     
-                    Text("Trends & Comparisons")
+                    Text("Insights")
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
                         .foregroundColor(.white.opacity(0.95))
                     
@@ -680,16 +773,8 @@ struct FinanceView: View {
                                        let category = data.categories.first(where: { $0.name == selectedCategory }) {
                                         Text(String(format: "%.1f%%", category.percentage))
                                             .font(.system(size: min(36, innerCircleDiameter * 0.3), weight: .bold, design: .rounded))
-                                            .foregroundStyle(
-                                                LinearGradient(
-                                                    colors: [
-                                                        Color.white.opacity(0.98),
-                                                        Color.white.opacity(0.9)
-                                                    ],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
+                                            .foregroundColor(.white)
+                                            .digit3D(baseColor: .white)
                                             .lineLimit(1)
                                             .minimumScaleFactor(0.5)
                                         
@@ -703,16 +788,8 @@ struct FinanceView: View {
                                         // Show largest category by default (first is sorted by percentage descending)
                                         Text(String(format: "%.1f%%", largestCategory.percentage))
                                             .font(.system(size: min(36, innerCircleDiameter * 0.3), weight: .bold, design: .rounded))
-                                            .foregroundStyle(
-                                                LinearGradient(
-                                                    colors: [
-                                                        Color.white.opacity(0.98),
-                                                        Color.white.opacity(0.9)
-                                                    ],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
+                                            .foregroundColor(.white)
+                                            .digit3D(baseColor: .white)
                                             .lineLimit(1)
                                             .minimumScaleFactor(0.5)
                                         
@@ -725,16 +802,8 @@ struct FinanceView: View {
                                     } else {
                                         Text("\(data.categoryCount)")
                                             .font(.system(size: min(36, innerCircleDiameter * 0.3), weight: .bold, design: .rounded))
-                                            .foregroundStyle(
-                                                LinearGradient(
-                                                    colors: [
-                                                        Color.white.opacity(0.98),
-                                                        Color.white.opacity(0.9)
-                                                    ],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
+                                            .foregroundColor(.white)
+                                            .digit3D(baseColor: .white)
                                             .lineLimit(1)
                                             .minimumScaleFactor(0.5)
                                         
@@ -1328,16 +1397,8 @@ struct FinanceView: View {
                         
                         Text(formatCurrency(totalAssetsValue))
                             .font(.system(size: 18, weight: .bold, design: .rounded))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [
-                                        Color.green.opacity(0.95),
-                                        Color.green.opacity(0.8)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .foregroundColor(.green)
+                            .digit3D(baseColor: .green)
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 18)
@@ -2329,20 +2390,8 @@ struct TransactionRow: View {
             // Amount
             Text(formatAmount(transaction.amount))
                 .font(.system(size: 17, weight: .semibold, design: .rounded))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [
-                            (transaction.type == "income" 
-                                ? Color.green.opacity(0.95)
-                                : Color.red.opacity(0.95)),
-                            (transaction.type == "income" 
-                                ? Color.green.opacity(0.8)
-                                : Color.red.opacity(0.8))
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .foregroundColor(transaction.type == "income" ? .green : .red)
+                .digit3D(baseColor: transaction.type == "income" ? .green : .red)
             
             // Edit button
             Button(action: {
@@ -2621,7 +2670,8 @@ struct TargetRow: View {
                 HStack(spacing: 6) {
                     Text("\(Int(target.progressPercentage))%")
                         .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundColor(isCompleted ? Color.green.opacity(0.9) : .white.opacity(0.6))
+                        .foregroundColor(isCompleted ? Color.green : .white.opacity(0.6))
+                        .digit3D(baseColor: isCompleted ? Color.green : .white.opacity(0.6))
                     
                     Text("•")
                         .foregroundColor(.white.opacity(0.4))
@@ -2630,6 +2680,7 @@ struct TargetRow: View {
                     Text(formatCurrency(target.currentAmount))
                         .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundColor(.white.opacity(0.5))
+                        .digit3D(baseColor: .white.opacity(0.5))
                     
                     Text("of")
                         .font(.system(size: 12, weight: .regular, design: .rounded))
@@ -2638,6 +2689,7 @@ struct TargetRow: View {
                     Text(formatCurrency(target.targetAmount))
                         .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundColor(.white.opacity(0.5))
+                        .digit3D(baseColor: .white.opacity(0.5))
                 }
                 
                 // Progress bar
@@ -2784,16 +2836,8 @@ struct AddMoneyToGoalSheet: View {
                     VStack(spacing: 8) {
                         Text(formatDisplayAmount())
                             .font(.system(size: 56, weight: .bold, design: .rounded))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.98),
-                                        Color.white.opacity(0.9)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .foregroundColor(.white)
+                            .digit3D(baseColor: .white)
                             .frame(height: 70)
                             .frame(maxWidth: .infinity)
                         
@@ -3992,16 +4036,8 @@ struct TakeMoneyFromGoalSheet: View {
                     VStack(spacing: 8) {
                         Text(formatDisplayAmount())
                             .font(.system(size: 56, weight: .bold, design: .rounded))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.98),
-                                        Color.white.opacity(0.9)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .foregroundColor(.white)
+                            .digit3D(baseColor: .white)
                             .frame(height: 70)
                             .frame(maxWidth: .infinity)
                         
@@ -4598,16 +4634,8 @@ struct AddValueToAssetSheet: View {
                     VStack(spacing: 8) {
                         Text(formatDisplayAmount())
                             .font(.system(size: 56, weight: .bold, design: .rounded))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.98),
-                                        Color.white.opacity(0.9)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .foregroundColor(.white)
+                            .digit3D(baseColor: .white)
                             .frame(height: 70)
                             .frame(maxWidth: .infinity)
                         
@@ -4840,16 +4868,8 @@ struct ReduceAssetValueSheet: View {
                     VStack(spacing: 8) {
                         Text(formatDisplayAmount())
                             .font(.system(size: 56, weight: .bold, design: .rounded))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.98),
-                                        Color.white.opacity(0.9)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .foregroundColor(.white)
+                            .digit3D(baseColor: .white)
                             .frame(height: 70)
                             .frame(maxWidth: .infinity)
                         
@@ -5380,6 +5400,7 @@ struct GoalRow: View {
                     Text("\(Int(periodProgressPercentage))%")
                         .font(.system(size: 12, weight: .semibold, design: .rounded))
                         .foregroundColor(.white.opacity(0.6))
+                        .digit3D(baseColor: .white.opacity(0.6))
                     
                     Text("•")
                         .foregroundColor(.white.opacity(0.4))
@@ -5390,10 +5411,12 @@ struct GoalRow: View {
                         Text(formatCurrency(periodSpending))
                             .font(.system(size: 12, weight: .medium, design: .rounded))
                             .foregroundColor(.white.opacity(0.5))
+                            .digit3D(baseColor: .white.opacity(0.5))
                     } else {
                         Text(formatCurrency(goal.currentAmount))
                             .font(.system(size: 12, weight: .medium, design: .rounded))
                             .foregroundColor(.white.opacity(0.5))
+                            .digit3D(baseColor: .white.opacity(0.5))
                     }
                     
                     Text("of")
@@ -5403,6 +5426,7 @@ struct GoalRow: View {
                     Text(formatCurrency(goal.targetAmount))
                         .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundColor(.white.opacity(0.5))
+                        .digit3D(baseColor: .white.opacity(0.5))
                 }
                 
                 // Progress bar (red) - use period progress for budget goals
@@ -5603,16 +5627,8 @@ struct AssetRow: View {
             // Value
             Text(formatCurrency(asset.currentValue))
                 .font(.system(size: 17, weight: .semibold, design: .rounded))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.95),
-                            Color.white.opacity(0.85)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .foregroundColor(.white)
+                .digit3D(baseColor: .white)
             
             // Edit button - only show for non-virtual assets
             if !isVirtualAsset {
@@ -5734,16 +5750,8 @@ struct XPLevelWidget: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Level \(xpStats.current_level)")
                             .font(.system(size: 20, weight: .bold, design: .rounded))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.98),
-                                        Color.white.opacity(0.9)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .foregroundColor(.white)
+                            .digit3D(baseColor: .white)
                         
                         Text(xpStats.level_title)
                             .font(.system(size: 14, weight: .medium, design: .rounded))
@@ -5757,16 +5765,8 @@ struct XPLevelWidget: View {
                 VStack(alignment: .trailing, spacing: 4) {
                     Text("\(xpStats.total_xp)")
                         .font(.system(size: 24, weight: .bold, design: .rounded))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.98),
-                                    Color.white.opacity(0.9)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .foregroundColor(.white)
+                        .digit3D(baseColor: .white)
                     
                     Text("XP")
                         .font(.system(size: 11, weight: .semibold, design: .rounded))
@@ -5782,21 +5782,14 @@ struct XPLevelWidget: View {
                     Text("\(xpStats.xp_to_next_level) XP to next level")
                         .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundColor(.white.opacity(0.5))
+                        .digit3D(baseColor: .white.opacity(0.5))
                     
                     Spacer()
                     
                     Text("\(xpStats.level_progress_percentage)%")
                         .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.9),
-                                    Color.white.opacity(0.7)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .foregroundColor(.white)
+                        .digit3D(baseColor: .white)
                 }
                 
                 GeometryReader { geometry in
@@ -5879,6 +5872,7 @@ struct FinanceCategoryRow: View {
                 Text(String(format: "%.1f%%", category.percentage))
                     .font(.system(size: 13, weight: .regular, design: .rounded))
                     .foregroundColor(.white.opacity(0.5))
+                    .digit3D(baseColor: .white.opacity(0.5))
             }
             
             Spacer()
@@ -5893,6 +5887,7 @@ struct FinanceCategoryRow: View {
                     Text(String(format: "%.1f", abs(trend.percentageChange)))
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .foregroundColor(trend.isPositive ? .green : .red)
+                        .digit3D(baseColor: trend.isPositive ? .green : .red)
                 }
                 .padding(.trailing, 8)
             }
@@ -5901,6 +5896,7 @@ struct FinanceCategoryRow: View {
             Text(formatCurrency(category.amount))
                 .font(.system(size: 16, weight: .semibold, design: .rounded))
                 .foregroundColor(.white)
+                .digit3D(baseColor: .white)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
@@ -7738,6 +7734,7 @@ struct DeleteTransactionSheet: View {
                             Text(formatCurrency(transaction.amount))
                                 .font(.system(size: 14, weight: .semibold, design: .rounded))
                                 .foregroundColor(transaction.type == "income" ? .green : .red)
+                                .digit3D(baseColor: transaction.type == "income" ? .green : .red)
                         }
                         
                         HStack {
@@ -7992,6 +7989,7 @@ struct TrackedCategoryRow: View {
                     Text(formatCurrency(category.totalSpent))
                         .font(.system(size: 13, weight: .medium, design: .rounded))
                         .foregroundColor(.white.opacity(0.7))
+                        .digit3D(baseColor: .white.opacity(0.7))
                     
                     Text("•")
                         .font(.system(size: 13, weight: .regular))
@@ -8000,6 +7998,7 @@ struct TrackedCategoryRow: View {
                     Text("\(category.transactionCount) transaction\(category.transactionCount == 1 ? "" : "s")")
                         .font(.system(size: 13, weight: .regular, design: .rounded))
                         .foregroundColor(.white.opacity(0.5))
+                        .digit3D(baseColor: .white.opacity(0.5))
                 }
             }
             
@@ -8220,6 +8219,7 @@ struct TrendIndicator: View {
                 .font(.system(size: 10, weight: .bold))
             Text(String(format: "%.1f%%", abs(change)))
                 .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .digit3D(baseColor: isPositive ? Color.green.opacity(0.9) : Color.red.opacity(0.9))
         }
         .foregroundColor(isPositive ? Color.green.opacity(0.9) : Color.red.opacity(0.9))
         .padding(.horizontal, 6)
@@ -8241,6 +8241,7 @@ struct PremiumTrendIndicator: View {
                 .font(.system(size: 12, weight: .bold))
             Text(String(format: "%.1f%%", abs(change)))
                 .font(.system(size: 13, weight: .bold, design: .rounded))
+                .digit3D(baseColor: .white)
         }
         .foregroundColor(.white)
         .padding(.horizontal, 10)
@@ -8313,7 +8314,8 @@ struct MonthToMonthComparisonView: View {
                             .foregroundColor(.white.opacity(0.6))
                         Text(formatCurrency(viewModel.monthlyIncome))
                             .font(.system(size: 16, weight: .semibold, design: .rounded))
-                            .foregroundColor(.white.opacity(0.95))
+                            .foregroundColor(.white)
+                            .digit3D(baseColor: .white)
                     }
                     Spacer()
                     let change = viewModel.getMonthToMonthChange(type: .income)
@@ -8331,7 +8333,8 @@ struct MonthToMonthComparisonView: View {
                             .foregroundColor(.white.opacity(0.6))
                         Text(formatCurrency(viewModel.monthlyExpenses))
                             .font(.system(size: 16, weight: .semibold, design: .rounded))
-                            .foregroundColor(.white.opacity(0.95))
+                            .foregroundColor(.white)
+                            .digit3D(baseColor: .white)
                     }
                     Spacer()
                     let change = viewModel.getMonthToMonthChange(type: .expenses)
@@ -8561,7 +8564,8 @@ struct EnhancedMonthToMonthComparisonView: View {
                         
                         Text(formatCurrency(viewModel.monthlyIncome))
                             .font(.system(size: 20, weight: .bold, design: .rounded))
-                            .foregroundColor(.white.opacity(0.95))
+                            .foregroundColor(.white)
+                            .digit3D(baseColor: .white)
                     }
                     
                     Spacer()
@@ -8572,6 +8576,7 @@ struct EnhancedMonthToMonthComparisonView: View {
                         Text(formatCurrency(abs(change.value)))
                             .font(.system(size: 11, weight: .regular, design: .rounded))
                             .foregroundColor(.white.opacity(0.5))
+                            .digit3D(baseColor: .white.opacity(0.5))
                     }
                 }
                 .padding(18)
@@ -8618,7 +8623,8 @@ struct EnhancedMonthToMonthComparisonView: View {
                         
                         Text(formatCurrency(viewModel.monthlyExpenses))
                             .font(.system(size: 20, weight: .bold, design: .rounded))
-                            .foregroundColor(.white.opacity(0.95))
+                            .foregroundColor(.white)
+                            .digit3D(baseColor: .white)
                     }
                     
                     Spacer()
@@ -8629,6 +8635,7 @@ struct EnhancedMonthToMonthComparisonView: View {
                         Text(formatCurrency(abs(change.value)))
                             .font(.system(size: 11, weight: .regular, design: .rounded))
                             .foregroundColor(.white.opacity(0.5))
+                            .digit3D(baseColor: .white.opacity(0.5))
                     }
                 }
                 .padding(18)
@@ -8829,6 +8836,7 @@ struct BalanceDetailSheet: View {
                         Text(formatCurrency(data.balance))
                             .font(.system(size: 32, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
+                            .digit3D(baseColor: .white)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(20)
@@ -8865,6 +8873,7 @@ struct BalanceDetailSheet: View {
                             Text(formatCurrency(data.income))
                                 .font(.system(size: 20, weight: .bold, design: .rounded))
                                 .foregroundColor(.white)
+                                .digit3D(baseColor: .white)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(16)
@@ -8890,6 +8899,7 @@ struct BalanceDetailSheet: View {
                             Text(formatCurrency(data.expenses))
                                 .font(.system(size: 20, weight: .bold, design: .rounded))
                                 .foregroundColor(.white)
+                                .digit3D(baseColor: .white)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(16)
@@ -8916,6 +8926,7 @@ struct BalanceDetailSheet: View {
                         Text(formatCurrency(cashAvailable))
                             .font(.system(size: 28, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
+                            .digit3D(baseColor: .white)
                         Text("Cumulative balance up to this month")
                             .font(.system(size: 12, weight: .regular, design: .rounded))
                             .foregroundColor(.white.opacity(0.5))
@@ -8953,6 +8964,7 @@ struct BalanceDetailSheet: View {
                         Text(formatCurrency(assets))
                             .font(.system(size: 28, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
+                            .digit3D(baseColor: .white)
                         Text("All assets and savings goals")
                             .font(.system(size: 12, weight: .regular, design: .rounded))
                             .foregroundColor(.white.opacity(0.5))
@@ -9099,11 +9111,13 @@ struct EnhancedNetWorthChart: View {
                         Text(formatCurrency(netWorthData[selectedIndex].value))
                             .font(.system(size: 18, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
+                            .digit3D(baseColor: .white)
                     } else {
                         let latestNetWorth = netWorthData.last?.value ?? totalAssets
                         Text(formatCurrency(latestNetWorth))
                             .font(.system(size: 18, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
+                            .digit3D(baseColor: .white)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -9520,6 +9534,7 @@ struct NetWorthDetailSheet: View {
                         Text(formatCurrency(data.netWorth))
                             .font(.system(size: 32, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
+                            .digit3D(baseColor: .white)
                         Text("Assets + Cash Available")
                             .font(.system(size: 12, weight: .regular, design: .rounded))
                             .foregroundColor(.white.opacity(0.5))
@@ -9559,6 +9574,7 @@ struct NetWorthDetailSheet: View {
                             Text(formatCurrency(data.assets))
                                 .font(.system(size: 20, weight: .bold, design: .rounded))
                                 .foregroundColor(.white)
+                                .digit3D(baseColor: .white)
                             Text("All assets & goals")
                                 .font(.system(size: 11, weight: .regular, design: .rounded))
                                 .foregroundColor(.white.opacity(0.5))
@@ -9587,6 +9603,7 @@ struct NetWorthDetailSheet: View {
                             Text(formatCurrency(data.cashAvailable))
                                 .font(.system(size: 20, weight: .bold, design: .rounded))
                                 .foregroundColor(.white)
+                                .digit3D(baseColor: .white)
                             Text("Cumulative balance")
                                 .font(.system(size: 11, weight: .regular, design: .rounded))
                                 .foregroundColor(.white.opacity(0.5))
@@ -9719,6 +9736,7 @@ struct EnhancedIncomeExpenseBarChart: View {
                             Text(formatCurrency(displayData.income))
                                 .font(.system(size: 14, weight: .bold, design: .rounded))
                                 .foregroundColor(.white)
+                                .digit3D(baseColor: .white)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.7)
                         }
@@ -9755,6 +9773,7 @@ struct EnhancedIncomeExpenseBarChart: View {
                             Text(formatCurrency(displayData.expenses))
                                 .font(.system(size: 14, weight: .bold, design: .rounded))
                                 .foregroundColor(.white)
+                                .digit3D(baseColor: .white)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.7)
                         }
@@ -9791,6 +9810,7 @@ struct EnhancedIncomeExpenseBarChart: View {
                             Text(formatCurrency(displayData.balance))
                                 .font(.system(size: 14, weight: .bold, design: .rounded))
                                 .foregroundColor(.white)
+                                .digit3D(baseColor: .white)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.7)
                         }
