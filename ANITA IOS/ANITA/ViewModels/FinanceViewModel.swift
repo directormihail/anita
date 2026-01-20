@@ -650,12 +650,51 @@ class FinanceViewModel: ObservableObject {
             savingsScore = 0
         }
         
-        // STEP 3: Stability Score
+        // STEP 3: Stability Score - Calculate previous month expenses dynamically
+        let calendar = Calendar.current
+        let previousMonthDate = calendar.date(byAdding: .month, value: -1, to: selectedMonth) ?? selectedMonth
+        let previousMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: previousMonthDate)) ?? previousMonthDate
+        
+        // Helper function to parse transaction date
+        func parseTransactionDate(_ dateString: String) -> Date? {
+            let dateFormatter = ISO8601DateFormatter()
+            dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = dateFormatter.date(from: dateString) {
+                return date
+            }
+            dateFormatter.formatOptions = [.withInternetDateTime]
+            return dateFormatter.date(from: dateString)
+        }
+        
+        // Calculate previous month expenses dynamically based on selected month
+        // This ensures the calculation is always correct for the currently selected month
+        let previousMonthExpensesCalculated: Double
+        if let previousMonthData = monthlyIncomeExpenseHistory.first(where: { data in
+            calendar.isDate(data.month, equalTo: previousMonthStart, toGranularity: .month)
+        }) {
+            // Use historical data if available (most accurate)
+            previousMonthExpensesCalculated = previousMonthData.expenses
+        } else if previousMonthExpenses > 0 {
+            // Use cached previousMonthExpenses as fallback
+            // This should be correct since loadData() updates it based on selectedMonth
+            previousMonthExpensesCalculated = previousMonthExpenses
+        } else {
+            // Last resort: try to calculate from all available transactions
+            // Note: transactions array may only contain current month, so this might be 0
+            let previousMonthTransactions = transactions.filter { transaction in
+                if let date = parseTransactionDate(transaction.date) {
+                    return calendar.isDate(date, equalTo: previousMonthStart, toGranularity: .month) && transaction.type == "expense"
+                }
+                return false
+            }
+            previousMonthExpensesCalculated = previousMonthTransactions.reduce(0.0) { $0 + $1.amount }
+        }
+        
         let stabilityScore: Double
-        if previousMonthExpenses <= 0 {
+        if previousMonthExpensesCalculated <= 0 {
             stabilityScore = 70 // Neutral if no previous month data
         } else {
-            let change = abs(expenses - previousMonthExpenses) / previousMonthExpenses
+            let change = abs(expenses - previousMonthExpensesCalculated) / previousMonthExpensesCalculated
             if change <= 0.10 {
                 stabilityScore = 100
             } else if change <= 0.30 {
@@ -668,19 +707,7 @@ class FinanceViewModel: ObservableObject {
         }
         
         // STEP 4: Consistency Score
-        let calendar = Calendar.current
         let now = Date()
-        
-        // Helper function to parse transaction date
-        func parseTransactionDate(_ dateString: String) -> Date? {
-            let dateFormatter = ISO8601DateFormatter()
-            dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let date = dateFormatter.date(from: dateString) {
-                return date
-            }
-            dateFormatter.formatOptions = [.withInternetDateTime]
-            return dateFormatter.date(from: dateString)
-        }
         
         // Get unique days with transactions in selected month
         let currentMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: selectedMonth)) ?? selectedMonth

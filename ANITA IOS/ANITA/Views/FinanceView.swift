@@ -171,6 +171,9 @@ struct FinanceView: View {
     @State private var showMonthPicker = false
     @State private var tempSelectedMonth: Date = Date()
     @State private var targetToScrollTo: String? = nil
+    @State private var animatedHealthScore: Double = 0
+    @State private var animatedProgress: Double = 0 // Smooth progress for the bar
+    @State private var healthScoreTimer: Timer?
     
     // MARK: - Helper Functions
     private var userCurrency: String {
@@ -191,6 +194,57 @@ struct FinanceView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMMM yyyy"
         return formatter.string(from: date)
+    }
+    
+    // Animate health score with counting effect
+    private func startHealthScoreAnimation(to targetScore: Int) {
+        // Cancel any existing timer
+        healthScoreTimer?.invalidate()
+        healthScoreTimer = nil
+        
+        // Reset to 0
+        animatedHealthScore = 0
+        animatedProgress = 0
+        
+        let target = Double(targetScore)
+        
+        // Calculate duration based on target score
+        // For scores 0-100: duration ranges from 1.8 to 2.8 seconds
+        let duration: TimeInterval = 1.8 + (Double(targetScore) / 100.0) * 1.0
+        
+        let startTime = Date()
+        let updateInterval: TimeInterval = 0.02 // Update every 20ms for smooth animation
+        
+        healthScoreTimer = Timer.scheduledTimer(withTimeInterval: updateInterval, repeats: true) { timer in
+            let elapsed = Date().timeIntervalSince(startTime)
+            let progress = min(elapsed / duration, 1.0)
+            
+            // Use easeOut curve for smooth progress bar animation
+            let easedProgress = 1 - pow(1 - progress, 3)
+            animatedProgress = target * easedProgress
+            
+            // For the number display, show integer counting (round to show each number)
+            let currentValue = target * easedProgress
+            let roundedValue = round(currentValue)
+            
+            // Only update the displayed number when it changes (to show counting effect)
+            if roundedValue != animatedHealthScore {
+                animatedHealthScore = roundedValue
+            }
+            
+            // Stop timer when animation completes
+            if progress >= 1.0 {
+                animatedHealthScore = target
+                animatedProgress = target
+                timer.invalidate()
+                healthScoreTimer = nil
+            }
+        }
+        
+        // Add timer to RunLoop to ensure it works properly
+        if let timer = healthScoreTimer {
+            RunLoop.main.add(timer, forMode: .common)
+        }
     }
     
     // Comprehensive assets including goals (matching webapp behavior)
@@ -336,7 +390,12 @@ struct FinanceView: View {
         let healthScore = viewModel.calculateHealthScore()
         let monthlyBalance = viewModel.monthlyIncome - viewModel.monthlyExpenses
         
-        // Determine health score color
+        // Use animated score for display (integer for counting effect)
+        let displayScore = Int(animatedHealthScore)
+        // Use smooth progress for the bar animation
+        let progressPercentage = animatedProgress / 100.0
+        
+        // Determine health score color based on actual score (not animated)
         let scoreColor: Color
         if healthScore.score >= 70 {
             scoreColor = .green
@@ -348,7 +407,7 @@ struct FinanceView: View {
         
         let balanceColor: Color = monthlyBalance >= 0 ? .green : .red
         
-        // Determine health score status
+        // Determine health score status based on actual score (not animated)
         let statusText: String
         if healthScore.score >= 80 {
             statusText = "Excellent"
@@ -389,9 +448,9 @@ struct FinanceView: View {
                         .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
                         .offset(y: 12)
                     
-                    // Progress semicircle with red-to-orange-to-green gradient
+                    // Progress semicircle with red-to-orange-to-green gradient (animated)
                     Circle()
-                        .trim(from: 0.0, to: 0.5 * CGFloat(healthScore.score) / 100)
+                        .trim(from: 0.0, to: 0.5 * progressPercentage)
                         .stroke(
                             LinearGradient(
                                 gradient: Gradient(stops: [
@@ -409,9 +468,9 @@ struct FinanceView: View {
                         .shadow(color: scoreColor.opacity(0.2), radius: 4, x: 0, y: 1)
                         .offset(y: 12)
                     
-                    // Inner glow effect with matching gradient
+                    // Inner glow effect with matching gradient (animated)
                     Circle()
-                        .trim(from: 0.0, to: 0.5 * CGFloat(healthScore.score) / 100)
+                        .trim(from: 0.0, to: 0.5 * progressPercentage)
                         .stroke(
                             LinearGradient(
                                 gradient: Gradient(stops: [
@@ -428,10 +487,10 @@ struct FinanceView: View {
                         .blur(radius: 4)
                         .offset(y: 12)
                     
-                    // Score number and status as one unified piece
+                    // Score number and status as one unified piece (animated)
                     VStack(spacing: 2) {
                         VStack(spacing: 0) {
-                            Text("\(healthScore.score)")
+                            Text("\(displayScore)")
                                 .font(.system(size: 67, weight: .bold, design: .rounded))
                                 .foregroundColor(scoreColor)
                                 .digit3D(baseColor: scoreColor)
@@ -456,6 +515,19 @@ struct FinanceView: View {
                     .offset(y: -30)
                 }
                 .frame(width: 320, height: 180)
+                .onAppear {
+                    // Animate health score every time view appears with counting effect
+                    startHealthScoreAnimation(to: healthScore.score)
+                }
+                .onChange(of: healthScore.score) { newScore in
+                    // Re-animate when score changes
+                    startHealthScoreAnimation(to: newScore)
+                }
+                .onDisappear {
+                    // Clean up timer when view disappears
+                    healthScoreTimer?.invalidate()
+                    healthScoreTimer = nil
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(.top, 12)
@@ -652,7 +724,8 @@ struct FinanceView: View {
                     } else {
                         EnhancedIncomeExpenseBarChart(
                             data: viewModel.getComparisonData(for: viewModel.comparisonPeriod),
-                            currency: userCurrency
+                            currency: userCurrency,
+                            isExpanded: isTrendsAndComparisonsExpanded
                         )
                         .padding(.horizontal, 20)
                         .padding(.vertical, 20)
@@ -9640,8 +9713,10 @@ struct NetWorthDetailSheet: View {
 struct EnhancedIncomeExpenseBarChart: View {
     let data: [ComparisonPeriodData]
     let currency: String
+    var isExpanded: Bool = false
     
     @State private var selectedIndex: Int? = nil
+    @State private var barAnimationProgress: Double = 0
     
     private func formatCurrency(_ amount: Double) -> String {
         let formatter = NumberFormatter()
@@ -9878,13 +9953,14 @@ struct EnhancedIncomeExpenseBarChart: View {
                                     // Use HStack to properly separate the three bars horizontally
                                     HStack(alignment: .bottom, spacing: gapBetweenBars) {
                                         // Income bar - Green
+                                        let incomeHeight = (point.income / maxValue) * chartHeight * 0.85 * barAnimationProgress
                                         RoundedRectangle(cornerRadius: 8)
                                             .fill(
                                                 shouldGreyOut
                                                     ? Color.white.opacity(0.15)
                                                     : Color(red: 0.3, green: 0.7, blue: 0.4)
                                             )
-                                            .frame(width: barWidth, height: max(8, (point.income / maxValue) * chartHeight * 0.85))
+                                            .frame(width: barWidth, height: max(2, incomeHeight))
                                             .overlay(
                                                 RoundedRectangle(cornerRadius: 8)
                                                     .stroke(
@@ -9902,13 +9978,14 @@ struct EnhancedIncomeExpenseBarChart: View {
                                             )
                                         
                                         // Expense bar - Red
+                                        let expenseHeight = (point.expenses / maxValue) * chartHeight * 0.85 * barAnimationProgress
                                         RoundedRectangle(cornerRadius: 8)
                                             .fill(
                                                 shouldGreyOut
                                                     ? Color.white.opacity(0.15)
                                                     : Color(red: 0.9, green: 0.3, blue: 0.3)
                                             )
-                                            .frame(width: barWidth, height: max(8, (point.expenses / maxValue) * chartHeight * 0.85))
+                                            .frame(width: barWidth, height: max(2, expenseHeight))
                                             .overlay(
                                                 RoundedRectangle(cornerRadius: 8)
                                                     .stroke(
@@ -9926,7 +10003,7 @@ struct EnhancedIncomeExpenseBarChart: View {
                                             )
                                         
                                         // Balance bar - Blue/Orange
-                                        let balanceHeight = abs(point.balance) / maxValue * chartHeight * 0.85
+                                        let balanceHeight = abs(point.balance) / maxValue * chartHeight * 0.85 * barAnimationProgress
                                         let balanceColor = point.balance >= 0 
                                             ? Color(red: 0.4, green: 0.49, blue: 0.92) 
                                             : Color(red: 0.9, green: 0.5, blue: 0.3)
@@ -10005,6 +10082,31 @@ struct EnhancedIncomeExpenseBarChart: View {
                 .clipped()
             }
             .frame(height: 300)
+            .onChange(of: isExpanded) { newValue in
+                if newValue {
+                    // Reset first, then animate - ensures bars grow every time section opens
+                    barAnimationProgress = 0
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        withAnimation(.spring(response: 0.7, dampingFraction: 0.85, blendDuration: 0)) {
+                            barAnimationProgress = 1.0
+                        }
+                    }
+                } else {
+                    // Reset immediately when section closes (no animation needed)
+                    barAnimationProgress = 0
+                }
+            }
+            .onAppear {
+                // Animate bars when view first appears if already expanded
+                if isExpanded {
+                    barAnimationProgress = 0
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        withAnimation(.spring(response: 0.7, dampingFraction: 0.85, blendDuration: 0)) {
+                            barAnimationProgress = 1.0
+                        }
+                    }
+                }
+            }
             .onTapGesture {
                 if selectedIndex != nil {
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
