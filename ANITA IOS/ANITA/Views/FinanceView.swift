@@ -174,8 +174,35 @@ struct FinanceView: View {
     @State private var animatedHealthScore: Double = 0
     @State private var animatedProgress: Double = 0 // Smooth progress for the bar
     @State private var healthScoreTimer: Timer?
+    @State private var healthScoreRefreshTrigger: UUID = UUID()
+    @State private var animationDebounceTimer: Timer?
+    @State private var hasInitialLoadCompleted = false
+    @State private var pendingHealthScoreUpdate: Int? = nil
     
     // MARK: - Helper Functions
+    
+    // Computed property for health score that updates reactively
+    private var currentHealthScore: FinanceViewModel.HealthScore {
+        viewModel.calculateHealthScore()
+    }
+    
+    // Single computed property that tracks ALL data changes affecting health score
+    // This creates one unified trigger instead of multiple onChange handlers
+    private var healthScoreDataHash: String {
+        let transactionTotal = viewModel.transactions.reduce(0.0) { $0 + $1.amount }
+        let transactionCount = viewModel.transactions.count
+        let income = String(format: "%.2f", viewModel.monthlyIncome)
+        let expenses = String(format: "%.2f", viewModel.monthlyExpenses)
+        let balance = String(format: "%.2f", viewModel.totalBalance)
+        let prevIncome = String(format: "%.2f", viewModel.previousMonthIncome)
+        let prevExpenses = String(format: "%.2f", viewModel.previousMonthExpenses)
+        let historyCount = viewModel.monthlyIncomeExpenseHistory.count
+        let assetsCount = viewModel.assets.count
+        let month = viewModel.selectedMonth.timeIntervalSince1970
+        
+        // Combine all relevant data into a single hash
+        return "\(transactionCount)-\(String(format: "%.2f", transactionTotal))-\(income)-\(expenses)-\(balance)-\(prevIncome)-\(prevExpenses)-\(historyCount)-\(assetsCount)-\(month)"
+    }
     private var userCurrency: String {
         UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
     }
@@ -196,13 +223,51 @@ struct FinanceView: View {
         return formatter.string(from: date)
     }
     
+    // Debounced animation trigger - prevents multiple animations from firing at once
+    private func triggerHealthScoreAnimation(forceUpdate: Bool = false) {
+        // If initial load hasn't completed and not forcing, just store the pending score
+        // This prevents multiple animations during initial data loading
+        if !hasInitialLoadCompleted && !forceUpdate {
+            let freshScore = viewModel.calculateHealthScore()
+            pendingHealthScoreUpdate = freshScore.score
+            return
+        }
+        
+        // Cancel any existing debounce timer
+        animationDebounceTimer?.invalidate()
+        
+        // Wait a short time to collect all changes, then animate once
+        // This prevents multiple onChange handlers from triggering multiple animations
+        animationDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [self] _ in
+            // Ensure we're on the main actor for UI updates
+            Task { @MainActor in
+                let freshScore = self.viewModel.calculateHealthScore()
+                self.startHealthScoreAnimation(to: freshScore.score)
+            }
+        }
+        
+        // Add timer to RunLoop to ensure it works properly
+        if let timer = animationDebounceTimer {
+            RunLoop.main.add(timer, forMode: .common)
+        }
+    }
+    
     // Animate health score with counting effect
     private func startHealthScoreAnimation(to targetScore: Int) {
-        // Cancel any existing timer
+        // Cancel any existing animation timer
         healthScoreTimer?.invalidate()
         healthScoreTimer = nil
         
-        // Reset to 0
+        // Don't reset if we're already close to the target (smooth transition)
+        let currentScore = Int(animatedHealthScore)
+        if abs(currentScore - targetScore) <= 2 && animatedHealthScore > 0 {
+            // Already close to target, just animate to exact value
+            animatedHealthScore = Double(targetScore)
+            animatedProgress = Double(targetScore)
+            return
+        }
+        
+        // Reset to 0 for new animation
         animatedHealthScore = 0
         animatedProgress = 0
         
@@ -387,7 +452,8 @@ struct FinanceView: View {
     }
     
     private var balanceCardView: some View {
-        let healthScore = viewModel.calculateHealthScore()
+        // Use computed property that updates reactively
+        let healthScore = currentHealthScore
         let monthlyBalance = viewModel.monthlyIncome - viewModel.monthlyExpenses
         
         // Use animated score for display (integer for counting effect)
@@ -516,17 +582,68 @@ struct FinanceView: View {
                 }
                 .frame(width: 320, height: 180)
                 .onAppear {
-                    // Animate health score every time view appears with counting effect
-                    startHealthScoreAnimation(to: healthScore.score)
+                    // Reset initial load flag when view appears
+                    hasInitialLoadCompleted = false
+                    pendingHealthScoreUpdate = nil
                 }
-                .onChange(of: healthScore.score) { newScore in
-                    // Re-animate when score changes
-                    startHealthScoreAnimation(to: newScore)
+                .onChange(of: viewModel.isLoading) { oldValue, newValue in
+                    // When loading completes, trigger SINGLE update - this is the only initial load trigger
+                    if oldValue == true && newValue == false && !hasInitialLoadCompleted {
+                        // Data just finished loading, wait a moment for all data to settle, then animate once
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            hasInitialLoadCompleted = true
+                            let freshScore = viewModel.calculateHealthScore()
+                            startHealthScoreAnimation(to: freshScore.score)
+                        }
+                    }
+                }
+                .onChange(of: healthScoreDataHash) { oldValue, newValue in
+                    // SINGLE unified update trigger - watches ALL data that affects health score
+                    // CRITICAL: Only trigger AFTER initial load is complete to prevent multiple updates on page load
+                    if oldValue != newValue && hasInitialLoadCompleted {
+                        // Check if this is a transaction-related change
+                        let transactionCountChanged = {
+                            let oldParts = oldValue.split(separator: "-")
+                            let newParts = newValue.split(separator: "-")
+                            return oldParts.count > 0 && newParts.count > 0 && oldParts[0] != newParts[0]
+                        }()
+                        
+                        if transactionCountChanged {
+                            // Transaction was added/deleted - wait for refresh to complete
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                                let freshScore = viewModel.calculateHealthScore()
+                                startHealthScoreAnimation(to: freshScore.score)
+                            }
+                        } else {
+                            // Other data changed - use debounced update
+                            triggerHealthScoreAnimation(forceUpdate: false)
+                        }
+                    }
+                }
+                .onChange(of: viewModel.transactions.count) { oldValue, newValue in
+                    // Explicitly watch transaction count changes to ensure updates on add/delete
+                    // Only trigger AFTER initial load is complete to prevent updates during initial data load
+                    if oldValue != newValue && hasInitialLoadCompleted {
+                        // Wait for monthlyIncome/Expenses to update from server after transaction change
+                        // This is critical for accurate health score after add/delete operations
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                            let freshScore = viewModel.calculateHealthScore()
+                            startHealthScoreAnimation(to: freshScore.score)
+                        }
+                    }
+                }
+                .onChange(of: viewModel.selectedMonth) { oldValue, newValue in
+                    // When month changes, reset initial load flag so isLoading handler can update once
+                    // This prevents double updates (once from here, once from isLoading change)
+                    hasInitialLoadCompleted = false
+                    // Health score will update automatically via onChange(of: isLoading) when new month data loads
                 }
                 .onDisappear {
-                    // Clean up timer when view disappears
+                    // Clean up timers when view disappears
                     healthScoreTimer?.invalidate()
                     healthScoreTimer = nil
+                    animationDebounceTimer?.invalidate()
+                    animationDebounceTimer = nil
                 }
             }
             .frame(maxWidth: .infinity)
@@ -716,21 +833,35 @@ struct FinanceView: View {
                     
                 // Income vs Expenses Bar Chart
                 VStack(alignment: .leading, spacing: 16) {
-                    if viewModel.isLoading {
+                    if viewModel.isLoading || viewModel.isHistoricalDataLoading {
                         ProgressView()
                             .tint(Color(red: 0.4, green: 0.49, blue: 0.92))
                             .frame(height: 300)
                             .frame(maxWidth: .infinity)
                     } else {
-                        EnhancedIncomeExpenseBarChart(
-                            data: viewModel.getComparisonData(for: viewModel.comparisonPeriod),
-                            currency: userCurrency,
-                            isExpanded: isTrendsAndComparisonsExpanded
-                        )
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 20)
-                        .liquidGlass(cornerRadius: 20)
-                        .padding(.horizontal, 20)
+                        // Only render graph when data is ready to prevent double updates
+                        if !viewModel.comparisonData.isEmpty {
+                            EnhancedIncomeExpenseBarChart(
+                                data: viewModel.getComparisonData(for: viewModel.comparisonPeriod),
+                                currency: userCurrency,
+                                isExpanded: isTrendsAndComparisonsExpanded
+                            )
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 20)
+                            .liquidGlass(cornerRadius: 20)
+                            .padding(.horizontal, 20)
+                        } else {
+                            // Show empty state while loading
+                            VStack(spacing: 12) {
+                                ProgressView()
+                                    .tint(Color(red: 0.4, green: 0.49, blue: 0.92))
+                                Text("Loading chart data...")
+                                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.5))
+                            }
+                            .frame(height: 300)
+                            .frame(maxWidth: .infinity)
+                        }
                     }
                 }
                 .transition(.expandSection)
@@ -819,133 +950,163 @@ struct FinanceView: View {
             .buttonStyle(PremiumSettingsButtonStyle())
             
             if isCategoryAnalysisExpanded {
-                if categoryViewModel.isLoading {
-                    ProgressView()
-                        .tint(Color(red: 0.4, green: 0.49, blue: 0.92))
-                        .frame(height: 200)
-                        .frame(maxWidth: .infinity)
-                        .liquidGlass(cornerRadius: 14)
-                        .padding(.horizontal, 20)
-                        .transition(.expandSection)
-                } else if let data = categoryViewModel.categoryData {
-                    VStack(spacing: 20) {
-                        // Perfect Donut Chart - iOS style with smooth rendering
-                        GeometryReader { geometry in
-                            let chartSize = min(geometry.size.width, geometry.size.height)
-                            let radius = chartSize / 2 - 10
-                            let innerRadius = radius * 0.6
-                            let innerCircleDiameter = innerRadius * 2
-                            
-                            ZStack {
-                                DonutChartView(categories: data.categories, selectedCategory: selectedCategory)
-                                    .drawingGroup() // Ensures smooth rendering
+                // Single section container (like webapp's insight-card)
+                VStack(spacing: 0) {
+                    if categoryViewModel.isLoading {
+                        ProgressView()
+                            .tint(Color(red: 0.4, green: 0.49, blue: 0.92))
+                            .frame(height: 200)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 24)
+                    } else if let data = categoryViewModel.categoryData {
+                        VStack(spacing: 24) {
+                            // Perfect Donut Chart - Progressive design with enhanced glass morphism
+                            GeometryReader { geometry in
+                                let chartSize = min(geometry.size.width, geometry.size.height)
+                                let radius = chartSize / 2 - 10
+                                let innerRadius = radius * 0.6
+                                let innerCircleDiameter = innerRadius * 2
                                 
-                                // Center text - shows selected category, largest category, or total count
-                                VStack(spacing: 6) {
-                                    if let selectedCategory = selectedCategory,
-                                       let category = data.categories.first(where: { $0.name == selectedCategory }) {
-                                        Text(String(format: "%.1f%%", category.percentage))
-                                            .font(.system(size: min(36, innerCircleDiameter * 0.3), weight: .bold, design: .rounded))
-                                            .foregroundColor(.white)
-                                            .digit3D(baseColor: .white)
-                                            .lineLimit(1)
-                                            .minimumScaleFactor(0.5)
-                                        
-                                        Text(category.name) // Display with proper case, not all caps
-                                            .font(.system(size: min(10, innerCircleDiameter * 0.08), weight: .semibold, design: .rounded))
-                                            .foregroundColor(.white.opacity(0.5))
-                                            .tracking(0.8)
-                                            .lineLimit(1)
-                                            .minimumScaleFactor(0.6)
-                                    } else if let largestCategory = data.categories.first {
-                                        // Show largest category by default (first is sorted by percentage descending)
-                                        Text(String(format: "%.1f%%", largestCategory.percentage))
-                                            .font(.system(size: min(36, innerCircleDiameter * 0.3), weight: .bold, design: .rounded))
-                                            .foregroundColor(.white)
-                                            .digit3D(baseColor: .white)
-                                            .lineLimit(1)
-                                            .minimumScaleFactor(0.5)
-                                        
-                                        Text(largestCategory.name)
-                                            .font(.system(size: min(10, innerCircleDiameter * 0.08), weight: .semibold, design: .rounded))
-                                            .foregroundColor(.white.opacity(0.5))
-                                            .tracking(0.8)
-                                            .lineLimit(1)
-                                            .minimumScaleFactor(0.6)
-                                    } else {
-                                        Text("\(data.categoryCount)")
-                                            .font(.system(size: min(36, innerCircleDiameter * 0.3), weight: .bold, design: .rounded))
-                                            .foregroundColor(.white)
-                                            .digit3D(baseColor: .white)
-                                            .lineLimit(1)
-                                            .minimumScaleFactor(0.5)
-                                        
-                                        Text("CATEGORIES")
-                                            .font(.system(size: min(10, innerCircleDiameter * 0.08), weight: .semibold, design: .rounded))
-                                            .foregroundColor(.white.opacity(0.5))
-                                            .tracking(0.8)
-                                            .textCase(.uppercase)
-                                            .lineLimit(1)
-                                            .minimumScaleFactor(0.6)
-                                    }
-                                }
-                                .frame(width: innerCircleDiameter * 0.9, height: innerCircleDiameter * 0.9)
-                                .clipped()
-                            }
-                        }
-                        .frame(height: 220)
-                        .padding(.vertical, 24)
-                        .background(
-                            RoundedRectangle(cornerRadius: 18)
-                                .fill(Color(white: 0.15).opacity(0.8))
-                        )
-                        .opacity(isCategoryAnalysisExpanded ? 1 : 0)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: isCategoryAnalysisExpanded)
-                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedCategory)
-                        
-                        // Category List - each category in its own card
-                        if !data.categories.isEmpty {
-                            VStack(spacing: 12) {
-                                ForEach(Array(data.categories.enumerated()), id: \.element.id) { index, category in
-                                    Button(action: {
-                                        let impact = UIImpactFeedbackGenerator(style: .light)
-                                        impact.impactOccurred()
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                            selectedCategory = selectedCategory == category.name ? nil : category.name
+                                ZStack {
+                                    // Donut chart
+                                    DonutChartView(categories: data.categories, selectedCategory: selectedCategory)
+                                        .drawingGroup() // Ensures smooth rendering
+                                    
+                                    // Center text - shows selected category, largest category, or total count
+                                    VStack(spacing: 6) {
+                                        if let selectedCategory = selectedCategory,
+                                           let category = data.categories.first(where: { $0.name == selectedCategory }) {
+                                            Text(String(format: "%.1f%%", category.percentage))
+                                                .font(.system(size: min(42, innerCircleDiameter * 0.35), weight: .bold, design: .rounded))
+                                                .foregroundColor(.white)
+                                                .digit3D(baseColor: .white)
+                                                .lineLimit(1)
+                                                .minimumScaleFactor(0.5)
+                                            
+                                            Text(category.name) // Display with proper case, not all caps
+                                                .font(.system(size: min(12, innerCircleDiameter * 0.1), weight: .medium, design: .rounded))
+                                                .foregroundColor(.white.opacity(0.6))
+                                                .tracking(0.5)
+                                                .lineLimit(1)
+                                                .minimumScaleFactor(0.6)
+                                        } else if let largestCategory = data.categories.first {
+                                            // Show largest category by default (first is sorted by percentage descending)
+                                            Text(String(format: "%.1f%%", largestCategory.percentage))
+                                                .font(.system(size: min(42, innerCircleDiameter * 0.35), weight: .bold, design: .rounded))
+                                                .foregroundColor(.white)
+                                                .digit3D(baseColor: .white)
+                                                .lineLimit(1)
+                                                .minimumScaleFactor(0.5)
+                                            
+                                            Text(largestCategory.name)
+                                                .font(.system(size: min(12, innerCircleDiameter * 0.1), weight: .medium, design: .rounded))
+                                                .foregroundColor(.white.opacity(0.6))
+                                                .tracking(0.5)
+                                                .lineLimit(1)
+                                                .minimumScaleFactor(0.6)
+                                        } else {
+                                            Text("\(data.categoryCount)")
+                                                .font(.system(size: min(42, innerCircleDiameter * 0.35), weight: .bold, design: .rounded))
+                                                .foregroundColor(.white)
+                                                .digit3D(baseColor: .white)
+                                                .lineLimit(1)
+                                                .minimumScaleFactor(0.5)
+                                            
+                                            Text("CATEGORIES")
+                                                .font(.system(size: min(12, innerCircleDiameter * 0.1), weight: .medium, design: .rounded))
+                                                .foregroundColor(.white.opacity(0.6))
+                                                .tracking(0.8)
+                                                .textCase(.uppercase)
+                                                .lineLimit(1)
+                                                .minimumScaleFactor(0.6)
                                         }
-                                    }) {
-                                        FinanceCategoryRow(
-                                            category: category,
-                                            isSelected: selectedCategory == category.name,
-                                            trend: categoryViewModel.categoryTrends[category.name]
-                                        )
                                     }
-                                    .buttonStyle(PlainButtonStyle())
-                                    .contentShape(Rectangle())
-                                    .opacity(isCategoryAnalysisExpanded ? 1 : 0)
-                                    .animation(
-                                        .spring(response: 0.4, dampingFraction: 0.8)
-                                            .delay(Double(index) * 0.025),
-                                        value: isCategoryAnalysisExpanded
-                                    )
+                                    .frame(width: innerCircleDiameter * 0.9, height: innerCircleDiameter * 0.9)
+                                    .clipped()
                                 }
                             }
+                            .frame(height: 240)
+                            .padding(.top, 24)
+                            .opacity(isCategoryAnalysisExpanded ? 1 : 0)
+                            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: isCategoryAnalysisExpanded)
+                            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedCategory)
+                            
+                            // Scrollable Category List - Progressive design with enhanced cards
+                            if !data.categories.isEmpty {
+                                ScrollView(.vertical, showsIndicators: false) {
+                                    VStack(spacing: 14) {
+                                        ForEach(Array(data.categories.enumerated()), id: \.element.id) { index, category in
+                                            Button(action: {
+                                                let impact = UIImpactFeedbackGenerator(style: .light)
+                                                impact.impactOccurred()
+                                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                                    selectedCategory = selectedCategory == category.name ? nil : category.name
+                                                }
+                                            }) {
+                                                FinanceCategoryRow(
+                                                    category: category,
+                                                    isSelected: selectedCategory == category.name,
+                                                    trend: categoryViewModel.categoryTrends[category.name]
+                                                )
+                                            }
+                                            .buttonStyle(PlainButtonStyle())
+                                            .contentShape(Rectangle())
+                                            .opacity(isCategoryAnalysisExpanded ? 1 : 0)
+                                            .offset(y: isCategoryAnalysisExpanded ? 0 : 20)
+                                            .animation(
+                                                .spring(response: 0.5, dampingFraction: 0.8)
+                                                    .delay(Double(index) * 0.03),
+                                                value: isCategoryAnalysisExpanded
+                                            )
+                                        }
+                                    }
+                                    .padding(.bottom, 8)
+                                }
+                                .frame(maxHeight: 400) // Limit height for scrolling
+                            }
                         }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 24)
+                    } else {
+                        VStack(spacing: 8) {
+                            Text("No category data available")
+                                .font(.system(size: 15, weight: .medium, design: .rounded))
+                                .foregroundColor(.white.opacity(0.5))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 36)
                     }
-                    .padding(.horizontal, 20)
-                    .transition(.expandSection)
-                } else {
-                    VStack(spacing: 8) {
-                        Text("No category data available")
-                            .font(.system(size: 15, weight: .medium, design: .rounded))
-                            .foregroundColor(.white.opacity(0.5))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 36)
-                    .liquidGlass(cornerRadius: 20)
-                    .padding(.horizontal, 20)
-                    .transition(.expandSection)
                 }
+                .background(
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(white: 0.15).opacity(0.95),
+                                    Color(white: 0.12).opacity(0.9)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 20)
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(0.15),
+                                            Color.white.opacity(0.05)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1
+                                )
+                        }
+                        .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: 6)
+                )
+                .padding(.horizontal, 20)
+                .transition(.expandSection)
             }
         }
     }
@@ -2316,6 +2477,8 @@ struct FinanceView: View {
         }
         .onAppear {
             viewModel.loadData()
+            // Health score will update automatically when isLoading changes to false
+            // No need for manual trigger here
         }
         .refreshable {
             Task { @MainActor in
@@ -2327,6 +2490,7 @@ struct FinanceView: View {
                     let year = calendar.component(.year, from: viewModel.selectedMonth)
                     categoryViewModel.loadData(month: month, year: year)
                 }
+                // Health score will update automatically via onChange(of: isLoading) when refresh completes
             }
         }
         .onChange(of: viewModel.selectedMonth) { oldValue, newValue in
@@ -2352,6 +2516,26 @@ struct FinanceView: View {
         }
         .sheet(isPresented: $showAddTransactionSheet) {
             AddTransactionSheet(viewModel: viewModel)
+        }
+        .onChange(of: showAddTransactionSheet) { oldValue, newValue in
+            // When transaction sheet is dismissed, refresh data
+            if oldValue == true && newValue == false {
+                // Ensure updates are enabled
+                hasInitialLoadCompleted = true
+                
+                // Sheet was dismissed - refresh data to ensure we have latest metrics
+                viewModel.refresh()
+                
+                // Health score will update automatically via onChange(of: isLoading) when refresh completes
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("TransactionAdded"))) { _ in
+            // Listen for transaction added notifications (from chat or other sources)
+            // Ensure updates are enabled
+            hasInitialLoadCompleted = true
+            
+            // Refresh data - health score will update automatically via onChange handlers
+            viewModel.refresh()
         }
         .sheet(isPresented: $showMonthPicker) {
             MonthPickerSheet(
@@ -5924,59 +6108,93 @@ struct FinanceCategoryRow: View {
     
     var body: some View {
         HStack(spacing: 16) {
-            // Colored circle with thin light gray border (matching screenshot)
-            ZStack {
-                Circle()
-                    .fill(category.color)
-                    .frame(width: 44, height: 44)
-                
-                Circle()
-                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                    .frame(width: 44, height: 44)
-            }
+            // Colored circle indicator - progressive design
+            Circle()
+                .fill(category.color)
+                .frame(width: 48, height: 48)
+                .overlay {
+                    Circle()
+                        .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                }
             
-            // Category name and percentage
+            // Category name and percentage - left aligned
             VStack(alignment: .leading, spacing: 4) {
                 Text(category.name)
-                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .foregroundColor(.white)
                     .lineLimit(1)
                 
                 Text(String(format: "%.1f%%", category.percentage))
-                    .font(.system(size: 13, weight: .regular, design: .rounded))
-                    .foregroundColor(.white.opacity(0.5))
-                    .digit3D(baseColor: .white.opacity(0.5))
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundColor(.white.opacity(0.6))
             }
             
             Spacer()
             
-            // Trend indicator with percentage change (red downward arrow)
-            if let trend = trend {
-                HStack(spacing: 4) {
-                    Image(systemName: trend.isPositive ? "arrow.up" : "arrow.down")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(trend.isPositive ? .green : .red)
-                    
-                    Text(String(format: "%.1f", abs(trend.percentageChange)))
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundColor(trend.isPositive ? .green : .red)
-                        .digit3D(baseColor: trend.isPositive ? .green : .red)
+            // Right side: Trend indicator and Amount
+            HStack(spacing: 12) {
+                // Trend indicator with green arrow up and percentage
+                if let trend = trend {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
+                        
+                        Text(String(format: "%.1f", abs(trend.percentageChange)))
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
+                    }
+                } else {
+                    // Default trend if no data
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
+                        
+                        Text("100.0")
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
+                    }
                 }
-                .padding(.trailing, 8)
+                
+                // Amount on the far right
+                Text(formatCurrency(category.amount))
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
             }
-            
-            // Amount on the right
-            Text(formatCurrency(category.amount))
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
-                .foregroundColor(.white)
-                .digit3D(baseColor: .white)
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 14)
+        .padding(.vertical, 16)
         .background(
-            RoundedRectangle(cornerRadius: 18)
-                .fill(Color(white: 0.15).opacity(0.8))
+            RoundedRectangle(cornerRadius: 16)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(white: 0.15).opacity(0.9),
+                            Color(white: 0.12).opacity(0.8)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(isSelected ? 0.3 : 0.1),
+                                    Color.white.opacity(isSelected ? 0.15 : 0.05)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                }
+                .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
         )
+        .scaleEffect(isSelected ? 1.02 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
         .contentShape(Rectangle())
     }
 }
@@ -9717,6 +9935,7 @@ struct EnhancedIncomeExpenseBarChart: View {
     
     @State private var selectedIndex: Int? = nil
     @State private var barAnimationProgress: Double = 0
+    @State private var hasAnimated = false
     
     private func formatCurrency(_ amount: Double) -> String {
         let formatter = NumberFormatter()
@@ -10098,13 +10317,36 @@ struct EnhancedIncomeExpenseBarChart: View {
             }
             .onAppear {
                 // Animate bars when view first appears if already expanded
-                if isExpanded {
+                // Only animate once to prevent double updates
+                if isExpanded && !hasAnimated && !data.isEmpty {
+                    hasAnimated = true
                     barAnimationProgress = 0
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                         withAnimation(.spring(response: 0.7, dampingFraction: 0.85, blendDuration: 0)) {
                             barAnimationProgress = 1.0
                         }
                     }
+                } else if !data.isEmpty {
+                    // If data is already loaded, set progress immediately without animation
+                    barAnimationProgress = 1.0
+                    hasAnimated = true
+                }
+            }
+            .onChange(of: data.count) { oldValue, newValue in
+                // Reset animation state when data changes significantly (e.g., new month loaded)
+                if oldValue == 0 && newValue > 0 {
+                    hasAnimated = false
+                    barAnimationProgress = 0
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        withAnimation(.spring(response: 0.7, dampingFraction: 0.85, blendDuration: 0)) {
+                            barAnimationProgress = 1.0
+                            hasAnimated = true
+                        }
+                    }
+                } else if newValue > 0 && !hasAnimated {
+                    // Data updated but haven't animated yet
+                    barAnimationProgress = 1.0
+                    hasAnimated = true
                 }
             }
             .onTapGesture {

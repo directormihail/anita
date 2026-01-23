@@ -36,6 +36,7 @@ class FinanceViewModel: ObservableObject {
     @Published var monthlyNetWorthHistory: [MonthlyNetWorth] = []
     @Published var comparisonPeriod: ComparisonPeriod = .threeMonths
     @Published var comparisonData: [ComparisonPeriodData] = []
+    @Published var isHistoricalDataLoading = false
     
     private let networkService = NetworkService.shared
     let userId: String
@@ -445,16 +446,24 @@ class FinanceViewModel: ObservableObject {
     
     // Load historical data for charts (based on comparison period)
     func loadHistoricalData() {
+        // Prevent multiple simultaneous loads
+        guard !isHistoricalDataLoading else { return }
+        
         Task {
+            await MainActor.run {
+                self.isHistoricalDataLoading = true
+            }
+            
             let calendar = Calendar.current
             var history: [MonthlyBalance] = []
             var incomeExpenseHistory: [MonthlyIncomeExpense] = []
             var comparisonDataArray: [ComparisonPeriodData] = []
             
             // Get data for the selected comparison period (always load at least 12 months for flexibility)
+            // Load data both backwards AND forwards from selectedMonth to ensure we have previous month data
             let monthsToLoad = 12
             
-            // Load all months first
+            // Load months backwards from selectedMonth (including selectedMonth itself)
             for i in 0..<monthsToLoad {
                 if let monthDate = calendar.date(byAdding: .month, value: -i, to: selectedMonth) {
                     let month = calendar.component(.month, from: monthDate)
@@ -553,10 +562,46 @@ class FinanceViewModel: ObservableObject {
             }
             
             await MainActor.run {
+                // Sort by month to ensure proper chronological order
+                // This is critical for health score calculation to find previous month correctly
+                var finalIncomeExpenseHistory = incomeExpenseHistory.sorted { $0.month < $1.month }
+                
+                // CRITICAL: Ensure we have the previous month for the selected month in history
+                // This is essential for health score stability calculation to work for ALL months
+                let calendar = Calendar.current
+                let previousMonthDate = calendar.date(byAdding: .month, value: -1, to: self.selectedMonth) ?? self.selectedMonth
+                let previousMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: previousMonthDate)) ?? previousMonthDate
+                
+                // Check if previous month is already in history
+                let hasPreviousMonth = finalIncomeExpenseHistory.contains { data in
+                    calendar.isDate(data.month, equalTo: previousMonthStart, toGranularity: .month)
+                }
+                
+                // If not, and we have previousMonthExpenses from loadData(), add it to history
+                // This ensures health score calculation works correctly for every month
+                if !hasPreviousMonth && self.previousMonthExpenses > 0 {
+                    let previousMonth = calendar.component(.month, from: previousMonthDate)
+                    let previousYear = calendar.component(.year, from: previousMonthDate)
+                    
+                    // Add previous month to history for accurate health score calculation
+                    finalIncomeExpenseHistory.append(MonthlyIncomeExpense(
+                        id: "\(previousYear)-\(previousMonth)",
+                        month: previousMonthStart,
+                        income: self.previousMonthIncome,
+                        expenses: self.previousMonthExpenses
+                    ))
+                    
+                    // Re-sort after adding to maintain chronological order
+                    finalIncomeExpenseHistory = finalIncomeExpenseHistory.sorted { $0.month < $1.month }
+                }
+                
+                // Update all published properties in a single batch to prevent multiple view updates
+                // This ensures the graph only updates once when data is fully loaded
                 self.monthlyBalanceHistory = history.sorted { $0.month < $1.month }
-                self.monthlyIncomeExpenseHistory = incomeExpenseHistory.sorted { $0.month < $1.month }
+                self.monthlyIncomeExpenseHistory = finalIncomeExpenseHistory
                 self.monthlyNetWorthHistory = netWorthHistory
                 self.comparisonData = finalComparisonData
+                self.isHistoricalDataLoading = false
             }
         }
     }
@@ -630,6 +675,7 @@ class FinanceViewModel: ObservableObject {
     func calculateHealthScore() -> HealthScore {
         let income = monthlyIncome
         let expenses = monthlyExpenses
+        let currentBalance = monthlyIncome - monthlyExpenses // Current month's balance
         
         // STEP 1: Basic check
         if income <= 0 {
@@ -639,149 +685,143 @@ class FinanceViewModel: ObservableObject {
             )
         }
         
-        // STEP 2: Savings Score
+        // STEP 2: Income vs Expense Score (60% weight)
+        // Calculate savings rate: (income - expenses) / income
         let savingsRate = (income - expenses) / income
-        let savingsScore: Double
-        if savingsRate >= 0.20 {
-            savingsScore = 100
-        } else if savingsRate >= 0 {
-            savingsScore = (savingsRate / 0.20) * 100
+        let incomeExpenseScore: Double
+        
+        if expenses > income {
+            // Expenses exceed income - critical situation
+            // Score decreases based on how much expenses exceed income
+            let overspendRate = (expenses - income) / income
+            if overspendRate >= 0.50 {
+                // Spending 50%+ more than income - very bad
+                incomeExpenseScore = 0
+            } else if overspendRate >= 0.25 {
+                // Spending 25-50% more than income
+                incomeExpenseScore = 10
+            } else {
+                // Spending up to 25% more than income
+                incomeExpenseScore = 20
+            }
+        } else if expenses == income {
+            // Break even - neutral score
+            incomeExpenseScore = 50
         } else {
-            savingsScore = 0
+            // Positive savings - scale from 50 to 100
+            // 0% savings = 50 points, 20%+ savings = 100 points
+            if savingsRate >= 0.20 {
+                incomeExpenseScore = 100
+            } else {
+                // Linear scaling: 0% -> 50 points, 20% -> 100 points
+                incomeExpenseScore = 50 + (savingsRate / 0.20) * 50
+            }
         }
         
-        // STEP 3: Stability Score - Calculate previous month expenses dynamically
+        // STEP 3: Balance Change Score (40% weight)
+        // Compare current month balance to previous month balance
         let calendar = Calendar.current
         let previousMonthDate = calendar.date(byAdding: .month, value: -1, to: selectedMonth) ?? selectedMonth
         let previousMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: previousMonthDate)) ?? previousMonthDate
         
-        // Helper function to parse transaction date
-        func parseTransactionDate(_ dateString: String) -> Date? {
-            let dateFormatter = ISO8601DateFormatter()
-            dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let date = dateFormatter.date(from: dateString) {
-                return date
-            }
-            dateFormatter.formatOptions = [.withInternetDateTime]
-            return dateFormatter.date(from: dateString)
-        }
+        // Get previous month balance from history
+        let sortedBalanceHistory = monthlyBalanceHistory.sorted { $0.month < $1.month }
+        let previousMonthBalance: Double
         
-        // Calculate previous month expenses dynamically based on selected month
-        // This ensures the calculation is always correct for the currently selected month
-        let previousMonthExpensesCalculated: Double
-        if let previousMonthData = monthlyIncomeExpenseHistory.first(where: { data in
+        if let previousMonthData = sortedBalanceHistory.first(where: { data in
             calendar.isDate(data.month, equalTo: previousMonthStart, toGranularity: .month)
         }) {
-            // Use historical data if available (most accurate)
-            previousMonthExpensesCalculated = previousMonthData.expenses
-        } else if previousMonthExpenses > 0 {
-            // Use cached previousMonthExpenses as fallback
-            // This should be correct since loadData() updates it based on selectedMonth
-            previousMonthExpensesCalculated = previousMonthExpenses
+            previousMonthBalance = previousMonthData.balance
         } else {
-            // Last resort: try to calculate from all available transactions
-            // Note: transactions array may only contain current month, so this might be 0
-            let previousMonthTransactions = transactions.filter { transaction in
-                if let date = parseTransactionDate(transaction.date) {
-                    return calendar.isDate(date, equalTo: previousMonthStart, toGranularity: .month) && transaction.type == "expense"
+            // No previous month data - use neutral score
+            previousMonthBalance = currentBalance // Assume no change for first month
+        }
+        
+        let balanceChangeScore: Double
+        
+        if previousMonthBalance == 0 && currentBalance == 0 {
+            // Both months have zero balance - neutral
+            balanceChangeScore = 50
+        } else if previousMonthBalance == 0 {
+            // First month with balance - positive if balance is positive
+            balanceChangeScore = currentBalance > 0 ? 80 : 30
+        } else {
+            // Calculate percentage change in balance
+            let balanceChange = currentBalance - previousMonthBalance
+            let balanceChangePercent = balanceChange / abs(previousMonthBalance)
+            
+            if balanceChange > 0 {
+                // Balance increased - good
+                if balanceChangePercent >= 0.20 {
+                    // 20%+ increase - excellent
+                    balanceChangeScore = 100
+                } else if balanceChangePercent >= 0.10 {
+                    // 10-20% increase - very good
+                    balanceChangeScore = 85
+                } else if balanceChangePercent >= 0.05 {
+                    // 5-10% increase - good
+                    balanceChangeScore = 70
+                } else {
+                    // Small increase - decent
+                    balanceChangeScore = 60
                 }
-                return false
-            }
-            previousMonthExpensesCalculated = previousMonthTransactions.reduce(0.0) { $0 + $1.amount }
-        }
-        
-        let stabilityScore: Double
-        if previousMonthExpensesCalculated <= 0 {
-            stabilityScore = 70 // Neutral if no previous month data
-        } else {
-            let change = abs(expenses - previousMonthExpensesCalculated) / previousMonthExpensesCalculated
-            if change <= 0.10 {
-                stabilityScore = 100
-            } else if change <= 0.30 {
-                // Scale from 100 to 50
-                let normalizedChange = (change - 0.10) / 0.20
-                stabilityScore = 100 - (normalizedChange * 50)
+            } else if balanceChange == 0 {
+                // Balance stayed the same - neutral
+                balanceChangeScore = 50
             } else {
-                stabilityScore = 30
+                // Balance decreased - bad
+                let decreasePercent = abs(balanceChangePercent)
+                if decreasePercent >= 0.50 {
+                    // 50%+ decrease - very bad
+                    balanceChangeScore = 0
+                } else if decreasePercent >= 0.25 {
+                    // 25-50% decrease - bad
+                    balanceChangeScore = 20
+                } else if decreasePercent >= 0.10 {
+                    // 10-25% decrease - poor
+                    balanceChangeScore = 35
+                } else {
+                    // Small decrease - below average
+                    balanceChangeScore = 45
+                }
             }
         }
         
-        // STEP 4: Consistency Score
-        let now = Date()
-        
-        // Get unique days with transactions in selected month
-        let currentMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: selectedMonth)) ?? selectedMonth
-        let currentMonthTransactions = transactions.filter { transaction in
-            if let date = parseTransactionDate(transaction.date) {
-                return calendar.isDate(date, equalTo: currentMonthStart, toGranularity: .month)
-            }
-            return false
-        }
-        
-        let uniqueDays = Set(currentMonthTransactions.compactMap { transaction -> Int? in
-            if let date = parseTransactionDate(transaction.date) {
-                return calendar.component(.day, from: date)
-            }
-            return nil
-        })
-        
-        let daysWithTransactions = uniqueDays.count
-        
-        // Determine currentDay: if viewing current month, use today's day; otherwise use last day of that month
-        let currentDay: Int
-        if calendar.isDate(selectedMonth, equalTo: now, toGranularity: .month) {
-            currentDay = calendar.component(.day, from: now)
-        } else {
-            // For past months, use the last day of that month
-            if let lastDay = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: currentMonthStart) {
-                currentDay = calendar.component(.day, from: lastDay)
-            } else {
-                currentDay = 30 // Fallback
-            }
-        }
-        
-        let consistencyRate = currentDay > 0 ? Double(daysWithTransactions) / Double(currentDay) : 0.0
-        
-        let consistencyScore: Double
-        if consistencyRate >= 0.6 {
-            consistencyScore = 100
-        } else if consistencyRate >= 0.3 {
-            consistencyScore = 70
-        } else {
-            consistencyScore = 40
-        }
-        
-        // STEP 5: Final Health Score
-        let finalScore = (savingsScore * 0.5) + (stabilityScore * 0.3) + (consistencyScore * 0.2)
+        // STEP 4: Final Health Score
+        // Weighted combination: 60% income/expense, 40% balance change
+        let finalScore = (incomeExpenseScore * 0.60) + (balanceChangeScore * 0.40)
         let clampedScore = max(0, min(100, Int(finalScore.rounded())))
         
-        // STEP 6: Generate explanation based on weakest part and context
+        // STEP 5: Generate explanation
         let explanation: String
         
-        // Check if expenses exceed income (critical situation)
-        if expenses > income && income > 0 {
-            // Expenses exceed income - this is the most critical issue
-            if savingsScore <= stabilityScore && savingsScore <= consistencyScore {
-                explanation = "Your expenses exceed your income this month. Reducing spending is essential to improve your financial health."
-            } else if stabilityScore <= consistencyScore {
-                explanation = "Your expenses exceed income and changed significantly. Focus on reducing spending and maintaining stability."
+        if expenses > income {
+            explanation = "Your expenses exceed your income this month. Reducing spending is essential to improve your financial health."
+        } else if savingsRate >= 0.20 {
+            if balanceChangeScore >= 80 {
+                explanation = "Excellent financial health! You're saving well and your balance is growing."
             } else {
-                explanation = "Your expenses exceed income. Track transactions regularly and reduce spending to improve your score."
+                explanation = "Great savings rate! Keep maintaining this level to improve your score further."
             }
-        } else if savingsRate < 0 {
-            // Negative savings but expenses don't exceed income (edge case)
-            explanation = "You're spending more than you earn. Reducing expenses is critical for financial health."
-        } else if savingsScore <= stabilityScore && savingsScore <= consistencyScore {
-            // Savings is the weakest, but expenses don't exceed income
-            if savingsRate < 0.10 {
-                explanation = "Your expenses are too close to your income. Aim to save at least 20% to improve your score."
+        } else if savingsRate >= 0.10 {
+            if balanceChangeScore >= 70 {
+                explanation = "Good progress! You're saving money and your balance is increasing."
             } else {
-                explanation = "You're saving, but increasing your savings rate will improve your score."
+                explanation = "You're saving money, but try to increase your savings rate to 20% or more."
             }
-        } else if stabilityScore <= consistencyScore {
-            explanation = "Your expenses changed a lot compared to last month. More stability improves your score."
+        } else if savingsRate > 0 {
+            if balanceChangeScore < 50 {
+                explanation = "You're saving, but your balance decreased. Focus on increasing your savings rate."
+            } else {
+                explanation = "You're saving some money. Aim to save at least 20% of your income for better financial health."
+            }
         } else {
-            explanation = "Adding transactions more regularly will improve your score."
+            // Break even or negative
+            if balanceChangeScore < 50 {
+                explanation = "Your expenses match or exceed your income, and your balance is decreasing. Reduce spending to improve your score."
+            } else {
+                explanation = "Your expenses are too close to your income. Aim to save at least 20% to improve your score."
+            }
         }
         
         return HealthScore(score: clampedScore, explanation: explanation)
