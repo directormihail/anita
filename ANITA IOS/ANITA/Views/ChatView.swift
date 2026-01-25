@@ -115,7 +115,7 @@ struct ChatView: View {
                             showUpgradeView = true
                         }) {
                             ZStack(alignment: .topTrailing) {
-                                Text("Upgrade")
+                                Text(AppL10n.t("chat.upgrade"))
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 16)
@@ -168,7 +168,7 @@ struct ChatView: View {
                                     // Premium welcome card - more substantial
                                     VStack(spacing: 18) {
                                         VStack(spacing: 8) {
-                                            Text("Welcome to ANITA")
+                                            Text(AppL10n.t("chat.welcome_title"))
                                                 .font(.system(size: 32, weight: .bold, design: .rounded))
                                                 .foregroundStyle(
                                                     LinearGradient(
@@ -182,7 +182,7 @@ struct ChatView: View {
                                                 )
                                                 .multilineTextAlignment(.center)
                                             
-                                            Text("Your Personal Finance Assistant")
+                                            Text(AppL10n.t("chat.welcome_subtitle"))
                                                 .font(.system(size: 17, weight: .medium, design: .rounded))
                                                 .foregroundColor(.white.opacity(0.75))
                                                 .multilineTextAlignment(.center)
@@ -193,7 +193,7 @@ struct ChatView: View {
                                             .padding(.vertical, 4)
                                         
                                         // Simple explanation text
-                                        Text("Track expenses, set goals, and get insights about your finances. Just ask me anything or use the buttons below to get started.")
+                                        Text(AppL10n.t("chat.welcome_body"))
                                             .font(.system(size: 15, weight: .regular, design: .rounded))
                                             .foregroundColor(.white.opacity(0.65))
                                             .multilineTextAlignment(.center)
@@ -323,7 +323,7 @@ struct ChatView: View {
                         HStack {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundColor(.red)
-                            Text("Error")
+                            Text(AppL10n.t("chat.error"))
                                 .font(.headline)
                                 .foregroundColor(.red)
                             Spacer()
@@ -650,7 +650,7 @@ struct CheckGoalButton: View {
                     .font(.system(size: 16))
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
                 
-                Text("Check your goal")
+                Text(AppL10n.t("chat.check_goal"))
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
             }
@@ -709,7 +709,7 @@ struct CheckLimitButton: View {
                         )
                     )
                 
-                Text("Check your limit")
+                Text(AppL10n.t("chat.check_limit"))
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(Color(red: 0.9, green: 0.3, blue: 0.3))
             }

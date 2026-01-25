@@ -42,7 +42,7 @@ struct LoginView: View {
                                 HStack(spacing: 6) {
                                     Image(systemName: "chevron.left")
                                         .font(.system(size: 14, weight: .semibold))
-                                    Text("Back")
+                                    Text(AppL10n.t("common.back"))
                                         .font(.system(size: 16, weight: .medium))
                                 }
                                 .foregroundColor(.white.opacity(0.9))
@@ -63,11 +63,11 @@ struct LoginView: View {
                     
                     // Header
                     VStack(spacing: 8) {
-                        Text("Welcome to ANITA")
+                        Text(AppL10n.t("welcome.title"))
                             .font(.system(size: 32, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                         
-                        Text("Personal Finance Assistant")
+                        Text(AppL10n.t("welcome.subtitle"))
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.white.opacity(0.7))
                     }
@@ -83,7 +83,7 @@ struct LoginView: View {
                                 .foregroundColor(.white.opacity(0.6))
                                 .frame(width: 20)
                             
-                            TextField("Email", text: $email)
+                            TextField(AppL10n.t("login.email"), text: $email)
                                 .textContentType(.emailAddress)
                                 .keyboardType(.emailAddress)
                                 .autocapitalization(.none)
@@ -109,13 +109,13 @@ struct LoginView: View {
                                 .frame(width: 20)
                             
                             if showPassword {
-                                TextField("Password", text: $password)
+                                TextField(AppL10n.t("login.password"), text: $password)
                                     .textContentType(.password)
                                     .foregroundColor(.white)
                                     .font(.system(size: 17))
                                     .focused($focusedField, equals: .password)
                             } else {
-                                SecureField("Password", text: $password)
+                                SecureField(AppL10n.t("login.password"), text: $password)
                                     .textContentType(.password)
                                     .foregroundColor(.white)
                                     .font(.system(size: 17))
@@ -155,7 +155,7 @@ struct LoginView: View {
                             impact.impactOccurred()
                             showForgotPassword = true
                         }) {
-                            Text("Forgot Password?")
+                            Text(AppL10n.t("login.forgot_password"))
                                 .font(.system(size: 15, weight: .medium))
                                 .foregroundColor(.white.opacity(0.8))
                         }
@@ -181,7 +181,7 @@ struct LoginView: View {
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                     .scaleEffect(0.9)
                             } else {
-                                Text("Login")
+                                Text(AppL10n.t("login.login"))
                                     .font(.system(size: 17, weight: .semibold))
                             }
                         }
@@ -202,7 +202,7 @@ struct LoginView: View {
                             .fill(Color.white.opacity(0.1))
                             .frame(height: 0.5)
                         
-                        Text("OR")
+                        Text(AppL10n.t("auth.or"))
                             .font(.system(size: 13, weight: .medium))
                             .foregroundColor(.white.opacity(0.5))
                         
@@ -227,7 +227,7 @@ struct LoginView: View {
                         HStack(spacing: 10) {
                             GoogleLogoView(size: 20)
                             
-                            Text("Log in with Google")
+                            Text(AppL10n.t("login.google"))
                                 .font(.system(size: 17, weight: .medium))
                                 .foregroundColor(.white)
                         }
@@ -301,22 +301,22 @@ struct LoginView: View {
                     
                     // Footer
                     VStack(spacing: 8) {
-                        Text("By continuing, you agree to our")
+                        Text(AppL10n.t("login.by_continuing"))
                             .font(.system(size: 12))
                             .foregroundColor(.white.opacity(0.5))
                         
                         HStack(spacing: 4) {
-                            Button("Terms of Service") {
+                            Button(AppL10n.t("auth.terms")) {
                                 // TODO: Show terms
                             }
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(.white.opacity(0.8))
                             
-                            Text("and")
+                            Text(AppL10n.t("auth.and"))
                                 .font(.system(size: 12))
                                 .foregroundColor(.white.opacity(0.5))
                             
-                            Button("Privacy Policy") {
+                            Button(AppL10n.t("auth.privacy")) {
                                 // TODO: Show privacy
                             }
                             .font(.system(size: 12, weight: .medium))
@@ -328,16 +328,16 @@ struct LoginView: View {
                 }
             }
         }
-        .alert("Forgot Password", isPresented: $showForgotPassword) {
-            TextField("Email", text: $email)
+        .alert(AppL10n.t("login.forgot_password"), isPresented: $showForgotPassword) {
+            TextField(AppL10n.t("login.email"), text: $email)
                 .textContentType(.emailAddress)
                 .keyboardType(.emailAddress)
-            Button("Send Reset Link") {
+            Button(AppL10n.t("login.reset.send")) {
                 // TODO: Implement password reset
             }
-            Button("Cancel", role: .cancel) {}
+            Button(AppL10n.t("common.cancel"), role: .cancel) {}
         } message: {
-            Text("Enter your email address and we'll send you a password reset link.")
+            Text(AppL10n.t("login.reset.help"))
         }
     }
 }

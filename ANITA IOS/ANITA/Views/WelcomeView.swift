@@ -147,7 +147,7 @@ struct WelcomeView: View {
                     .opacity(logoOpacity)
                     
                     VStack(spacing: 10) {
-                        Text("Welcome to ANITA")
+                        Text(AppL10n.t("welcome.title"))
                             .font(.system(size: 34, weight: .bold, design: .rounded))
                             .foregroundStyle(
                                 LinearGradient(
@@ -157,7 +157,7 @@ struct WelcomeView: View {
                                 )
                             )
                         
-                        Text("Personal Finance Assistant")
+                        Text(AppL10n.t("welcome.subtitle"))
                             .font(.system(size: 17, weight: .medium))
                             .foregroundColor(.white.opacity(0.7))
                     }
@@ -170,22 +170,22 @@ struct WelcomeView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     FeatureBullet(
                         icon: "message.fill",
-                        title: "AI Chat",
-                        description: "Talk naturally, track automatically",
+                        title: AppL10n.t("welcome.feature.chat.title"),
+                        description: AppL10n.t("welcome.feature.chat.desc"),
                         delay: 0.1
                     )
                     
                     FeatureBullet(
                         icon: "chart.line.uptrend.xyaxis",
-                        title: "Finance Dashboard",
-                        description: "See where money goes, stop leaks",
+                        title: AppL10n.t("welcome.feature.finance.title"),
+                        description: AppL10n.t("welcome.feature.finance.desc"),
                         delay: 0.2
                     )
                     
                     FeatureBullet(
                         icon: "target",
-                        title: "Smart Goals",
-                        description: "AI breaks down goals into steps",
+                        title: AppL10n.t("welcome.feature.goals.title"),
+                        description: AppL10n.t("welcome.feature.goals.desc"),
                         delay: 0.3
                     )
                 }
@@ -204,7 +204,7 @@ struct WelcomeView: View {
                     }) {
                         HStack {
                             Spacer()
-                            Text("Get Started")
+                            Text(AppL10n.t("welcome.get_started"))
                                 .font(.system(size: 18, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white)
                             Spacer()
@@ -267,7 +267,7 @@ struct WelcomeView: View {
                     }) {
                         HStack {
                             Spacer()
-                            Text("Sign In")
+                            Text(AppL10n.t("welcome.sign_in"))
                                 .font(.system(size: 18, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white)
                             Spacer()

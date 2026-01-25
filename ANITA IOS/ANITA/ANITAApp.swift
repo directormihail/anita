@@ -10,6 +10,8 @@ import UserNotifications
 
 @main
 struct ANITAApp: App {
+    @AppStorage("anita_preferred_language_code") private var preferredLanguageCode: String = "en"
+    
     init() {
         // Initialize notification service and request permissions
         Task { @MainActor in
@@ -70,6 +72,7 @@ struct ANITAApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(\.locale, Locale(identifier: AppL10n.localeIdentifier(for: preferredLanguageCode)))
         }
     }
 }

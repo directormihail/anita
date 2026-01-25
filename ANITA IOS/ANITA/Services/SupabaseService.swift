@@ -489,6 +489,43 @@ class SupabaseService {
         }
     }
     
+    // MARK: - User Metadata
+    
+    /// Updates Supabase Auth user metadata (user.user_metadata).
+    /// Best place to store onboarding answers without requiring profile table schema changes.
+    func updateUserMetadata(data: [String: Any]) async throws {
+        guard let token = accessToken else {
+            throw SupabaseError.authFailed("No access token available")
+        }
+        
+        let baseUrl = supabaseUrl.hasSuffix("/") ? String(supabaseUrl.dropLast()) : supabaseUrl
+        let url = URL(string: "\(baseUrl)/auth/v1/user")!
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        let body: [String: Any] = [
+            "data": data
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (responseData, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SupabaseError.invalidResponse
+        }
+        
+        if httpResponse.statusCode >= 200 && httpResponse.statusCode < 300 {
+            return
+        }
+        
+        let errorString = String(data: responseData, encoding: .utf8) ?? "Unknown error"
+        print("[Supabase] updateUserMetadata failed: \(errorString)")
+        throw SupabaseError.authFailed("Failed to update user metadata")
+    }
+    
     // MARK: - Database Operations
     
     private func makeDatabaseRequest(endpoint: String, method: String = "GET", body: Data? = nil) async throws -> Data {

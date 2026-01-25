@@ -54,6 +54,8 @@ struct SettingsView: View {
     @State private var showExportSuccess = false
     @State private var showImportPicker = false
     @State private var showClearDataConfirm = false
+    @State private var showTestOnboardingConfirm = false
+    @State private var showTestOnboardingRequiresAuth = false
     
     // Notification preview
     @State private var showNotificationPreview = false
@@ -98,7 +100,7 @@ struct SettingsView: View {
                     ScrollView {
                         VStack(spacing: 28) {
                     // Profile Section
-                    SettingsCategorySection(title: "PROFILE", icon: "person.fill") {
+                    SettingsCategorySection(title: AppL10n.t("settings.profile"), icon: "person.fill") {
                             VStack(spacing: 0) {
                                 if userManager.isAuthenticated, let user = userManager.currentUser {
                                 // Profile Header
@@ -258,7 +260,7 @@ struct SettingsView: View {
                     }
                     
                     // Preferences Section
-                    SettingsCategorySection(title: "PREFERENCES", icon: "slider.horizontal.3") {
+                    SettingsCategorySection(title: AppL10n.t("settings.preferences"), icon: "slider.horizontal.3") {
                         VStack(spacing: 0) {
                             // Currency
                             Menu {
@@ -327,7 +329,7 @@ struct SettingsView: View {
                     }
                     
                     // Development Section
-                    SettingsCategorySection(title: "DEVELOPMENT", icon: "wrench.and.screwdriver.fill") {
+                    SettingsCategorySection(title: AppL10n.t("settings.development"), icon: "wrench.and.screwdriver.fill") {
                         VStack(spacing: 0) {
                             Button(action: {
                                 showBackendURLAlert = true
@@ -344,6 +346,23 @@ struct SettingsView: View {
                             
                             PremiumDivider()
                                 .padding(.leading, 76)
+
+                            Button(action: {
+                                if userManager.isAuthenticated {
+                                    showTestOnboardingConfirm = true
+                                } else {
+                                    showTestOnboardingRequiresAuth = true
+                                }
+                            }) {
+                                SettingsRowWithIcon(
+                                    icon: "sparkles",
+                                    iconColor: Color.orange.opacity(0.8),
+                                    title: "Test Onboarding",
+                                    value: nil,
+                                    showChevron: true
+                                ) {}
+                            }
+                            .buttonStyle(PremiumSettingsButtonStyle())
                             
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("For iPhone: Use your Mac's IP address")
@@ -361,7 +380,7 @@ struct SettingsView: View {
                     }
                     
                     // Subscription Section
-                    SettingsCategorySection(title: "SUBSCRIPTION", icon: "crown.fill") {
+                    SettingsCategorySection(title: AppL10n.t("settings.subscription"), icon: "crown.fill") {
                         VStack(spacing: 0) {
                             Button(action: {
                                 showUpgradeView = true
@@ -379,7 +398,7 @@ struct SettingsView: View {
                     }
                     
                     // Notifications Section
-                    SettingsCategorySection(title: "NOTIFICATIONS", icon: "bell.fill") {
+                    SettingsCategorySection(title: AppL10n.t("settings.notifications"), icon: "bell.fill") {
                         VStack(spacing: 0) {
                             HStack {
                                 SettingsRowWithIcon(
@@ -459,7 +478,7 @@ struct SettingsView: View {
                     }
                     
                     // Privacy & Data Section
-                    SettingsCategorySection(title: "PRIVACY & DATA", icon: "lock.shield.fill") {
+                    SettingsCategorySection(title: AppL10n.t("settings.privacy_data"), icon: "lock.shield.fill") {
                         VStack(spacing: 0) {
                             Button(action: {
                                 exportData()
@@ -508,7 +527,7 @@ struct SettingsView: View {
                     }
                     
                     // Information Section
-                    SettingsCategorySection(title: "INFORMATION", icon: "info.circle.fill") {
+                    SettingsCategorySection(title: AppL10n.t("settings.information"), icon: "info.circle.fill") {
                         VStack(spacing: 0) {
                             Button(action: {
                                 loadPrivacyPolicy()
@@ -540,7 +559,7 @@ struct SettingsView: View {
                     }
                     
                     // About Section
-                    SettingsCategorySection(title: "ABOUT", icon: "app.badge.fill") {
+                    SettingsCategorySection(title: AppL10n.t("settings.about"), icon: "app.badge.fill") {
                         VStack(spacing: 0) {
                             SettingsRowWithIcon(
                                 icon: "info.circle",
@@ -679,6 +698,19 @@ struct SettingsView: View {
             }
         } message: {
             Text("Enter your backend server URL.\n\nFor iPhone: Use your Mac's IP address (e.g., http://192.168.178.45:3001)\nFor Simulator: Use http://localhost:3001")
+        }
+        .alert("Test Onboarding", isPresented: $showTestOnboardingConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Start") {
+                userManager.resetOnboardingForTesting()
+            }
+        } message: {
+            Text("This will reset onboarding so you can go through it again.")
+        }
+        .alert("Sign in required", isPresented: $showTestOnboardingRequiresAuth) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Please sign in first to test onboarding.")
         }
         .alert("Export Successful", isPresented: $showExportSuccess) {
             Button("OK", role: .cancel) {}

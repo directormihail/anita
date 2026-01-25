@@ -9,6 +9,7 @@ import SwiftUI
 
 enum AuthViewState {
     case welcome
+    case onboarding
     case login
     case signUp
 }
@@ -22,11 +23,15 @@ struct ContentView: View {
     var body: some View {
         Group {
             if authViewModel.isAuthenticated {
-                if userManager.hasCompletedOnboarding {
+                if userManager.shouldShowPostSignupPlans {
+                    PostSignupPlansView {
+                        userManager.completePostSignupPlans()
+                    }
+                } else if userManager.hasCompletedOnboarding {
                     mainContentView
                 } else {
-                    OnboardingView {
-                        userManager.completeOnboarding()
+                    OnboardingView { survey in
+                        userManager.completeOnboarding(survey: survey)
                     }
                 }
             } else {
@@ -56,19 +61,19 @@ struct ContentView: View {
             TabView(selection: $selectedTab) {
                 ChatView()
                     .tabItem {
-                        Label("Chat", systemImage: "message.fill")
+                        Label(AppL10n.t("tab.chat"), systemImage: "message.fill")
                     }
                     .tag(0)
                 
                 FinanceView()
                     .tabItem {
-                        Label("Finance", systemImage: "chart.line.uptrend.xyaxis")
+                        Label(AppL10n.t("tab.finance"), systemImage: "chart.line.uptrend.xyaxis")
                     }
                     .tag(1)
                 
                 SettingsView()
                     .tabItem {
-                        Label("Settings", systemImage: "gearshape.fill")
+                        Label(AppL10n.t("tab.settings"), systemImage: "gearshape.fill")
                     }
                     .tag(2)
             }
@@ -135,10 +140,19 @@ struct ContentView: View {
                     },
                     onShowSignUp: {
                         withAnimation {
-                            authViewState = .signUp
+                            authViewState = .onboarding
                         }
                     }
                 )
+                
+            case .onboarding:
+                OnboardingView { survey in
+                    // Pre-auth onboarding: save locally + apply language, then proceed to account creation.
+                    userManager.savePreAuthOnboarding(survey: survey)
+                    withAnimation {
+                        authViewState = .signUp
+                    }
+                }
                 
             case .login:
                 LoginView(

@@ -833,35 +833,34 @@ struct FinanceView: View {
                     
                 // Income vs Expenses Bar Chart
                 VStack(alignment: .leading, spacing: 16) {
-                    if viewModel.isLoading || viewModel.isHistoricalDataLoading {
-                        ProgressView()
-                            .tint(Color(red: 0.4, green: 0.49, blue: 0.92))
-                            .frame(height: 300)
-                            .frame(maxWidth: .infinity)
+                    let chartData = viewModel.getComparisonData(for: viewModel.comparisonPeriod)
+                    
+                    // Always show existing data immediately (even during refresh),
+                    // and only show an empty state when we truly have no data yet.
+                    if !chartData.isEmpty {
+                        EnhancedIncomeExpenseBarChart(
+                            data: chartData,
+                            currency: userCurrency,
+                            isExpanded: isTrendsAndComparisonsExpanded
+                        )
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 20)
+                        .liquidGlass(cornerRadius: 20)
+                        .padding(.horizontal, 20)
                     } else {
-                        // Only render graph when data is ready to prevent double updates
-                        if !viewModel.comparisonData.isEmpty {
-                            EnhancedIncomeExpenseBarChart(
-                                data: viewModel.getComparisonData(for: viewModel.comparisonPeriod),
-                                currency: userCurrency,
-                                isExpanded: isTrendsAndComparisonsExpanded
-                            )
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 20)
-                            .liquidGlass(cornerRadius: 20)
-                            .padding(.horizontal, 20)
-                        } else {
-                            // Show empty state while loading
-                            VStack(spacing: 12) {
-                                ProgressView()
-                                    .tint(Color(red: 0.4, green: 0.49, blue: 0.92))
-                                Text("Loading chart data...")
+                        VStack(spacing: 8) {
+                            Text("No chart data available")
+                                .font(.system(size: 15, weight: .medium, design: .rounded))
+                                .foregroundColor(.white.opacity(0.55))
+                            
+                            if viewModel.isLoading || viewModel.isHistoricalDataLoading {
+                                Text("Updating…")
                                     .font(.system(size: 13, weight: .regular, design: .rounded))
-                                    .foregroundColor(.white.opacity(0.5))
+                                    .foregroundColor(.white.opacity(0.4))
                             }
-                            .frame(height: 300)
-                            .frame(maxWidth: .infinity)
                         }
+                        .frame(height: 300)
+                        .frame(maxWidth: .infinity)
                     }
                 }
                 .transition(.expandSection)
@@ -952,13 +951,9 @@ struct FinanceView: View {
             if isCategoryAnalysisExpanded {
                 // Single section container (like webapp's insight-card)
                 VStack(spacing: 0) {
-                    if categoryViewModel.isLoading {
-                        ProgressView()
-                            .tint(Color(red: 0.4, green: 0.49, blue: 0.92))
-                            .frame(height: 200)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 24)
-                    } else if let data = categoryViewModel.categoryData {
+                    // Always show existing data immediately (even during refresh).
+                    // Only show a minimal loading/empty state when we truly have no data yet.
+                    if let data = categoryViewModel.categoryData {
                         VStack(spacing: 24) {
                             // Perfect Donut Chart - Progressive design with enhanced glass morphism
                             GeometryReader { geometry in
@@ -1067,6 +1062,14 @@ struct FinanceView: View {
                         }
                         .padding(.horizontal, 20)
                         .padding(.bottom, 24)
+                    } else if categoryViewModel.isLoading {
+                        VStack(spacing: 8) {
+                            Text("Loading…")
+                                .font(.system(size: 15, weight: .medium, design: .rounded))
+                                .foregroundColor(.white.opacity(0.5))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 36)
                     } else {
                         VStack(spacing: 8) {
                             Text("No category data available")

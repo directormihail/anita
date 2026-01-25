@@ -21,7 +21,8 @@ struct SignUpView: View {
     @State private var confirmPassword: String = ""
     @State private var showPassword: Bool = false
     @State private var showConfirmPassword: Bool = false
-    @State private var selectedCurrency: String = "USD"
+    @State private var selectedCurrency: String = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+    @State private var needsCurrencyStep: Bool = false
     @FocusState private var focusedField: Field?
     
     enum Field {
@@ -43,11 +44,11 @@ struct SignUpView: View {
                 VStack(spacing: 0) {
                     // Header
                     VStack(spacing: 8) {
-                        Text("Welcome to ANITA")
+                        Text(AppL10n.t("welcome.title"))
                             .font(.system(size: 32, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                         
-                        Text("Personal Finance Assistant")
+                        Text(AppL10n.t("welcome.subtitle"))
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.white.opacity(0.7))
                     }
@@ -65,7 +66,7 @@ struct SignUpView: View {
                                 HStack(spacing: 6) {
                                     Image(systemName: "chevron.left")
                                         .font(.system(size: 14, weight: .semibold))
-                                    Text("Back")
+                                    Text(AppL10n.t("common.back"))
                                         .font(.system(size: 16, weight: .medium))
                                 }
                                 .foregroundColor(.white.opacity(0.9))
@@ -84,7 +85,7 @@ struct SignUpView: View {
                     }
                     
                     // Step Indicator
-                    if currentStep == .preferences {
+                    if needsCurrencyStep && currentStep == .preferences {
                         HStack {
                             Button(action: {
                                 let impact = UIImpactFeedbackGenerator(style: .light)
@@ -96,7 +97,7 @@ struct SignUpView: View {
                                 HStack(spacing: 6) {
                                     Image(systemName: "chevron.left")
                                         .font(.system(size: 14, weight: .semibold))
-                                    Text("Back")
+                                    Text(AppL10n.t("common.back"))
                                         .font(.system(size: 16, weight: .medium))
                                 }
                                 .foregroundColor(.white.opacity(0.9))
@@ -115,42 +116,47 @@ struct SignUpView: View {
                     }
                     
                     // Step Indicator
-                    HStack(spacing: 12) {
-                        StepIndicatorItem(
-                            number: "1",
-                            label: "Account Details",
-                            isActive: currentStep == .credentials,
-                            isCompleted: currentStep == .preferences
-                        )
-                        
-                        Rectangle()
-                            .fill(
-                                LinearGradient(
-                                    colors: currentStep == .preferences ?
-                                    [
-                                        Color.white.opacity(0.3),
-                                        Color.white.opacity(0.2)
-                                    ] :
-                                    [
-                                        Color.white.opacity(0.15),
-                                        Color.white.opacity(0.08)
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
+                    if needsCurrencyStep {
+                        HStack(spacing: 12) {
+                            StepIndicatorItem(
+                                number: "1",
+                                label: "Account Details",
+                                isActive: currentStep == .credentials,
+                                isCompleted: currentStep == .preferences
                             )
-                            .frame(height: 2)
-                            .frame(maxWidth: 70)
-                        
-                        StepIndicatorItem(
-                            number: "2",
-                            label: "Preferences",
-                            isActive: currentStep == .preferences,
-                            isCompleted: false
-                        )
+                            
+                            Rectangle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: currentStep == .preferences ?
+                                        [
+                                            Color.white.opacity(0.3),
+                                            Color.white.opacity(0.2)
+                                        ] :
+                                        [
+                                            Color.white.opacity(0.15),
+                                            Color.white.opacity(0.08)
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(height: 2)
+                                .frame(maxWidth: 70)
+                            
+                            StepIndicatorItem(
+                                number: "2",
+                                label: "Preferences",
+                                isActive: currentStep == .preferences,
+                                isCompleted: false
+                            )
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 32)
+                    } else {
+                        // One-step signup (currency already chosen in onboarding)
+                        Spacer().frame(height: 8)
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 32)
                     
                     // Auth Form
                     if currentStep == .credentials {
@@ -180,22 +186,22 @@ struct SignUpView: View {
                     
                     // Footer
                     VStack(spacing: 8) {
-                        Text("By creating an account, you agree to our")
+                        Text(AppL10n.t("signup.by_creating"))
                             .font(.system(size: 12))
                             .foregroundColor(.white.opacity(0.5))
                         
                         HStack(spacing: 4) {
-                            Button("Terms of Service") {
+                            Button(AppL10n.t("auth.terms")) {
                                 // TODO: Show terms
                             }
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(.white.opacity(0.8))
                             
-                            Text("and")
+                            Text(AppL10n.t("auth.and"))
                                 .font(.system(size: 12))
                                 .foregroundColor(.white.opacity(0.5))
                             
-                            Button("Privacy Policy") {
+                            Button(AppL10n.t("auth.privacy")) {
                                 // TODO: Show privacy
                             }
                             .font(.system(size: 12, weight: .medium))
@@ -205,6 +211,13 @@ struct SignUpView: View {
                     .padding(.top, 32)
                     .padding(.bottom, 40)
                 }
+            }
+        }
+        .onAppear {
+            let savedCurrency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? ""
+            needsCurrencyStep = savedCurrency.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            if !needsCurrencyStep {
+                selectedCurrency = savedCurrency.isEmpty ? "USD" : savedCurrency
             }
         }
     }
@@ -220,7 +233,7 @@ struct SignUpView: View {
                         .foregroundColor(.white.opacity(0.6))
                         .frame(width: 20)
                     
-                    TextField("Email", text: $email)
+                    TextField(AppL10n.t("login.email"), text: $email)
                         .textContentType(.emailAddress)
                         .keyboardType(.emailAddress)
                         .autocapitalization(.none)
@@ -246,13 +259,13 @@ struct SignUpView: View {
                         .frame(width: 20)
                     
                     if showPassword {
-                        TextField("Password", text: $password)
+                        TextField(AppL10n.t("login.password"), text: $password)
                             .textContentType(.newPassword)
                             .foregroundColor(.white)
                             .font(.system(size: 17))
                             .focused($focusedField, equals: .password)
                     } else {
-                        SecureField("Password", text: $password)
+                        SecureField(AppL10n.t("login.password"), text: $password)
                             .textContentType(.newPassword)
                             .foregroundColor(.white)
                             .font(.system(size: 17))
@@ -287,13 +300,13 @@ struct SignUpView: View {
                         .frame(width: 20)
                     
                     if showConfirmPassword {
-                        TextField("Confirm Password", text: $confirmPassword)
+                        TextField(AppL10n.t("signup.confirm_password"), text: $confirmPassword)
                             .textContentType(.newPassword)
                             .foregroundColor(.white)
                             .font(.system(size: 17))
                             .focused($focusedField, equals: .confirmPassword)
                     } else {
-                        SecureField("Confirm Password", text: $confirmPassword)
+                        SecureField(AppL10n.t("signup.confirm_password"), text: $confirmPassword)
                             .textContentType(.newPassword)
                             .foregroundColor(.white)
                             .font(.system(size: 17))
@@ -331,15 +344,24 @@ struct SignUpView: View {
                 impact.impactOccurred()
                 focusedField = nil
                 if password == confirmPassword {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        currentStep = .preferences
+                    if needsCurrencyStep {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            currentStep = .preferences
+                        }
+                    } else {
+                        Task {
+                            await viewModel.signUp(email: email, password: password)
+                            if viewModel.isAuthenticated {
+                                onAuthSuccess()
+                            }
+                        }
                     }
                 } else {
                     viewModel.errorMessage = "Passwords do not match"
                 }
             }) {
                 HStack {
-                    Text("Next")
+                    Text(needsCurrencyStep ? AppL10n.t("signup.next") : AppL10n.t("signup.signup"))
                         .font(.system(size: 17, weight: .semibold))
                 }
                 .foregroundColor(.white)
@@ -359,7 +381,7 @@ struct SignUpView: View {
                     .fill(Color.white.opacity(0.1))
                     .frame(height: 0.5)
                 
-                Text("OR")
+                Text(AppL10n.t("auth.or"))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.white.opacity(0.5))
                 
@@ -384,7 +406,7 @@ struct SignUpView: View {
                 HStack(spacing: 10) {
                     GoogleLogoView(size: 20)
                     
-                    Text("Sign up with Google")
+                    Text(AppL10n.t("signup.google"))
                         .font(.system(size: 17, weight: .medium))
                         .foregroundColor(.white)
                 }
@@ -423,7 +445,7 @@ struct SignUpView: View {
         VStack(spacing: 24) {
             // Currency Selector - iOS Style
             VStack(alignment: .leading, spacing: 12) {
-                Text("Select Currency")
+                Text(AppL10n.t("signup.select_currency"))
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(.white.opacity(0.9))
                     .padding(.horizontal, 24)
@@ -434,6 +456,7 @@ struct SignUpView: View {
                             let impact = UIImpactFeedbackGenerator(style: .light)
                             impact.impactOccurred()
                             selectedCurrency = currency
+                            persistCurrencySelection(currency)
                         }) {
                             HStack {
                                 Text(currency)
@@ -481,6 +504,7 @@ struct SignUpView: View {
                 let impact = UIImpactFeedbackGenerator(style: .medium)
                 impact.impactOccurred()
                 Task {
+                    persistCurrencySelection(selectedCurrency)
                     await viewModel.signUp(email: email, password: password)
                     if viewModel.isAuthenticated {
                         onAuthSuccess()
@@ -493,7 +517,7 @@ struct SignUpView: View {
                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             .scaleEffect(0.9)
                     } else {
-                        Text("Sign Up")
+                        Text(AppL10n.t("signup.signup"))
                             .font(.system(size: 17, weight: .semibold))
                     }
                 }
@@ -507,6 +531,18 @@ struct SignUpView: View {
             .opacity(viewModel.isLoading ? 0.5 : 1.0)
             .padding(.horizontal, 24)
         }
+    }
+    
+    private func persistCurrencySelection(_ currency: String) {
+        UserDefaults.standard.set(currency, forKey: "anita_user_currency")
+        let numberFormat: String
+        switch currency {
+        case "EUR":
+            numberFormat = "1.234,56"
+        default:
+            numberFormat = "1,234.56"
+        }
+        UserDefaults.standard.set(numberFormat, forKey: "anita_number_format")
     }
 }
 

@@ -695,8 +695,13 @@ class ChatViewModel: ObservableObject {
                 }
                 
                 // Convert messages to API format
-                let apiMessages = messages.map { msg in
+                var apiMessages = messages.map { msg in
                     ChatMessageRequest(role: msg.role, content: msg.content)
+                }
+                
+                // Inject a system message to enforce onboarding language + personalization (not shown in UI)
+                if let systemPrompt = buildSystemPrompt() {
+                    apiMessages.insert(ChatMessageRequest(role: "system", content: systemPrompt), at: 0)
                 }
                 
                 print("[ChatViewModel] Sending chat message to backend...")
@@ -771,6 +776,36 @@ class ChatViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    private func buildSystemPrompt() -> String? {
+        let survey = OnboardingSurveyResponse.loadFromUserDefaults()
+        let languageCode = survey?.languageCode ?? OnboardingSurveyResponse.preferredLanguageCode() ?? "en"
+        
+        let languageName: String
+        switch languageCode {
+        case "de": languageName = "German"
+        case "es": languageName = "Spanish"
+        case "it": languageName = "Italian"
+        case "ru": languageName = "Russian"
+        case "uk": languageName = "Ukrainian"
+        default: languageName = "English"
+        }
+        
+        var lines: [String] = []
+        lines.append("You are ANITA, a personal finance assistant.")
+        lines.append("Always reply in \(languageName), unless the user explicitly asks for another language.")
+        
+        if let answers = survey?.answers, !answers.isEmpty {
+            // Lightweight personalization context (IDs, not sensitive personal data)
+            let formatted = answers
+                .sorted(by: { $0.key < $1.key })
+                .map { "\($0.key)=\($0.value)" }
+                .joined(separator: ", ")
+            lines.append("Onboarding preferences: \(formatted). Use them to personalize your advice.")
+        }
+        
+        return lines.joined(separator: "\n")
     }
     
     // Start a new conversation

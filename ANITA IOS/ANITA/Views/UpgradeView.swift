@@ -54,7 +54,7 @@ struct UpgradeView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "chevron.left")
                                 .font(.system(size: 15, weight: .semibold))
-                            Text("Back")
+                            Text(AppL10n.t("common.back"))
                                 .font(.system(size: 15, weight: .medium, design: .rounded))
                         }
                         .foregroundColor(.white.opacity(0.9))
@@ -73,7 +73,7 @@ struct UpgradeView: View {
                     VStack(spacing: 32) {
                         // Header with premium styling
                         VStack(spacing: 14) {
-                            Text("Upgrade to Premium")
+                            Text(AppL10n.t("plans.upgrade_header"))
                                 .font(.system(size: 34, weight: .bold, design: .rounded))
                                 .foregroundStyle(
                                     LinearGradient(
@@ -88,7 +88,7 @@ struct UpgradeView: View {
                                 .shadow(color: Color.white.opacity(0.1), radius: 2, x: 0, y: 1)
                                 .tracking(-0.5)
                             
-                            Text("Unlock all features and get the most out of ANITA")
+                            Text(AppL10n.t("plans.upgrade_subheader"))
                                 .font(.system(size: 16, weight: .medium, design: .rounded))
                                 .foregroundColor(.white.opacity(0.65))
                                 .multilineTextAlignment(.center)
@@ -147,12 +147,12 @@ struct UpgradeView: View {
                 }
             }
         }
-        .alert("Purchase Successful", isPresented: $showSuccessAlert) {
-            Button("OK") {
+        .alert(AppL10n.t("plans.purchase_success_title"), isPresented: $showSuccessAlert) {
+            Button(AppL10n.t("plans.ok")) {
                 dismiss()
             }
         } message: {
-            Text("Your subscription has been activated!")
+            Text(AppL10n.t("plans.purchase_success_body"))
         }
         .task {
             await loadSubscriptionFromDatabase()
@@ -273,7 +273,7 @@ struct FreePlanCard: View {
                                 .foregroundColor(.white.opacity(0.5))
                         }
                         
-                        Text("Free")
+                        Text(AppL10n.t("plans.free"))
                             .font(.system(size: 26, weight: .bold, design: .rounded))
                             .foregroundColor(.white.opacity(0.95))
                             .tracking(-0.3)
@@ -284,7 +284,7 @@ struct FreePlanCard: View {
                             .font(.system(size: 22, weight: .semibold, design: .rounded))
                             .foregroundColor(.white.opacity(0.85))
                             .digit3D(baseColor: .white.opacity(0.85))
-                        Text("/month")
+                        Text(AppL10n.t("plans.per_month"))
                             .font(.system(size: 15, weight: .regular, design: .rounded))
                             .foregroundColor(.white.opacity(0.55))
                     }
@@ -294,7 +294,7 @@ struct FreePlanCard: View {
                 Spacer()
                 
                 if isCurrentPlan {
-                    Text("Current Plan")
+                    Text(AppL10n.t("plans.current"))
                         .font(.system(size: 11, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
                         .padding(.horizontal, 16)
@@ -319,14 +319,14 @@ struct FreePlanCard: View {
             
             // Features
             VStack(alignment: .leading, spacing: 16) {
-                FeatureRow(text: "20 replies per month", accentColor: .white.opacity(0.4))
-                FeatureRow(text: "Basic expense analysis", accentColor: .white.opacity(0.4))
+                FeatureRow(text: AppL10n.t("plans.feature.replies_20"), accentColor: .white.opacity(0.4))
+                FeatureRow(text: AppL10n.t("plans.feature.basic_expense"), accentColor: .white.opacity(0.4))
             }
             .padding(.top, 6)
             
             // Button
             Button(action: {}) {
-                Text(isCurrentPlan ? "Current Plan" : "Free Plan")
+                Text(isCurrentPlan ? AppL10n.t("plans.current") : AppL10n.t("plans.free"))
                     .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .frame(maxWidth: .infinity)
                     .frame(height: 54)
@@ -364,11 +364,11 @@ struct SubscriptionPlanCard: View {
     var planName: String {
         switch planType {
         case .pro:
-            return "Pro"
+            return AppL10n.t("plans.pro")
         case .ultimate:
-            return "Ultimate"
+            return AppL10n.t("plans.ultimate")
         case .free:
-            return "Free"
+            return AppL10n.t("plans.free")
         }
     }
     
@@ -376,19 +376,19 @@ struct SubscriptionPlanCard: View {
         switch planType {
         case .pro:
             return [
-                "50 replies per month",
-                "Full budget analysis",
-                "Financial goals",
-                "Smart insights",
-                "Faster AI responses"
+                AppL10n.t("plans.feature.replies_50"),
+                AppL10n.t("plans.feature.full_budget"),
+                AppL10n.t("plans.feature.financial_goals"),
+                AppL10n.t("plans.feature.smart_insights"),
+                AppL10n.t("plans.feature.faster_ai")
             ]
         case .ultimate:
             return [
-                "Unlimited replies",
-                "Advanced analytics",
-                "Priority support",
-                "Custom AI training",
-                "All Pro features"
+                AppL10n.t("plans.feature.unlimited_replies"),
+                AppL10n.t("plans.feature.advanced_analytics"),
+                AppL10n.t("plans.feature.priority_support"),
+                AppL10n.t("plans.feature.custom_ai"),
+                AppL10n.t("plans.feature.all_pro")
             ]
         case .free:
             return []
@@ -427,7 +427,7 @@ struct SubscriptionPlanCard: View {
             if showMostPopular {
                 HStack {
                     Spacer()
-                    Text("Most Popular")
+                    Text(AppL10n.t("plans.most_popular"))
                         .font(.system(size: 11, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
                         .padding(.horizontal, 16)
@@ -518,7 +518,7 @@ struct SubscriptionPlanCard: View {
                             .font(.system(size: 22, weight: .semibold, design: .rounded))
                             .foregroundColor(.white.opacity(0.85))
                             .digit3D(baseColor: .white.opacity(0.85))
-                        Text("/month")
+                        Text(AppL10n.t("plans.per_month"))
                             .font(.system(size: 15, weight: .regular, design: .rounded))
                             .foregroundColor(.white.opacity(0.55))
                     }
@@ -528,7 +528,7 @@ struct SubscriptionPlanCard: View {
                 Spacer()
                 
                 if isCurrentPlan {
-                    Text("Current Plan")
+                    Text(AppL10n.t("plans.current"))
                         .font(.system(size: 11, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
                         .padding(.horizontal, 16)
@@ -577,7 +577,7 @@ struct SubscriptionPlanCard: View {
                         } else {
                             Image(systemName: "creditcard.fill")
                                 .font(.system(size: 16, weight: .semibold))
-                            Text("Upgrade to \(planName)")
+                            Text("\(AppL10n.t("plans.upgrade_to")) \(planName)")
                                 .font(.system(size: 16, weight: .semibold, design: .rounded))
                         }
                     }
@@ -620,7 +620,7 @@ struct SubscriptionPlanCard: View {
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isCreatingCheckout)
             } else {
                 Button(action: {}) {
-                    Text("Current Plan")
+                    Text(AppL10n.t("plans.current"))
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
                         .frame(maxWidth: .infinity)
                         .frame(height: 54)
@@ -702,11 +702,11 @@ struct SubscriptionPlanPlaceholder: View {
     var planName: String {
         switch planType {
         case .pro:
-            return "Pro"
+            return AppL10n.t("plans.pro")
         case .ultimate:
-            return "Ultimate"
+            return AppL10n.t("plans.ultimate")
         case .free:
-            return "Free"
+            return AppL10n.t("plans.free")
         }
     }
     
@@ -725,19 +725,19 @@ struct SubscriptionPlanPlaceholder: View {
         switch planType {
         case .pro:
             return [
-                "50 replies per month",
-                "Full budget analysis",
-                "Financial goals",
-                "Smart insights",
-                "Faster AI responses"
+                AppL10n.t("plans.feature.replies_50"),
+                AppL10n.t("plans.feature.full_budget"),
+                AppL10n.t("plans.feature.financial_goals"),
+                AppL10n.t("plans.feature.smart_insights"),
+                AppL10n.t("plans.feature.faster_ai")
             ]
         case .ultimate:
             return [
-                "Unlimited replies",
-                "Advanced analytics",
-                "Priority support",
-                "Custom AI training",
-                "All Pro features"
+                AppL10n.t("plans.feature.unlimited_replies"),
+                AppL10n.t("plans.feature.advanced_analytics"),
+                AppL10n.t("plans.feature.priority_support"),
+                AppL10n.t("plans.feature.custom_ai"),
+                AppL10n.t("plans.feature.all_pro")
             ]
         case .free:
             return []
@@ -776,7 +776,7 @@ struct SubscriptionPlanPlaceholder: View {
             if showMostPopular {
                 HStack {
                     Spacer()
-                    Text("Most Popular")
+                    Text(AppL10n.t("plans.most_popular"))
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 12)
@@ -809,7 +809,7 @@ struct SubscriptionPlanPlaceholder: View {
                             ProgressView()
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                 .scaleEffect(0.8)
-                            Text("Loading...")
+                            Text(AppL10n.t("plans.loading"))
                                 .font(.system(size: 14))
                                 .foregroundColor(.white.opacity(0.6))
                         }
@@ -819,7 +819,7 @@ struct SubscriptionPlanPlaceholder: View {
                                 .font(.system(size: 18, weight: .semibold))
                                 .foregroundColor(.white.opacity(0.8))
                                 .digit3D(baseColor: .white.opacity(0.8))
-                            Text("/month")
+                            Text(AppL10n.t("plans.per_month"))
                                 .font(.system(size: 14, weight: .regular))
                                 .foregroundColor(.white.opacity(0.6))
                         }
@@ -829,7 +829,7 @@ struct SubscriptionPlanPlaceholder: View {
                 Spacer()
                 
                 if isCurrentPlan {
-                    Text("Current Plan")
+                    Text(AppL10n.t("plans.current"))
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 12)
@@ -852,20 +852,20 @@ struct SubscriptionPlanPlaceholder: View {
                     HStack {
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        Text("Loading...")
+                        Text(AppL10n.t("plans.loading"))
                             .font(.system(size: 16, weight: .semibold))
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 50)
                     .foregroundColor(.white)
                 } else if isCurrentPlan {
-                    Text("Current Plan")
+                    Text(AppL10n.t("plans.current"))
                         .font(.system(size: 16, weight: .semibold))
                         .frame(maxWidth: .infinity)
                         .frame(height: 50)
                         .foregroundColor(.white.opacity(0.6))
                 } else {
-                    Text("Upgrade to \(planName)")
+                    Text("\(AppL10n.t("plans.upgrade_to")) \(planName)")
                         .font(.system(size: 16, weight: .semibold))
                         .frame(maxWidth: .infinity)
                         .frame(height: 50)
