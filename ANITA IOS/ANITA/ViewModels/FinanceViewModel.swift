@@ -642,6 +642,51 @@ class FinanceViewModel: ObservableObject {
         return assetsValue + goalsValue + targetsValue
     }
     
+    // Calculate cumulative total balance up to selected month
+    // This sums all monthly balances from the first month up to and including the selected month
+    // The balance will change as the user selects different months
+    var cumulativeTotalBalance: Double {
+        let calendar = Calendar.current
+        let selectedMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: selectedMonth)) ?? selectedMonth
+        
+        // Get all monthly balances sorted chronologically
+        let sortedHistory = monthlyBalanceHistory.sorted { $0.month < $1.month }
+        
+        // Calculate balance for the selected month
+        // Use monthlyIncome - monthlyExpenses since these are loaded for the selectedMonth
+        let selectedMonthBalance = monthlyIncome - monthlyExpenses
+        
+        // If no history available yet, return just the selected month's balance
+        if sortedHistory.isEmpty {
+            return selectedMonthBalance
+        }
+        
+        // Sum all balances from history that are BEFORE the selected month
+        let previousMonthsBalance = sortedHistory
+            .filter { balance in
+                // Include only months that are strictly before the selected month
+                balance.month < selectedMonthStart
+            }
+            .reduce(0.0) { $0 + $1.balance }
+        
+        // Check if the selected month is already in history
+        let hasSelectedMonthInHistory = sortedHistory.contains { balance in
+            calendar.isDate(balance.month, equalTo: selectedMonthStart, toGranularity: .month)
+        }
+        
+        if hasSelectedMonthInHistory {
+            // If selected month is in history, sum all balances up to and including it
+            return sortedHistory
+                .filter { balance in
+                    balance.month <= selectedMonthStart
+                }
+                .reduce(0.0) { $0 + $1.balance }
+        } else {
+            // If selected month is not in history, use the loaded monthlyIncome/monthlyExpenses
+            return previousMonthsBalance + selectedMonthBalance
+        }
+    }
+    
     // Calculate percentage change for month-to-month comparison
     func getMonthToMonthChange(type: ComparisonType) -> (value: Double, percentage: Double) {
         let current: Double

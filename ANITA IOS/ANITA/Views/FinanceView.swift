@@ -733,7 +733,7 @@ struct FinanceView: View {
                             .foregroundColor(.white.opacity(0.4))
                             .tracking(0.8)
                         
-                        Text(formatCurrency(viewModel.totalBalance))
+                        Text(formatCurrency(viewModel.cumulativeTotalBalance))
                             .font(.system(size: 22, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                             .digit3D(baseColor: .white)
@@ -963,8 +963,8 @@ struct FinanceView: View {
                                 let innerCircleDiameter = innerRadius * 2
                                 
                                 ZStack {
-                                    // Donut chart
-                                    DonutChartView(categories: data.categories, selectedCategory: selectedCategory)
+                                    // Enhanced 3D Donut chart
+                                    DonutChartView3D(categories: data.categories, selectedCategory: selectedCategory)
                                         .drawingGroup() // Ensures smooth rendering
                                     
                                     // Center text - shows selected category, largest category, or total count
@@ -6120,83 +6120,103 @@ struct FinanceCategoryRow: View {
                         .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
                 }
             
-            // Category name and percentage - left aligned
+            // Category name and percentages - left aligned
             VStack(alignment: .leading, spacing: 4) {
                 Text(category.name)
                     .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .foregroundColor(.white)
                     .lineLimit(1)
                 
-                Text(String(format: "%.1f%%", category.percentage))
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundColor(.white.opacity(0.6))
+                // Both percentages on the same line
+                HStack(spacing: 8) {
+                    // Category percentage
+                    Text(String(format: "%.1f%%", category.percentage))
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundColor(.white.opacity(0.6))
+                    
+                    // Trend percentage vs last year
+                    if let trend = trend {
+                        HStack(spacing: 4) {
+                            Image(systemName: trend.isPositive ? "arrow.up" : "arrow.down")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(trend.isPositive ? Color(red: 0.2, green: 0.8, blue: 0.4) : Color(red: 0.9, green: 0.3, blue: 0.3))
+                            
+                            Text(String(format: "%.1f%%", abs(trend.percentageChange)))
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                                .foregroundColor(trend.isPositive ? Color(red: 0.2, green: 0.8, blue: 0.4) : Color(red: 0.9, green: 0.3, blue: 0.3))
+                        }
+                    } else {
+                        // Default trend if no data
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.up")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
+                            
+                            Text("100.0%")
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                                .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
+                        }
+                    }
+                }
             }
             
             Spacer()
             
-            // Right side: Trend indicator and Amount
-            HStack(spacing: 12) {
-                // Trend indicator with green arrow up and percentage
-                if let trend = trend {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.up")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
-                        
-                        Text(String(format: "%.1f", abs(trend.percentageChange)))
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
-                            .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
-                    }
-                } else {
-                    // Default trend if no data
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.up")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
-                        
-                        Text("100.0")
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
-                            .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
-                    }
-                }
-                
-                // Amount on the far right
-                Text(formatCurrency(category.amount))
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-            }
+            // Amount on the far right
+            Text(formatCurrency(category.amount))
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(white: 0.15).opacity(0.9),
-                            Color(white: 0.12).opacity(0.8)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+            ZStack {
+                // Base gradient background
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(white: 0.15).opacity(0.9),
+                                Color(white: 0.12).opacity(0.8)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
                     )
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(
+                
+                // Category color overlay when selected
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .fill(
                             LinearGradient(
                                 colors: [
-                                    Color.white.opacity(isSelected ? 0.3 : 0.1),
-                                    Color.white.opacity(isSelected ? 0.15 : 0.05)
+                                    category.color.opacity(0.2),
+                                    category.color.opacity(0.15)
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1
+                            )
                         )
                 }
-                .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+                
+                // Border
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                isSelected ? category.color.opacity(0.5) : Color.white.opacity(0.1),
+                                isSelected ? category.color.opacity(0.3) : Color.white.opacity(0.05)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: isSelected ? 1.5 : 1
+                    )
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
         )
-        .scaleEffect(isSelected ? 1.02 : 1.0)
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
         .contentShape(Rectangle())
     }
@@ -10360,6 +10380,72 @@ struct EnhancedIncomeExpenseBarChart: View {
                 }
             }
         }
+    }
+}
+
+// Apple Watch-style 3D Donut Chart - Clean and refined
+struct DonutChartView3D: View {
+    let categories: [CategoryAnalytics]
+    var selectedCategory: String? = nil
+    
+    var body: some View {
+        GeometryReader { geometry in
+            let size = min(geometry.size.width, geometry.size.height)
+            let center = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
+            let radius = size / 2 - 10
+            let innerRadius = radius * 0.6
+            
+            ZStack {
+                // Draw segments with Apple Watch-style clean 3D effect
+                ForEach(Array(categories.enumerated()), id: \.element.id) { index, category in
+                    let isSelected = selectedCategory == category.name
+                    let shouldShowColor = selectedCategory == nil || isSelected
+                    let segmentColor = shouldShowColor ? category.color : Color.white.opacity(0.15)
+                    
+                    // Main segment with smooth radial-style gradient (Apple Watch style)
+                    DonutSegmentShape(
+                        category: category,
+                        startAngle: startAngle(for: index),
+                        endAngle: endAngle(for: index),
+                        center: center,
+                        radius: radius,
+                        innerRadius: innerRadius
+                    )
+                    .fill(
+                        // Clean gradient from lighter top to darker bottom (Apple Watch style)
+                        LinearGradient(
+                            gradient: Gradient(stops: [
+                                .init(color: segmentColor.opacity(1.0), location: 0.0),
+                                .init(color: segmentColor.opacity(0.98), location: 0.4),
+                                .init(color: segmentColor.opacity(0.92), location: 1.0)
+                            ]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    // Subtle shadow for depth (Apple Watch minimal shadow style)
+                    .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
+                    .shadow(color: segmentColor.opacity(0.1), radius: 1, x: 0, y: 0.5)
+                    .animation(.easeInOut(duration: 0.5), value: selectedCategory)
+                }
+            }
+        }
+    }
+    
+    private func startAngle(for index: Int) -> Double {
+        var angle: Double = -90 // Start from top
+        for i in 0..<index {
+            angle += categories[i].percentage * 3.6 // 360 / 100
+        }
+        return angle
+    }
+    
+    private func endAngle(for index: Int) -> Double {
+        var angle: Double = -90
+        for i in 0...index {
+            angle += categories[i].percentage * 3.6
+        }
+        return angle
     }
 }
 
