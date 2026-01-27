@@ -287,6 +287,44 @@ class CategoryDefinitions {
         return categories.first { $0.name.lowercased() == name.lowercased() }
     }
     
+    // Get translated category name
+    func getTranslatedCategoryName(_ categoryName: String) -> String {
+        // Map category names to translation keys
+        let categoryKeyMap: [String: String] = [
+            "Rent": "category.rent",
+            "Mortgage": "category.mortgage",
+            "Electricity": "category.electricity",
+            "Water & Sewage": "category.water_sewage",
+            "Gas & Heating": "category.gas_heating",
+            "Internet & Phone": "category.internet_phone",
+            "Groceries": "category.groceries",
+            "Dining Out": "category.dining_out",
+            "Gas & Fuel": "category.gas_fuel",
+            "Public Transportation": "category.public_transportation",
+            "Rideshare & Taxi": "category.rideshare_taxi",
+            "Parking & Tolls": "category.parking_tolls",
+            "Streaming Services": "category.streaming_services",
+            "Software & Apps": "category.software_apps",
+            "Shopping": "category.shopping",
+            "Clothing & Fashion": "category.clothing_fashion",
+            "Entertainment": "category.entertainment",
+            "Medical & Healthcare": "category.medical_healthcare",
+            "Fitness & Gym": "category.fitness_gym",
+            "Personal Care": "category.personal_care",
+            "Education": "category.education",
+            "Salary": "category.salary",
+            "Freelance & Side Income": "category.freelance_side_income",
+            "Other": "category.other"
+        ]
+        
+        if let key = categoryKeyMap[categoryName] {
+            return AppL10n.t(key)
+        }
+        
+        // Fallback to original name if no translation found
+        return categoryName
+    }
+    
     // Normalize category name (ensure proper case, not all caps)
     func normalizeCategory(_ category: String?) -> String {
         guard let category = category, !category.isEmpty else {

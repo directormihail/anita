@@ -24,7 +24,7 @@ struct CategoryAnalyticsView: View {
                             .font(.system(size: 20))
                             .foregroundColor(.white)
                         
-                        Text("Category Analysis")
+                        Text(AppL10n.t("finance.category_analysis"))
                             .font(.system(size: 24, weight: .bold))
                             .foregroundColor(.white)
                         
@@ -50,7 +50,7 @@ struct CategoryAnalyticsView: View {
                                     .font(.system(size: 48, weight: .bold))
                                     .foregroundColor(.white)
                                 
-                                Text("CATEGORIES")
+                                Text(AppL10n.t("finance.categories"))
                                     .font(.system(size: 14, weight: .medium))
                                     .foregroundColor(.white.opacity(0.8))
                             }
@@ -84,11 +84,11 @@ struct CategoryAnalyticsView: View {
                                 .font(.system(size: 48))
                                 .foregroundColor(.gray)
                             
-                            Text("No category data available")
+                            Text(AppL10n.t("finance.no_category_data"))
                                 .font(.headline)
                                 .foregroundColor(.gray)
                             
-                            Text("Add transactions to see category analysis")
+                            Text(AppL10n.t("finance.add_transactions_for_analysis"))
                                 .font(.subheadline)
                                 .foregroundColor(.gray)
                                 .multilineTextAlignment(.center)
@@ -104,7 +104,7 @@ struct CategoryAnalyticsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("Category Analysis")
+                Text(AppL10n.t("finance.category_analysis"))
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(.white)
             }
@@ -237,7 +237,7 @@ struct CategoryRow: View {
                 .frame(width: 44, height: 44)
             
             // Category name
-            Text(category.name)
+            Text(CategoryDefinitions.shared.getTranslatedCategoryName(category.name))
                 .font(.body)
                 .foregroundColor(.white)
             

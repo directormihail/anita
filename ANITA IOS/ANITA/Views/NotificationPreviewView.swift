@@ -29,7 +29,7 @@ struct NotificationPreviewView: View {
                         
                         Spacer()
                         
-                        Text("Notification Previews")
+                        Text(AppL10n.t("notifications.previews"))
                             .font(.system(size: 20, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                         
@@ -50,7 +50,7 @@ struct NotificationPreviewView: View {
                         HStack {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundColor(.orange)
-                            Text("Push notifications are disabled")
+                            Text(AppL10n.t("notifications.push_disabled"))
                                 .font(.system(size: 14, weight: .medium, design: .rounded))
                                 .foregroundColor(.white.opacity(0.8))
                         }
@@ -62,7 +62,7 @@ struct NotificationPreviewView: View {
                         HStack {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundColor(.orange)
-                            Text("Notification permissions not granted")
+                            Text(AppL10n.t("notifications.permissions_not_granted"))
                                 .font(.system(size: 14, weight: .medium, design: .rounded))
                                 .foregroundColor(.white.opacity(0.8))
                         }

@@ -51,7 +51,7 @@ struct SidebarMenu: View {
                                     .tint(Color(red: 0.5, green: 0.6, blue: 0.85))
                                     .scaleEffect(0.8)
                             } else {
-                                Text("\(viewModel.xp) XP")
+                                Text("\(viewModel.xp) \(AppL10n.t("finance.xp"))")
                                     .font(.system(size: 16, weight: .semibold))
                                     .foregroundColor(Color(red: 0.5, green: 0.6, blue: 0.85))
                                     .digit3D(baseColor: Color(red: 0.5, green: 0.6, blue: 0.85))
@@ -89,7 +89,7 @@ struct SidebarMenu: View {
                     }
                     .frame(height: 10)
                     
-                    Text("\(viewModel.xpToNextLevel) to next level")
+                    Text("\(viewModel.xpToNextLevel) \(AppL10n.t("finance.xp_to_next_level"))")
                         .font(.system(size: 12))
                         .foregroundColor(.gray)
                         .digit3D(baseColor: .gray)
@@ -97,12 +97,12 @@ struct SidebarMenu: View {
                     // Level Card
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Level \(viewModel.level)")
+                            Text("\(AppL10n.t("finance.level")) \(viewModel.level)")
                                 .font(.system(size: 20, weight: .bold))
                                 .foregroundColor(Color(red: 0.5, green: 0.6, blue: 0.85))
                                 .digit3D(baseColor: Color(red: 0.5, green: 0.6, blue: 0.85))
                             
-                            Text(viewModel.levelTitle)
+                            Text(getTranslatedLevelTitle(viewModel.levelTitle))
                                 .font(.system(size: 12))
                                 .foregroundColor(.gray)
                         }
@@ -119,11 +119,11 @@ struct SidebarMenu: View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         if viewModel.isLoading {
-                            Text("Conversations...")
+                            Text("\(AppL10n.t("sidebar.conversations"))...")
                                 .font(.system(size: 18, weight: .semibold))
                                 .foregroundColor(.white)
                         } else {
-                            Text("Conversations (\(viewModel.conversations.count))")
+                            Text("\(AppL10n.t("sidebar.conversations")) (\(viewModel.conversations.count))")
                                 .font(.system(size: 18, weight: .semibold))
                                 .foregroundColor(.white)
                                 .digit3D(baseColor: .white)
@@ -150,7 +150,7 @@ struct SidebarMenu: View {
                                     .tint(.white)
                                     .padding()
                             } else if viewModel.conversations.isEmpty {
-                                Text("No conversations yet")
+                                Text(AppL10n.t("sidebar.no_conversations"))
                                     .font(.subheadline)
                                     .foregroundColor(.gray)
                                     .padding()
@@ -173,7 +173,7 @@ struct SidebarMenu: View {
                             
                             if let errorMessage = viewModel.errorMessage {
                                 VStack(alignment: .leading, spacing: 8) {
-                                    Text("⚠️ Connection Error")
+                                    Text(AppL10n.t("sidebar.connection_error"))
                                         .font(.headline)
                                         .foregroundColor(.red)
                                     
@@ -222,6 +222,21 @@ struct SidebarMenu: View {
         isPresented = false
         // TODO: Load conversation in ChatView
         NotificationCenter.default.post(name: NSNotification.Name("OpenConversation"), object: conversationId)
+    }
+    
+    private func getTranslatedLevelTitle(_ title: String) -> String {
+        let titleMap: [String: String] = [
+            "NEWCOMER": "level.newcomer",
+            "WEALTH BUILDER": "level.wealth_builder",
+            "SAVER": "level.saver",
+            "INVESTOR": "level.investor",
+            "FINANCIAL GURU": "level.financial_guru",
+            "MILLIONAIRE": "level.millionaire"
+        ]
+        if let key = titleMap[title.uppercased()] {
+            return AppL10n.t(key)
+        }
+        return title
     }
 }
 
@@ -314,19 +329,19 @@ struct ConversationRow: View {
     
     private func formatDate(_ date: Date, isToday: Bool) -> String {
         if isToday {
-            return "Today"
+            return AppL10n.t("common.today")
         }
         
         let calendar = Calendar.current
         let now = Date()
         
         if calendar.isDateInYesterday(date) {
-            return "Yesterday"
+            return AppL10n.t("common.yesterday")
         }
         
         let daysAgo = calendar.dateComponents([.day], from: date, to: now).day ?? 0
         if daysAgo < 7 {
-            return "\(daysAgo) days ago"
+            return "\(daysAgo) \(AppL10n.t("common.days_ago"))"
         }
         
         // Use user's date format preference from UserDefaults

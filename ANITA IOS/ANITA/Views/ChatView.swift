@@ -107,7 +107,7 @@ struct ChatView: View {
                     
                     // Plan information - centered
                     HStack(spacing: 8) {
-                        Text("Ultimate")
+                        Text(AppL10n.t("plans.ultimate"))
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.white)
                         
@@ -214,9 +214,9 @@ struct ChatView: View {
                                             EnhancedTaskButton(
                                                 icon: "plus",
                                                 iconColor: Color.green,
-                                                title: "Add Income",
+                                                title: AppL10n.t("chat.add_income"),
                                                 action: {
-                                                    viewModel.inputText = "Add income"
+                                                    viewModel.inputText = AppL10n.t("chat.add_income")
                                                     viewModel.sendMessage()
                                                 }
                                             )
@@ -224,9 +224,9 @@ struct ChatView: View {
                                             EnhancedTaskButton(
                                                 icon: "minus",
                                                 iconColor: Color.red,
-                                                title: "Add Expense",
+                                                title: AppL10n.t("chat.add_expense"),
                                                 action: {
-                                                    viewModel.inputText = "Add expense"
+                                                    viewModel.inputText = AppL10n.t("chat.add_expense")
                                                     viewModel.sendMessage()
                                                 }
                                             )
@@ -237,9 +237,9 @@ struct ChatView: View {
                                             EnhancedTaskButton(
                                                 icon: "target",
                                                 iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                                title: "Set a Target",
+                                                title: AppL10n.t("chat.set_target"),
                                                 action: {
-                                                    viewModel.inputText = "Set a target"
+                                                    viewModel.inputText = AppL10n.t("chat.set_target")
                                                     viewModel.sendMessage()
                                                 }
                                             )
@@ -247,9 +247,9 @@ struct ChatView: View {
                                             EnhancedTaskButton(
                                                 icon: "chart.pie.fill",
                                                 iconColor: Color.orange,
-                                                title: "Analytics",
+                                                title: AppL10n.t("chat.analytics"),
                                                 action: {
-                                                    viewModel.inputText = "Show analytics"
+                                                    viewModel.inputText = AppL10n.t("chat.analytics")
                                                     viewModel.sendMessage()
                                                 }
                                             )
@@ -290,7 +290,7 @@ struct ChatView: View {
                 VStack(spacing: 0) {
                     HStack(spacing: 12) {
                         // Text input
-                        TextField("Ask about finance", text: $viewModel.inputText, axis: .vertical)
+                        TextField(AppL10n.t("chat.ask_finance"), text: $viewModel.inputText, axis: .vertical)
                             .focused($isInputFocused)
                             .font(.body)
                             .foregroundColor(.white)

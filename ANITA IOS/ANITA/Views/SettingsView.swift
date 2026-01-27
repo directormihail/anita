@@ -3,6 +3,7 @@
 //  ANITA
 //
 //  Settings view with professional finance app design
+
 //
 
 import SwiftUI
@@ -39,6 +40,8 @@ struct SettingsView: View {
         }
     }()
     @State private var emailNotifications: Bool = UserDefaults.standard.bool(forKey: "anita_email_notifications")
+    @State private var currentLanguageCode: String = AppL10n.currentLanguageCode()
+    @State private var languageRefreshTrigger = UUID()
     
     // Backend URL
     @State private var backendURL: String = UserDefaults.standard.string(forKey: "backendURL") ?? Config.backendURL
@@ -149,15 +152,15 @@ struct SettingsView: View {
                                     }
                                     
                                     VStack(alignment: .leading, spacing: 6) {
-                                        Text(profileName.isEmpty ? (user.email ?? "User") : profileName)
+                                        Text(profileName.isEmpty ? (user.email ?? AppL10n.t("settings.name")) : profileName)
                                             .font(.system(size: 19, weight: .semibold, design: .rounded))
                                             .foregroundColor(.white.opacity(0.95))
                                         
                                         HStack(spacing: 6) {
-                                            Text(subscriptionPlan?.capitalized ?? "Free")
+                                            Text(subscriptionPlan?.capitalized ?? AppL10n.t("plans.free"))
                                                 .font(.system(size: 14, weight: .medium))
                                                 .foregroundColor(.white.opacity(0.7))
-                                            Text("Plan")
+                                            Text(AppL10n.t("plans.current").components(separatedBy: " ").last ?? "Plan")
                                                 .font(.system(size: 14, weight: .regular))
                                                 .foregroundColor(.white.opacity(0.5))
                                         }
@@ -175,12 +178,12 @@ struct SettingsView: View {
                                 SettingsRowWithIcon(
                                     icon: "person.text.rectangle",
                                     iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                    title: "Name",
+                                    title: AppL10n.t("settings.name"),
                                     value: nil,
                                     showChevron: false
                                 ) {
                                     HStack {
-                                        TextField("Enter your name", text: $profileName)
+                                        TextField(AppL10n.t("settings.enter_name"), text: $profileName)
                                             .font(.system(size: 16, weight: .regular))
                                             .foregroundColor(.white.opacity(0.9))
                                             .onChange(of: profileName) { _, newValue in
@@ -202,8 +205,8 @@ struct SettingsView: View {
                                 SettingsRowWithIcon(
                                     icon: "envelope.fill",
                                     iconColor: .white.opacity(0.6),
-                                    title: "Email",
-                                    value: user.email ?? "No email",
+                                    title: AppL10n.t("settings.email"),
+                                    value: user.email ?? AppL10n.t("settings.no_email"),
                                     showChevron: false
                                 ) {}
                                 
@@ -214,7 +217,7 @@ struct SettingsView: View {
                                     SettingsRowWithIcon(
                                         icon: "calendar",
                                         iconColor: .white.opacity(0.6),
-                                        title: "Member Since",
+                                        title: AppL10n.t("settings.member_since"),
                                         value: formatJoinDate(createdAt),
                                         showChevron: false
                                     ) {}
@@ -230,7 +233,7 @@ struct SettingsView: View {
                                     SettingsRowWithIcon(
                                         icon: "arrow.right.square",
                                         iconColor: .red.opacity(0.8),
-                                        title: "Logout",
+                                        title: AppL10n.t("settings.logout"),
                                         value: nil,
                                         showChevron: false
                                     ) {}
@@ -242,7 +245,7 @@ struct SettingsView: View {
                                     SettingsRowWithIcon(
                                         icon: "person.badge.plus",
                                         iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                        title: "Sign In / Sign Up",
+                                        title: AppL10n.t("settings.sign_in_up"),
                                         value: nil,
                                         showChevron: true
                                     ) {}
@@ -262,6 +265,63 @@ struct SettingsView: View {
                     // Preferences Section
                     SettingsCategorySection(title: AppL10n.t("settings.preferences"), icon: "slider.horizontal.3") {
                         VStack(spacing: 0) {
+                            // Language
+                            Menu {
+                                let languages: [(code: String, name: String)] = [
+                                    ("en", "English"),
+                                    ("de", "Deutsch"),
+                                    ("fr", "Français"),
+                                    ("es", "Español"),
+                                    ("it", "Italiano"),
+                                    ("pl", "Polski"),
+                                    ("tr", "Türkçe"),
+                                    ("ru", "Русский"),
+                                    ("uk", "Українська")
+                                ]
+                                
+                                ForEach(languages, id: \.code) { lang in
+                                    Button(action: {
+                                        AppL10n.setLanguageCode(lang.code)
+                                        currentLanguageCode = lang.code
+                                        languageRefreshTrigger = UUID()
+                                        // Trigger UI refresh
+                                        NotificationCenter.default.post(name: NSNotification.Name("LanguageChanged"), object: nil)
+                                    }) {
+                                        HStack {
+                                            Text(lang.name)
+                                            if currentLanguageCode == lang.code {
+                                                Image(systemName: "checkmark")
+                                            }
+                                        }
+                                    }
+                                }
+                            } label: {
+                                SettingsRowWithIcon(
+                                    icon: "globe",
+                                    iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
+                                    title: AppL10n.t("settings.language"),
+                                    value: {
+                                        let languages: [String: String] = [
+                                            "en": "English",
+                                            "de": "Deutsch",
+                                            "fr": "Français",
+                                            "es": "Español",
+                                            "it": "Italiano",
+                                            "pl": "Polski",
+                                            "tr": "Türkçe",
+                                            "ru": "Русский",
+                                            "uk": "Українська"
+                                        ]
+                                        return languages[currentLanguageCode] ?? currentLanguageCode.uppercased()
+                                    }(),
+                                    showChevron: true
+                                ) {}
+                            }
+                            .id(languageRefreshTrigger)
+                            
+                            PremiumDivider()
+                                .padding(.leading, 76)
+                            
                             // Currency
                             Menu {
                                 ForEach(currencies, id: \.self) { currency in
@@ -280,7 +340,7 @@ struct SettingsView: View {
                                 SettingsRowWithIcon(
                                     icon: "dollarsign.circle.fill",
                                     iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                    title: "Currency",
+                                    title: AppL10n.t("settings.currency"),
                                     value: selectedCurrency,
                                     showChevron: true
                                 ) {}
@@ -307,7 +367,7 @@ struct SettingsView: View {
                                 SettingsRowWithIcon(
                                     icon: "calendar.badge.clock",
                                     iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                    title: "Date Format",
+                                    title: AppL10n.t("settings.date_format"),
                                     value: dateFormats.first(where: { $0.0 == dateFormat })?.1 ?? dateFormat,
                                     showChevron: true
                                 ) {}
@@ -321,7 +381,7 @@ struct SettingsView: View {
                             SettingsRowWithIcon(
                                 icon: "number",
                                 iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                title: "Number Format",
+                                title: AppL10n.t("settings.number_format"),
                                 value: numberFormats.first(where: { $0.0 == numberFormat })?.1 ?? numberFormat,
                                 showChevron: false
                             ) {}
@@ -337,7 +397,7 @@ struct SettingsView: View {
                                 SettingsRowWithIcon(
                                     icon: "server.rack",
                                     iconColor: Color.orange.opacity(0.8),
-                                    title: "Backend URL",
+                                    title: AppL10n.t("settings.backend_url"),
                                     value: backendURL,
                                     showChevron: true
                                 ) {}
@@ -357,7 +417,7 @@ struct SettingsView: View {
                                 SettingsRowWithIcon(
                                     icon: "sparkles",
                                     iconColor: Color.orange.opacity(0.8),
-                                    title: "Test Onboarding",
+                                    title: AppL10n.t("settings.test_onboarding"),
                                     value: nil,
                                     showChevron: true
                                 ) {}
@@ -365,12 +425,12 @@ struct SettingsView: View {
                             .buttonStyle(PremiumSettingsButtonStyle())
                             
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("For iPhone: Use your Mac's IP address")
+                                Text(AppL10n.t("settings.backend_url_hint"))
                                     .font(.system(size: 11, weight: .regular, design: .rounded))
                                     .foregroundColor(.white.opacity(0.4))
                                     .padding(.horizontal, 20)
                                     .padding(.top, 8)
-                                Text("Example: http://192.168.1.100:3001")
+                                Text(AppL10n.t("settings.backend_url_example"))
                                     .font(.system(size: 11, weight: .regular, design: .rounded))
                                     .foregroundColor(.white.opacity(0.4))
                                     .padding(.horizontal, 20)
@@ -388,8 +448,8 @@ struct SettingsView: View {
                                 SettingsRowWithIcon(
                                     icon: "crown.fill",
                                     iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                    title: "Manage Subscription",
-                                    value: subscriptionPlan?.capitalized ?? "Free",
+                                    title: AppL10n.t("settings.manage_subscription"),
+                                    value: subscriptionPlan?.capitalized ?? AppL10n.t("plans.free"),
                                     showChevron: true
                                 ) {}
                             }
@@ -404,7 +464,7 @@ struct SettingsView: View {
                                 SettingsRowWithIcon(
                                     icon: "envelope.badge",
                                     iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                    title: "Email Notifications",
+                                    title: AppL10n.t("settings.email_notifications"),
                                     value: nil,
                                     showChevron: false
                                 ) {
@@ -424,7 +484,7 @@ struct SettingsView: View {
                                 SettingsRowWithIcon(
                                     icon: "bell.badge.fill",
                                     iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                    title: "Push Notifications",
+                                    title: AppL10n.t("settings.push_notifications"),
                                     value: nil,
                                     showChevron: false
                                 ) {
@@ -451,7 +511,7 @@ struct SettingsView: View {
                                 SettingsRowWithIcon(
                                     icon: "bell.badge",
                                     iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                    title: "Test Notification",
+                                    title: AppL10n.t("settings.test_notification"),
                                     value: nil,
                                     showChevron: true
                                 ) {}
@@ -468,7 +528,7 @@ struct SettingsView: View {
                                 SettingsRowWithIcon(
                                     icon: "eye.fill",
                                     iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                    title: "View All Notifications",
+                                    title: AppL10n.t("settings.view_all_notifications"),
                                     value: nil,
                                     showChevron: true
                                 ) {}
@@ -486,7 +546,7 @@ struct SettingsView: View {
                                 SettingsRowWithIcon(
                                     icon: "arrow.down.circle.fill",
                                     iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                    title: "Export Data",
+                                    title: AppL10n.t("settings.export_data"),
                                     value: nil,
                                     showChevron: true
                                 ) {}
@@ -501,7 +561,7 @@ struct SettingsView: View {
                                 SettingsRowWithIcon(
                                     icon: "arrow.up.circle.fill",
                                     iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                    title: "Import Data",
+                                    title: AppL10n.t("settings.import_data"),
                                     value: nil,
                                     showChevron: true
                                 ) {}
@@ -517,7 +577,7 @@ struct SettingsView: View {
                                 SettingsRowWithIcon(
                                     icon: "trash.fill",
                                     iconColor: .red.opacity(0.8),
-                                    title: "Clear All Data",
+                                    title: AppL10n.t("settings.clear_all_data"),
                                     value: nil,
                                     showChevron: true
                                 ) {}
@@ -535,7 +595,7 @@ struct SettingsView: View {
                                 SettingsRowWithIcon(
                                     icon: "doc.text.fill",
                                     iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                    title: "Privacy Policy",
+                                    title: AppL10n.t("settings.privacy_policy"),
                                     value: nil,
                                     showChevron: true
                                 ) {}
@@ -549,7 +609,7 @@ struct SettingsView: View {
                                 SettingsRowWithIcon(
                                     icon: "safari.fill",
                                     iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                    title: "Visit Website",
+                                    title: AppL10n.t("settings.visit_website"),
                                     value: nil,
                                     showChevron: true
                                 ) {}
@@ -564,7 +624,7 @@ struct SettingsView: View {
                             SettingsRowWithIcon(
                                 icon: "info.circle",
                                 iconColor: .white.opacity(0.6),
-                                title: "Version",
+                                title: AppL10n.t("settings.version"),
                                 value: "1.0.0",
                                 showChevron: false
                             ) {}
@@ -573,7 +633,7 @@ struct SettingsView: View {
                                 .padding(.leading, 76)
                             
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("ANITA - Your Personal Finance AI Assistant")
+                                Text(AppL10n.t("settings.about_description"))
                                     .font(.system(size: 13, weight: .regular, design: .rounded))
                                     .foregroundColor(.white.opacity(0.5))
                                     .padding(.horizontal, 20)
@@ -677,45 +737,53 @@ struct SettingsView: View {
                 print("Import error: \(error.localizedDescription)")
             }
         }
-        .alert("Clear All Data", isPresented: $showClearDataConfirm) {
-            Button("Cancel", role: .cancel) {}
-            Button("Clear", role: .destructive) {
+        .alert(AppL10n.t("settings.clear_data_title"), isPresented: $showClearDataConfirm) {
+            Button(AppL10n.t("common.cancel"), role: .cancel) {}
+            Button(AppL10n.t("settings.clear"), role: .destructive) {
                 clearAllData()
             }
         } message: {
-            Text("Are you sure you want to clear all data? This action cannot be undone.")
+            Text(AppL10n.t("settings.clear_data_message"))
         }
-        .alert("Backend URL", isPresented: $showBackendURLAlert) {
-            TextField("Backend URL", text: $backendURL)
+        .alert(AppL10n.t("settings.backend_url_title"), isPresented: $showBackendURLAlert) {
+            TextField(AppL10n.t("settings.backend_url_title"), text: $backendURL)
                 .autocapitalization(.none)
                 .autocorrectionDisabled()
-            Button("Cancel", role: .cancel) {
+            Button(AppL10n.t("common.cancel"), role: .cancel) {
                 // Reset to saved value
                 backendURL = UserDefaults.standard.string(forKey: "backendURL") ?? Config.backendURL
             }
-            Button("Save") {
+            Button(AppL10n.t("settings.save")) {
                 saveBackendURL()
             }
         } message: {
-            Text("Enter your backend server URL.\n\nFor iPhone: Use your Mac's IP address (e.g., http://192.168.178.45:3001)\nFor Simulator: Use http://localhost:3001")
+            Text(AppL10n.t("settings.backend_url_message"))
         }
-        .alert("Test Onboarding", isPresented: $showTestOnboardingConfirm) {
-            Button("Cancel", role: .cancel) {}
-            Button("Start") {
+        .alert(AppL10n.t("settings.test_onboarding_title"), isPresented: $showTestOnboardingConfirm) {
+            Button(AppL10n.t("common.cancel"), role: .cancel) {}
+            Button(AppL10n.t("settings.start")) {
                 userManager.resetOnboardingForTesting()
             }
         } message: {
-            Text("This will reset onboarding so you can go through it again.")
+            Text(AppL10n.t("settings.test_onboarding_message"))
         }
-        .alert("Sign in required", isPresented: $showTestOnboardingRequiresAuth) {
-            Button("OK", role: .cancel) {}
+        .alert(AppL10n.t("settings.sign_in_required"), isPresented: $showTestOnboardingRequiresAuth) {
+            Button(AppL10n.t("plans.ok"), role: .cancel) {}
         } message: {
-            Text("Please sign in first to test onboarding.")
+            Text(AppL10n.t("settings.sign_in_required_message"))
         }
-        .alert("Export Successful", isPresented: $showExportSuccess) {
-            Button("OK", role: .cancel) {}
+        .alert(AppL10n.t("settings.export_successful"), isPresented: $showExportSuccess) {
+            Button(AppL10n.t("plans.ok"), role: .cancel) {}
         } message: {
-            Text("Your data has been exported successfully.")
+            Text(AppL10n.t("settings.export_success_message"))
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LanguageChanged"))) { _ in
+            // Refresh the view when language changes
+            currentLanguageCode = AppL10n.currentLanguageCode()
+            languageRefreshTrigger = UUID()
+        }
+        .onAppear {
+            currentLanguageCode = AppL10n.currentLanguageCode()
         }
     }
     
@@ -735,10 +803,11 @@ struct SettingsView: View {
         let formatter = ISO8601DateFormatter()
         if let date = formatter.date(from: dateString) {
             let displayFormatter = DateFormatter()
+            displayFormatter.locale = Locale(identifier: AppL10n.localeIdentifier(for: AppL10n.currentLanguageCode()))
             displayFormatter.dateFormat = "MMMM yyyy"
             return displayFormatter.string(from: date)
         }
-        return "Recently"
+        return AppL10n.t("settings.recently")
     }
     
     func loadSubscription() {
@@ -1264,13 +1333,13 @@ struct PrivacyPolicyView: View {
                 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
-                        Text("Privacy Policy")
+                        Text(AppL10n.t("settings.privacy_policy"))
                             .font(.title)
                             .fontWeight(.bold)
                             .foregroundColor(.white)
                         
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Data Collection")
+                            Text(AppL10n.t("privacy.data_collection"))
                                 .font(.headline)
                                 .foregroundColor(.white)
                             Text(policy.dataCollection)
@@ -1279,7 +1348,7 @@ struct PrivacyPolicyView: View {
                         }
                         
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Data Usage")
+                            Text(AppL10n.t("privacy.data_usage"))
                                 .font(.headline)
                                 .foregroundColor(.white)
                             Text(policy.dataUsage)
@@ -1288,7 +1357,7 @@ struct PrivacyPolicyView: View {
                         }
                         
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Data Sharing")
+                            Text(AppL10n.t("privacy.data_sharing"))
                                 .font(.headline)
                                 .foregroundColor(.white)
                             Text(policy.dataSharing)
@@ -1297,26 +1366,26 @@ struct PrivacyPolicyView: View {
                         }
                         
                         if let url = URL(string: policy.privacyPolicy) {
-                            Link("Full Privacy Policy", destination: url)
+                            Link(AppL10n.t("privacy.full_policy"), destination: url)
                                 .font(.headline)
                                 .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
                         }
                         
-                        Text("Contact: \(policy.contact)")
+                        Text("\(AppL10n.t("privacy.contact")): \(policy.contact)")
                             .font(.caption)
                             .foregroundColor(.gray)
                     }
                     .padding()
                 }
             }
-            .navigationTitle("Privacy Policy")
+            .navigationTitle(AppL10n.t("settings.privacy_policy"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Color.black, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button(AppL10n.t("settings.done")) {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -1367,7 +1436,7 @@ struct AuthSheet: View {
                             onSignIn()
                         }
                     }) {
-                        Text(isSignUp ? "Sign Up" : "Sign In")
+                        Text(isSignUp ? AppL10n.t("signup.signup") : AppL10n.t("welcome.sign_in"))
                             .font(.headline)
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
@@ -1381,7 +1450,7 @@ struct AuthSheet: View {
                         Rectangle()
                             .fill(Color.gray.opacity(0.3))
                             .frame(height: 1)
-                        Text("or")
+                        Text(AppL10n.t("auth.or").lowercased())
                             .font(.caption)
                             .foregroundColor(.gray)
                             .padding(.horizontal, 8)
@@ -1423,21 +1492,21 @@ struct AuthSheet: View {
                         isSignUp.toggle()
                         error = nil
                     }) {
-                        Text(isSignUp ? "Already have an account? Sign In" : "Don't have an account? Sign Up")
+                        Text(isSignUp ? AppL10n.t("auth.already_have_account") : AppL10n.t("auth.dont_have_account"))
                             .font(.subheadline)
                             .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
                     }
                 }
                 .padding()
             }
-            .navigationTitle(isSignUp ? "Sign Up" : "Sign In")
+            .navigationTitle(isSignUp ? AppL10n.t("signup.signup") : AppL10n.t("login.login"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Color.black, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Cancel") {
+                    Button(AppL10n.t("common.cancel")) {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))

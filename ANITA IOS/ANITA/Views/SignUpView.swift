@@ -120,7 +120,7 @@ struct SignUpView: View {
                         HStack(spacing: 12) {
                             StepIndicatorItem(
                                 number: "1",
-                                label: "Account Details",
+                                label: AppL10n.t("settings.account_details"),
                                 isActive: currentStep == .credentials,
                                 isCompleted: currentStep == .preferences
                             )
@@ -146,7 +146,7 @@ struct SignUpView: View {
                             
                             StepIndicatorItem(
                                 number: "2",
-                                label: "Preferences",
+                                label: AppL10n.t("settings.preferences_label"),
                                 isActive: currentStep == .preferences,
                                 isCompleted: false
                             )
@@ -357,7 +357,7 @@ struct SignUpView: View {
                         }
                     }
                 } else {
-                    viewModel.errorMessage = "Passwords do not match"
+                    viewModel.errorMessage = AppL10n.t("auth.passwords_not_match")
                 }
             }) {
                 HStack {
@@ -619,7 +619,7 @@ struct AppleSignInButton: UIViewRepresentable {
         
         // Text label
         let label = UILabel()
-        label.text = "Sign in with Apple"
+        label.text = AppL10n.t("auth.apple_sign_in")
         label.font = UIFont.systemFont(ofSize: 17, weight: .medium)
         label.textColor = .white
         

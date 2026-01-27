@@ -155,6 +155,7 @@ extension View {
 struct FinanceView: View {
     @StateObject private var viewModel = FinanceViewModel()
     @StateObject private var categoryViewModel = CategoryAnalyticsViewModel()
+    @State private var languageRefreshTrigger = UUID()
     @State private var isSpendingLimitsExpanded = false
     @State private var isSavingGoalsExpanded = false
     @State private var isCategoryAnalysisExpanded = false
@@ -219,6 +220,7 @@ struct FinanceView: View {
     
     func monthYearString(from date: Date) -> String {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: AppL10n.localeIdentifier(for: AppL10n.currentLanguageCode()))
         formatter.dateFormat = "MMMM yyyy"
         return formatter.string(from: date)
     }
@@ -395,7 +397,7 @@ struct FinanceView: View {
                         .font(.system(size: 20, weight: .bold, design: .rounded))
                         .foregroundColor(.white.opacity(0.95))
                     
-                    Text("Tap to change")
+                    Text(AppL10n.t("finance.tap_to_change"))
                         .font(.system(size: 11, weight: .regular, design: .rounded))
                         .foregroundColor(.white.opacity(0.4))
                 }
@@ -476,21 +478,21 @@ struct FinanceView: View {
         // Determine health score status based on actual score (not animated)
         let statusText: String
         if healthScore.score >= 80 {
-            statusText = "Excellent"
+            statusText = AppL10n.t("finance.score_excellent")
         } else if healthScore.score >= 60 {
-            statusText = "Good"
+            statusText = AppL10n.t("finance.score_good")
         } else if healthScore.score >= 40 {
-            statusText = "Fair"
+            statusText = AppL10n.t("finance.score_fair")
         } else {
-            statusText = "Needs Work"
+            statusText = AppL10n.t("finance.score_needs_work")
         }
         
         return VStack(spacing: 0) {
             // Health Score Section
             VStack(spacing: 12) {
-                Text("HEALTH SCORE")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundColor(.white.opacity(0.4))
+                Text(AppL10n.t("finance.health_score"))
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundColor(.white)
                     .tracking(0.8)
                 
                 // Semicircle progress with score (premium iOS speedometer style)
@@ -656,9 +658,9 @@ struct FinanceView: View {
                 HStack(spacing: 0) {
                     // Income
                     VStack(spacing: 10) {
-                        Text("INCOME")
-                            .font(.system(size: 10, weight: .semibold, design: .rounded))
-                            .foregroundColor(.white.opacity(0.4))
+                        Text(AppL10n.t("finance.income"))
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white)
                             .tracking(0.8)
                         
                         Text(formatCurrency(viewModel.monthlyIncome))
@@ -679,9 +681,9 @@ struct FinanceView: View {
                     
                     // Expenses
                     VStack(spacing: 10) {
-                        Text("EXPENSES")
-                            .font(.system(size: 10, weight: .semibold, design: .rounded))
-                            .foregroundColor(.white.opacity(0.4))
+                        Text(AppL10n.t("finance.expenses"))
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white)
                             .tracking(0.8)
                         
                         Text(formatCurrency(viewModel.monthlyExpenses))
@@ -705,9 +707,9 @@ struct FinanceView: View {
                 HStack(spacing: 0) {
                     // Balance
                     VStack(spacing: 10) {
-                        Text("BALANCE")
-                            .font(.system(size: 10, weight: .semibold, design: .rounded))
-                            .foregroundColor(.white.opacity(0.4))
+                        Text(AppL10n.t("finance.balance"))
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white)
                             .tracking(0.8)
                         
                         Text(formatCurrency(monthlyBalance))
@@ -728,9 +730,9 @@ struct FinanceView: View {
                     
                     // Total Balance
                     VStack(spacing: 10) {
-                        Text("TOTAL BALANCE")
-                            .font(.system(size: 10, weight: .semibold, design: .rounded))
-                            .foregroundColor(.white.opacity(0.4))
+                        Text(AppL10n.t("finance.total_balance"))
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white)
                             .tracking(0.8)
                         
                         Text(formatCurrency(viewModel.cumulativeTotalBalance))
@@ -806,7 +808,7 @@ struct FinanceView: View {
                             )
                     }
                     
-                    Text("Insights")
+                    Text(AppL10n.t("finance.insights"))
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
                         .foregroundColor(.white.opacity(0.95))
                     
@@ -849,12 +851,12 @@ struct FinanceView: View {
                         .padding(.horizontal, 20)
                     } else {
                         VStack(spacing: 8) {
-                            Text("No chart data available")
+                            Text(AppL10n.t("finance.no_chart_data"))
                                 .font(.system(size: 15, weight: .medium, design: .rounded))
                                 .foregroundColor(.white.opacity(0.55))
                             
                             if viewModel.isLoading || viewModel.isHistoricalDataLoading {
-                                Text("Updating…")
+                                Text(AppL10n.t("finance.updating"))
                                     .font(.system(size: 13, weight: .regular, design: .rounded))
                                     .foregroundColor(.white.opacity(0.4))
                             }
@@ -929,7 +931,7 @@ struct FinanceView: View {
                             )
                     }
                     
-                    Text("Category Analysis")
+                    Text(AppL10n.t("finance.category_analysis"))
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
                         .foregroundColor(.white.opacity(0.95))
                     
@@ -978,7 +980,7 @@ struct FinanceView: View {
                                                 .lineLimit(1)
                                                 .minimumScaleFactor(0.5)
                                             
-                                            Text(category.name) // Display with proper case, not all caps
+                                            Text(CategoryDefinitions.shared.getTranslatedCategoryName(category.name)) // Display with proper case, not all caps
                                                 .font(.system(size: min(12, innerCircleDiameter * 0.1), weight: .medium, design: .rounded))
                                                 .foregroundColor(.white.opacity(0.6))
                                                 .tracking(0.5)
@@ -986,14 +988,14 @@ struct FinanceView: View {
                                                 .minimumScaleFactor(0.6)
                                         } else if let largestCategory = data.categories.first {
                                             // Show largest category by default (first is sorted by percentage descending)
-                                            Text(String(format: "%.1f%%", largestCategory.percentage))
+                                            Text("\(data.categories.count)")
                                                 .font(.system(size: min(42, innerCircleDiameter * 0.35), weight: .bold, design: .rounded))
                                                 .foregroundColor(.white)
                                                 .digit3D(baseColor: .white)
                                                 .lineLimit(1)
                                                 .minimumScaleFactor(0.5)
                                             
-                                            Text(largestCategory.name)
+                                            Text(data.categories.count == 1 ? "category" : "categories")
                                                 .font(.system(size: min(12, innerCircleDiameter * 0.1), weight: .medium, design: .rounded))
                                                 .foregroundColor(.white.opacity(0.6))
                                                 .tracking(0.5)
@@ -1007,7 +1009,7 @@ struct FinanceView: View {
                                                 .lineLimit(1)
                                                 .minimumScaleFactor(0.5)
                                             
-                                            Text("CATEGORIES")
+                                            Text(AppL10n.t("finance.categories"))
                                                 .font(.system(size: min(12, innerCircleDiameter * 0.1), weight: .medium, design: .rounded))
                                                 .foregroundColor(.white.opacity(0.6))
                                                 .tracking(0.8)
@@ -1064,7 +1066,7 @@ struct FinanceView: View {
                         .padding(.bottom, 24)
                     } else if categoryViewModel.isLoading {
                         VStack(spacing: 8) {
-                            Text("Loading…")
+                            Text(AppL10n.t("finance.loading"))
                                 .font(.system(size: 15, weight: .medium, design: .rounded))
                                 .foregroundColor(.white.opacity(0.5))
                         }
@@ -1072,7 +1074,7 @@ struct FinanceView: View {
                         .padding(.vertical, 36)
                     } else {
                         VStack(spacing: 8) {
-                            Text("No category data available")
+                            Text(AppL10n.t("finance.no_category_data"))
                                 .font(.system(size: 15, weight: .medium, design: .rounded))
                                 .foregroundColor(.white.opacity(0.5))
                         }
@@ -1165,7 +1167,7 @@ struct FinanceView: View {
                             )
                     }
                     
-                    Text("Spending Limits")
+                    Text(AppL10n.t("finance.spending_limits"))
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
                         .foregroundColor(.white.opacity(0.95))
                     
@@ -1187,7 +1189,7 @@ struct FinanceView: View {
             if isSpendingLimitsExpanded {
                 if viewModel.goals.isEmpty {
                     VStack(spacing: 8) {
-                        Text("No spending limits set")
+                        Text(AppL10n.t("finance.no_spending_limits"))
                             .font(.system(size: 15, weight: .medium, design: .rounded))
                             .foregroundColor(.white.opacity(0.5))
                     }
@@ -1270,7 +1272,7 @@ struct FinanceView: View {
                                     
                                     // Spending limit details (matching GoalRow)
                                     VStack(alignment: .leading, spacing: 5) {
-                                        Text("Add Spending Limit")
+                                        Text(AppL10n.t("finance.add_spending_limit"))
                                             .font(.system(size: 16, weight: .medium, design: .rounded))
                                             .foregroundColor(.white.opacity(0.95))
                                     }
@@ -1383,7 +1385,7 @@ struct FinanceView: View {
                             )
                     }
                     
-                    Text("Saving Goals")
+                    Text(AppL10n.t("finance.saving_goals"))
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
                         .foregroundColor(.white.opacity(0.95))
                     
@@ -1405,7 +1407,7 @@ struct FinanceView: View {
             if isSavingGoalsExpanded {
                 if viewModel.targets.isEmpty {
                     VStack(spacing: 8) {
-                        Text("No saving goals set")
+                        Text(AppL10n.t("finance.no_saving_goals"))
                             .font(.system(size: 15, weight: .medium, design: .rounded))
                             .foregroundColor(.white.opacity(0.5))
                     }
@@ -1488,7 +1490,7 @@ struct FinanceView: View {
                                     
                                     // Saving goal details (matching TargetRow)
                                     VStack(alignment: .leading, spacing: 5) {
-                                        Text("Add Saving Goal")
+                                        Text(AppL10n.t("finance.add_saving_goal"))
                                             .font(.system(size: 16, weight: .medium, design: .rounded))
                                             .foregroundColor(.white.opacity(0.95))
                                     }
@@ -1602,7 +1604,7 @@ struct FinanceView: View {
                             )
                     }
                     
-                    Text("Assets")
+                    Text(AppL10n.t("finance.assets"))
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
                         .foregroundColor(.white.opacity(0.95))
                     
@@ -1625,7 +1627,7 @@ struct FinanceView: View {
                 // Total Assets Summary (shown when expanded)
                 if !comprehensiveAssets.isEmpty {
                     HStack {
-                        Text("TOTAL ASSETS")
+                        Text(AppL10n.t("finance.total_assets"))
                             .font(.system(size: 10, weight: .semibold, design: .rounded))
                             .foregroundColor(.white.opacity(0.4))
                             .tracking(0.8)
@@ -1665,11 +1667,11 @@ struct FinanceView: View {
                                     )
                                 )
                             
-                            Text("No assets tracked")
+                            Text(AppL10n.t("finance.no_assets"))
                                 .font(.system(size: 15, weight: .medium, design: .rounded))
                                 .foregroundColor(.white.opacity(0.5))
                             
-                            Text("Tap to add your first asset")
+                            Text(AppL10n.t("finance.tap_to_add_asset"))
                                 .font(.system(size: 13, weight: .regular, design: .rounded))
                                 .foregroundColor(.white.opacity(0.4))
                         }
@@ -1754,7 +1756,7 @@ struct FinanceView: View {
                                     
                                     // Asset details (matching AssetRow)
                                     VStack(alignment: .leading, spacing: 5) {
-                                        Text("Add Asset")
+                                        Text(AppL10n.t("finance.add_asset"))
                                             .font(.system(size: 16, weight: .medium, design: .rounded))
                                             .foregroundColor(.white.opacity(0.95))
                                     }
@@ -1867,7 +1869,7 @@ struct FinanceView: View {
                             )
                     }
                     
-                    Text("Anita Insights")
+                    Text(AppL10n.t("finance.anita_insights"))
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
                         .foregroundColor(.white.opacity(0.95))
                     
@@ -1891,7 +1893,7 @@ struct FinanceView: View {
                     // AI Recommendations Section
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            Text("AI Recommendations")
+                            Text(AppL10n.t("finance.ai_recommendations"))
                                 .font(.system(size: 12, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white.opacity(0.6))
                                 .tracking(0.8)
@@ -1909,7 +1911,7 @@ struct FinanceView: View {
                                 Image(systemName: "lightbulb")
                                     .font(.system(size: 32, weight: .light))
                                     .foregroundColor(.white.opacity(0.3))
-                                Text("No recommendations yet")
+                                Text(AppL10n.t("finance.no_recommendations"))
                                     .font(.system(size: 14, weight: .medium, design: .rounded))
                                     .foregroundColor(.white.opacity(0.5))
                             }
@@ -1947,7 +1949,7 @@ struct FinanceView: View {
                     // Tracked Categories Section
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            Text("Tracked Categories")
+                            Text(AppL10n.t("finance.tracked_categories"))
                                 .font(.system(size: 12, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white.opacity(0.6))
                                 .tracking(0.8)
@@ -1964,7 +1966,7 @@ struct FinanceView: View {
                                 Image(systemName: "tag")
                                     .font(.system(size: 32, weight: .light))
                                     .foregroundColor(.white.opacity(0.3))
-                                Text("No tracked categories yet")
+                                Text(AppL10n.t("finance.no_tracked_categories"))
                                     .font(.system(size: 14, weight: .medium, design: .rounded))
                                     .foregroundColor(.white.opacity(0.5))
                             }
@@ -2028,11 +2030,14 @@ struct FinanceView: View {
         if currentMonthIncome > 0 {
             let savingsRate = ((currentMonthIncome - currentMonthExpenses) / currentMonthIncome) * 100
             if savingsRate < 20 && savingsRate >= 0 {
+                let savingsRateStr = String(format: "%.1f", savingsRate)
+                let descriptionTemplate = AppL10n.t("ai_recommendation.savings_rate_description")
+                let description = descriptionTemplate.replacingOccurrences(of: "%@", with: savingsRateStr)
                 recommendations.append(AIRecommendation(
-                    title: "Increase Savings Rate",
-                    description: "Your current savings rate is \(String(format: "%.1f", savingsRate))%. Consider saving at least 20% of your income.",
+                    title: AppL10n.t("ai_recommendation.increase_savings_rate"),
+                    description: description,
                     priority: savingsRate < 10 ? "high" : "medium",
-                    category: "Savings"
+                    category: AppL10n.t("category.savings")
                 ))
             }
         }
@@ -2042,9 +2047,18 @@ struct FinanceView: View {
         for (category, transactions) in categorySpending {
             let total = transactions.reduce(0.0) { $0 + $1.amount }
             if total > currentMonthIncome * 0.3 && category != "Uncategorized" {
+                let translatedCategory = CategoryDefinitions.shared.getTranslatedCategoryName(category)
+                let titleTemplate = AppL10n.t("ai_recommendation.review_category_spending")
+                let title = titleTemplate.replacingOccurrences(of: "%@", with: translatedCategory)
+                let descriptionTemplate = AppL10n.t("ai_recommendation.category_spending_description")
+                var description = descriptionTemplate.replacingOccurrences(of: "%@", with: formatCurrency(total), options: [], range: nil)
+                // Replace second occurrence
+                if let range = description.range(of: "%@") {
+                    description.replaceSubrange(range, with: translatedCategory)
+                }
                 recommendations.append(AIRecommendation(
-                    title: "Review \(category) Spending",
-                    description: "You're spending \(formatCurrency(total)) on \(category) this month. Consider setting a budget limit.",
+                    title: title,
+                    description: description,
                     priority: "medium",
                     category: category
                 ))
@@ -2062,11 +2076,18 @@ struct FinanceView: View {
                     if let targetDate = formatter.date(from: targetDateString) ?? ISO8601DateFormatter().date(from: targetDateString) {
                         let daysRemaining = Calendar.current.dateComponents([.day], from: Date(), to: targetDate).day ?? 0
                         if daysRemaining > 0 && daysRemaining < 90 {
+                            let progressStr = String(format: "%.0f", progress)
+                            let titleTemplate = AppL10n.t("ai_recommendation.accelerate_goal")
+                            let title = titleTemplate.replacingOccurrences(of: "%@", with: goal.title)
+                            let descriptionTemplate = AppL10n.t("ai_recommendation.goal_progress_description")
+                            var description = descriptionTemplate.replacingOccurrences(of: "%@", with: progressStr)
+                            // Replace %d with daysRemaining
+                            description = description.replacingOccurrences(of: "%d", with: String(daysRemaining))
                             recommendations.append(AIRecommendation(
-                                title: "Accelerate \(goal.title)",
-                                description: "You're \(String(format: "%.0f", progress))% towards your goal with \(daysRemaining) days remaining. Consider increasing monthly contributions.",
+                                title: title,
+                                description: description,
                                 priority: "medium",
-                                category: "Goals"
+                                category: AppL10n.t("finance.saving_goals")
                             ))
                         }
                     }
@@ -2170,7 +2191,7 @@ struct FinanceView: View {
                             )
                     }
                     
-                    Text("Transactions")
+                    Text(AppL10n.t("finance.transactions"))
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
                         .foregroundColor(.white.opacity(0.95))
                     
@@ -2214,11 +2235,11 @@ struct FinanceView: View {
                                 )
                             )
                         
-                        Text("No transactions yet")
+                        Text(AppL10n.t("finance.no_transactions"))
                             .font(.system(size: 15, weight: .medium, design: .rounded))
                             .foregroundColor(.white.opacity(0.5))
                         
-                        Text("Add your first transaction to start tracking")
+                        Text(AppL10n.t("finance.add_first_transaction"))
                             .font(.system(size: 13, weight: .regular, design: .rounded))
                             .foregroundColor(.white.opacity(0.4))
                             .multilineTextAlignment(.center)
@@ -2231,7 +2252,7 @@ struct FinanceView: View {
                             HStack(spacing: 8) {
                                 Image(systemName: "plus.circle.fill")
                                     .font(.system(size: 16, weight: .semibold))
-                                Text("Add Transaction")
+                                Text(AppL10n.t("finance.add_transaction"))
                                     .font(.system(size: 15, weight: .semibold, design: .rounded))
                             }
                             .foregroundColor(.white)
@@ -2288,7 +2309,7 @@ struct FinanceView: View {
                             // Show filter indicator if category is selected
                             if selectedCategory != nil {
                                 HStack {
-                                    Text("Filtered: \(selectedCategory!)")
+                                    Text("\(AppL10n.t("finance.filtered")): \(selectedCategory!)")
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundColor(.white.opacity(0.6))
                                     
@@ -2310,11 +2331,11 @@ struct FinanceView: View {
                             
                             if filteredTransactions.isEmpty && selectedCategory != nil {
                                 VStack(spacing: 12) {
-                                    Text("No transactions found")
+                                    Text(AppL10n.t("finance.no_transactions_found"))
                                         .font(.system(size: 16, weight: .medium))
                                         .foregroundColor(.white.opacity(0.6))
                                     
-                                    Text("No transactions in \(selectedCategory!) category")
+                                    Text("\(AppL10n.t("finance.no_transactions_category")) \(selectedCategory!)")
                                         .font(.system(size: 14, weight: .regular))
                                         .foregroundColor(.white.opacity(0.4))
                                 }
@@ -2482,6 +2503,9 @@ struct FinanceView: View {
             viewModel.loadData()
             // Health score will update automatically when isLoading changes to false
             // No need for manual trigger here
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LanguageChanged"))) { _ in
+            languageRefreshTrigger = UUID()
         }
         .refreshable {
             Task { @MainActor in
@@ -2827,7 +2851,7 @@ struct AddTransactionRow: View {
                 
                 // Transaction details (matching TransactionRow layout exactly)
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("Add Transaction")
+                    Text(AppL10n.t("finance.add_transaction"))
                         .font(.system(size: 16, weight: .medium, design: .rounded))
                         .foregroundColor(.white.opacity(0.95))
                         .lineLimit(1)
@@ -2942,7 +2966,7 @@ struct TargetRow: View {
                         .foregroundColor(.white.opacity(0.5))
                         .digit3D(baseColor: .white.opacity(0.5))
                     
-                    Text("of")
+                    Text(AppL10n.t("finance.of"))
                         .font(.system(size: 12, weight: .regular, design: .rounded))
                         .foregroundColor(.white.opacity(0.4))
                     
@@ -3081,7 +3105,7 @@ struct AddMoneyToGoalSheet: View {
                 VStack(spacing: 0) {
                     // Header
                     VStack(spacing: 8) {
-                        Text("Add Amount to Goal")
+                        Text(AppL10n.t("finance.add_amount_to_goal"))
                             .font(.system(size: 24, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                         
@@ -3155,7 +3179,7 @@ struct AddMoneyToGoalSheet: View {
                                 ProgressView()
                                     .tint(.white)
                             } else {
-                                Text("Add")
+                                Text(AppL10n.t("finance.add"))
                                     .font(.system(size: 18, weight: .semibold, design: .rounded))
                                     .foregroundColor(.white)
                             }
@@ -3190,7 +3214,7 @@ struct AddMoneyToGoalSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button(AppL10n.t("settings.done")) {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -3374,7 +3398,7 @@ struct ChangeAmountSheet: View {
                 VStack(spacing: 0) {
                     // Header
                     VStack(spacing: 8) {
-                        Text("Change Amount")
+                        Text(AppL10n.t("finance.change_amount"))
                             .font(.system(size: 24, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                         
@@ -3456,7 +3480,7 @@ struct ChangeAmountSheet: View {
                                 ProgressView()
                                     .tint(.white)
                             } else {
-                                Text("Save")
+                                Text(AppL10n.t("finance.save"))
                                     .font(.system(size: 18, weight: .semibold, design: .rounded))
                                     .foregroundColor(.white)
                             }
@@ -3491,7 +3515,7 @@ struct ChangeAmountSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button(AppL10n.t("settings.done")) {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -3665,7 +3689,7 @@ struct EditGoalSheet: View {
                 VStack(spacing: 0) {
                     // Header
                     VStack(spacing: 8) {
-                        Text("Edit Goal")
+                        Text(AppL10n.t("finance.edit_goal"))
                             .font(.system(size: 24, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                         
@@ -3729,7 +3753,7 @@ struct EditGoalSheet: View {
                                             )
                                     }
                                     
-                                    Text("Add Money")
+                                    Text(AppL10n.t("finance.add_money"))
                                         .font(.system(size: 16, weight: .medium, design: .rounded))
                                         .foregroundColor(.white.opacity(0.95))
                                     
@@ -3797,7 +3821,7 @@ struct EditGoalSheet: View {
                                             )
                                     }
                                     
-                                    Text("Take Money")
+                                    Text(AppL10n.t("finance.take_money"))
                                         .font(.system(size: 16, weight: .medium, design: .rounded))
                                         .foregroundColor(.white.opacity(0.95))
                                     
@@ -3866,7 +3890,7 @@ struct EditGoalSheet: View {
                                             )
                                     }
                                     
-                                    Text("Change Amount")
+                                    Text(AppL10n.t("finance.change_amount"))
                                         .font(.system(size: 16, weight: .medium, design: .rounded))
                                         .foregroundColor(.white.opacity(0.95))
                                     
@@ -3935,7 +3959,7 @@ struct EditGoalSheet: View {
                                         )
                                 }
                                 
-                                Text("Remove")
+                                Text(AppL10n.t("finance.remove"))
                                     .font(.system(size: 16, weight: .medium, design: .rounded))
                                     .foregroundColor(.white.opacity(0.95))
                                 
@@ -3964,7 +3988,7 @@ struct EditGoalSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button(AppL10n.t("settings.done")) {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -4004,7 +4028,7 @@ struct EditAssetSheet: View {
                 VStack(spacing: 0) {
                     // Header
                     VStack(spacing: 8) {
-                        Text("Edit Asset")
+                        Text(AppL10n.t("finance.edit_asset"))
                             .font(.system(size: 24, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                         
@@ -4068,7 +4092,7 @@ struct EditAssetSheet: View {
                                 }
                                 
                                 // Text
-                                Text("Add Value")
+                                Text(AppL10n.t("finance.add_value"))
                                     .font(.system(size: 16, weight: .medium, design: .rounded))
                                     .foregroundColor(.white.opacity(0.95))
                                 
@@ -4139,7 +4163,7 @@ struct EditAssetSheet: View {
                                 }
                                 
                                 // Text
-                                Text("Reduce Value")
+                                Text(AppL10n.t("finance.reduce_value"))
                                     .font(.system(size: 16, weight: .medium, design: .rounded))
                                     .foregroundColor(.white.opacity(0.95))
                                 
@@ -4210,7 +4234,7 @@ struct EditAssetSheet: View {
                                 }
                                 
                                 // Text
-                                Text("Remove Asset")
+                                Text(AppL10n.t("finance.remove_asset"))
                                     .font(.system(size: 16, weight: .medium, design: .rounded))
                                     .foregroundColor(.white.opacity(0.95))
                                 
@@ -4240,7 +4264,7 @@ struct EditAssetSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button(AppL10n.t("settings.done")) {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -4281,7 +4305,7 @@ struct TakeMoneyFromGoalSheet: View {
                 VStack(spacing: 0) {
                     // Header
                     VStack(spacing: 8) {
-                        Text("Take Amount from Goal")
+                        Text(AppL10n.t("finance.take_amount_from_goal"))
                             .font(.system(size: 24, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                         
@@ -4351,7 +4375,7 @@ struct TakeMoneyFromGoalSheet: View {
                                 ProgressView()
                                     .tint(.white)
                             } else {
-                                Text("Take")
+                                Text(AppL10n.t("finance.take"))
                                     .font(.system(size: 18, weight: .semibold, design: .rounded))
                                     .foregroundColor(.white)
                             }
@@ -4386,7 +4410,7 @@ struct TakeMoneyFromGoalSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button(AppL10n.t("settings.done")) {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -4544,7 +4568,7 @@ struct RemoveGoalSheet: View {
                 VStack(spacing: 0) {
                     // Header
                     VStack(spacing: 8) {
-                        Text("Remove Goal")
+                        Text(AppL10n.t("finance.remove_goal"))
                             .font(.system(size: 24, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                         
@@ -4561,12 +4585,12 @@ struct RemoveGoalSheet: View {
                             .font(.system(size: 48, weight: .medium))
                             .foregroundColor(.red.opacity(0.8))
                         
-                        Text("Are you sure you want to remove this goal?")
+                        Text(AppL10n.t("finance.remove_goal_confirm"))
                             .font(.system(size: 18, weight: .semibold, design: .rounded))
                             .foregroundColor(.white)
                             .multilineTextAlignment(.center)
                         
-                        Text("This action cannot be undone.")
+                        Text(AppL10n.t("finance.remove_goal_warning"))
                             .font(.system(size: 14, weight: .regular, design: .rounded))
                             .foregroundColor(.white.opacity(0.6))
                             .multilineTextAlignment(.center)
@@ -4595,7 +4619,7 @@ struct RemoveGoalSheet: View {
                                     ProgressView()
                                         .tint(.white)
                                 } else {
-                                    Text("Remove Goal")
+                                    Text(AppL10n.t("finance.remove_goal"))
                                         .font(.system(size: 18, weight: .semibold, design: .rounded))
                                         .foregroundColor(.white)
                                 }
@@ -4625,7 +4649,7 @@ struct RemoveGoalSheet: View {
                         }) {
                             HStack {
                                 Spacer()
-                                Text("Cancel")
+                                Text(AppL10n.t("common.cancel"))
                                     .font(.system(size: 18, weight: .semibold, design: .rounded))
                                     .foregroundColor(.white.opacity(0.8))
                                 Spacer()
@@ -4656,7 +4680,7 @@ struct RemoveGoalSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button(AppL10n.t("settings.done")) {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -4715,7 +4739,7 @@ struct RemoveTargetSheet: View {
                 VStack(spacing: 0) {
                     // Header
                     VStack(spacing: 8) {
-                        Text("Remove Budget")
+                        Text(AppL10n.t("finance.remove_budget"))
                             .font(.system(size: 24, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                         
@@ -4732,12 +4756,12 @@ struct RemoveTargetSheet: View {
                             .font(.system(size: 48, weight: .medium))
                             .foregroundColor(.red.opacity(0.8))
                         
-                        Text("Are you sure you want to remove this budget?")
+                        Text(AppL10n.t("finance.remove_budget_confirm"))
                             .font(.system(size: 18, weight: .semibold, design: .rounded))
                             .foregroundColor(.white)
                             .multilineTextAlignment(.center)
                         
-                        Text("This action cannot be undone.")
+                        Text(AppL10n.t("finance.remove_goal_warning"))
                             .font(.system(size: 14, weight: .regular, design: .rounded))
                             .foregroundColor(.white.opacity(0.6))
                             .multilineTextAlignment(.center)
@@ -4766,7 +4790,7 @@ struct RemoveTargetSheet: View {
                                     ProgressView()
                                         .tint(.white)
                                 } else {
-                                    Text("Remove Budget")
+                                    Text(AppL10n.t("finance.remove_budget"))
                                         .font(.system(size: 18, weight: .semibold, design: .rounded))
                                         .foregroundColor(.white)
                                 }
@@ -4796,7 +4820,7 @@ struct RemoveTargetSheet: View {
                         }) {
                             HStack {
                                 Spacer()
-                                Text("Cancel")
+                                Text(AppL10n.t("common.cancel"))
                                     .font(.system(size: 18, weight: .semibold, design: .rounded))
                                     .foregroundColor(.white.opacity(0.8))
                                 Spacer()
@@ -4827,7 +4851,7 @@ struct RemoveTargetSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button(AppL10n.t("settings.done")) {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -4879,7 +4903,7 @@ struct AddValueToAssetSheet: View {
                 VStack(spacing: 0) {
                     // Header
                     VStack(spacing: 8) {
-                        Text("Add Value to Asset")
+                        Text(AppL10n.t("finance.add_value_to_asset"))
                             .font(.system(size: 24, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                         
@@ -4949,7 +4973,7 @@ struct AddValueToAssetSheet: View {
                                 ProgressView()
                                     .tint(.white)
                             } else {
-                                Text("Add")
+                                Text(AppL10n.t("finance.add"))
                                     .font(.system(size: 18, weight: .semibold, design: .rounded))
                                     .foregroundColor(.white)
                             }
@@ -4984,7 +5008,7 @@ struct AddValueToAssetSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button(AppL10n.t("settings.done")) {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -5113,7 +5137,7 @@ struct ReduceAssetValueSheet: View {
                 VStack(spacing: 0) {
                     // Header
                     VStack(spacing: 8) {
-                        Text("Reduce Asset Value")
+                        Text(AppL10n.t("finance.reduce_asset_value"))
                             .font(.system(size: 24, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                         
@@ -5183,7 +5207,7 @@ struct ReduceAssetValueSheet: View {
                                 ProgressView()
                                     .tint(.white)
                             } else {
-                                Text("Reduce")
+                                Text(AppL10n.t("finance.reduce"))
                                     .font(.system(size: 18, weight: .semibold, design: .rounded))
                                     .foregroundColor(.white)
                             }
@@ -5218,7 +5242,7 @@ struct ReduceAssetValueSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button(AppL10n.t("settings.done")) {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -5347,7 +5371,7 @@ struct RemoveAssetSheet: View {
                 VStack(spacing: 0) {
                     // Header
                     VStack(spacing: 8) {
-                        Text("Remove Asset")
+                        Text(AppL10n.t("finance.remove_asset"))
                             .font(.system(size: 24, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                         
@@ -5364,12 +5388,12 @@ struct RemoveAssetSheet: View {
                             .font(.system(size: 48, weight: .medium))
                             .foregroundColor(.red.opacity(0.8))
                         
-                        Text("Are you sure you want to remove this asset?")
+                        Text(AppL10n.t("finance.remove_asset_confirm"))
                             .font(.system(size: 18, weight: .semibold, design: .rounded))
                             .foregroundColor(.white)
                             .multilineTextAlignment(.center)
                         
-                        Text("This action cannot be undone.")
+                        Text(AppL10n.t("finance.remove_goal_warning"))
                             .font(.system(size: 14, weight: .regular, design: .rounded))
                             .foregroundColor(.white.opacity(0.6))
                             .multilineTextAlignment(.center)
@@ -5398,7 +5422,7 @@ struct RemoveAssetSheet: View {
                                     ProgressView()
                                         .tint(.white)
                                 } else {
-                                    Text("Remove Asset")
+                                    Text(AppL10n.t("finance.remove_asset"))
                                         .font(.system(size: 18, weight: .semibold, design: .rounded))
                                         .foregroundColor(.white)
                                 }
@@ -5428,7 +5452,7 @@ struct RemoveAssetSheet: View {
                         }) {
                             HStack {
                                 Spacer()
-                                Text("Cancel")
+                                Text(AppL10n.t("common.cancel"))
                                     .font(.system(size: 18, weight: .semibold, design: .rounded))
                                     .foregroundColor(.white.opacity(0.8))
                                 Spacer()
@@ -5459,7 +5483,7 @@ struct RemoveAssetSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button(AppL10n.t("settings.done")) {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -5679,7 +5703,7 @@ struct GoalRow: View {
                             .digit3D(baseColor: .white.opacity(0.5))
                     }
                     
-                    Text("of")
+                    Text(AppL10n.t("finance.of"))
                         .font(.system(size: 12, weight: .regular, design: .rounded))
                         .foregroundColor(.white.opacity(0.4))
                     
@@ -5855,7 +5879,7 @@ struct AssetRow: View {
                     .foregroundColor(.white.opacity(0.95))
                 
                 HStack(spacing: 6) {
-                    Text(asset.type.uppercased())
+                    Text(getTranslatedAssetType(asset.type))
                         .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundColor(.white.opacity(0.5))
                         .tracking(0.3)
@@ -5865,7 +5889,7 @@ struct AssetRow: View {
                             .foregroundColor(.white.opacity(0.4))
                             .font(.system(size: 11))
                         
-                        Text("AUTO")
+                        Text(AppL10n.t("finance.auto"))
                             .font(.system(size: 11, weight: .medium, design: .rounded))
                             .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
                             .tracking(0.3)
@@ -5993,6 +6017,20 @@ struct AssetRow: View {
         formatter.maximumFractionDigits = 2
         return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
     }
+    
+    private func getTranslatedAssetType(_ type: String) -> String {
+        let keyMap: [String: String] = [
+            "savings": "asset_type.savings",
+            "investment": "asset_type.investment",
+            "property": "asset_type.property",
+            "vehicle": "asset_type.vehicle",
+            "cash": "asset_type.cash"
+        ]
+        if let key = keyMap[type.lowercased()] {
+            return AppL10n.t(key).uppercased()
+        }
+        return type.uppercased()
+    }
 }
 
 struct XPLevelWidget: View {
@@ -6008,7 +6046,7 @@ struct XPLevelWidget: View {
                         .font(.system(size: 40))
                     
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Level \(xpStats.current_level)")
+                        Text("\(AppL10n.t("finance.level")) \(xpStats.current_level)")
                             .font(.system(size: 20, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                             .digit3D(baseColor: .white)
@@ -6028,7 +6066,7 @@ struct XPLevelWidget: View {
                         .foregroundColor(.white)
                         .digit3D(baseColor: .white)
                     
-                    Text("XP")
+                    Text(AppL10n.t("finance.xp"))
                         .font(.system(size: 11, weight: .semibold, design: .rounded))
                         .foregroundColor(.white.opacity(0.5))
                         .textCase(.uppercase)
@@ -6039,7 +6077,7 @@ struct XPLevelWidget: View {
             // Progress bar
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("\(xpStats.xp_to_next_level) XP to next level")
+                    Text("\(xpStats.xp_to_next_level) \(AppL10n.t("finance.xp_to_next_level"))")
                         .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundColor(.white.opacity(0.5))
                         .digit3D(baseColor: .white.opacity(0.5))
@@ -6122,7 +6160,7 @@ struct FinanceCategoryRow: View {
             
             // Category name and percentages - left aligned
             VStack(alignment: .leading, spacing: 4) {
-                Text(category.name)
+                Text(CategoryDefinitions.shared.getTranslatedCategoryName(category.name))
                     .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .foregroundColor(.white)
                     .lineLimit(1)
@@ -6245,7 +6283,7 @@ struct AddAssetSheet: View {
                     VStack(spacing: 24) {
                         // Header
                         VStack(spacing: 8) {
-                            Text("Add Asset")
+                            Text(AppL10n.t("finance.add_asset"))
                                 .font(.system(size: 24, weight: .bold, design: .rounded))
                                 .foregroundColor(.white)
                         }
@@ -6254,13 +6292,13 @@ struct AddAssetSheet: View {
                         
                         // Asset Name
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Asset Name")
+                            Text(AppL10n.t("finance.asset_name"))
                                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white.opacity(0.6))
                                 .textCase(.uppercase)
                                 .tracking(0.8)
                             
-                            TextField("e.g., Savings Account", text: $assetName)
+                            TextField(AppL10n.t("finance.placeholder.asset_name"), text: $assetName)
                                 .font(.system(size: 16, weight: .medium, design: .rounded))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 16)
@@ -6274,7 +6312,7 @@ struct AddAssetSheet: View {
                         
                         // Asset Type
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Asset Type")
+                            Text(AppL10n.t("finance.asset_type"))
                                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white.opacity(0.6))
                                 .textCase(.uppercase)
@@ -6317,7 +6355,7 @@ struct AddAssetSheet: View {
                         
                         // Current Value
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Current Value")
+                            Text(AppL10n.t("finance.current_value"))
                                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white.opacity(0.6))
                                 .textCase(.uppercase)
@@ -6338,7 +6376,7 @@ struct AddAssetSheet: View {
                         
                         // Description (Optional)
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Description (Optional)")
+                            Text(AppL10n.t("finance.description_optional"))
                                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white.opacity(0.6))
                                 .textCase(.uppercase)
@@ -6375,7 +6413,7 @@ struct AddAssetSheet: View {
                                     ProgressView()
                                         .tint(.white)
                                 } else {
-                                    Text("Add Asset")
+                                    Text(AppL10n.t("finance.add_asset"))
                                         .font(.system(size: 18, weight: .semibold, design: .rounded))
                                         .foregroundColor(.white)
                                 }
@@ -6422,7 +6460,7 @@ struct AddAssetSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button(AppL10n.t("settings.done")) {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -6492,7 +6530,7 @@ struct AddSavingGoalSheet: View {
                     VStack(spacing: 24) {
                         // Header
                         VStack(spacing: 8) {
-                            Text("Add Saving Goal")
+                            Text(AppL10n.t("finance.add_saving_goal"))
                                 .font(.system(size: 24, weight: .bold, design: .rounded))
                                 .foregroundColor(.white)
                         }
@@ -6501,13 +6539,13 @@ struct AddSavingGoalSheet: View {
                         
                         // Goal Title
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Goal Title")
+                            Text(AppL10n.t("finance.goal_title"))
                                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white.opacity(0.6))
                                 .textCase(.uppercase)
                                 .tracking(0.8)
                             
-                            TextField("e.g., Emergency Fund", text: $goalTitle)
+                            TextField(AppL10n.t("finance.placeholder.goal_title"), text: $goalTitle)
                                 .font(.system(size: 16, weight: .medium, design: .rounded))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 16)
@@ -6521,7 +6559,7 @@ struct AddSavingGoalSheet: View {
                         
                         // Target Amount
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Target Amount")
+                            Text(AppL10n.t("finance.target_amount"))
                                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white.opacity(0.6))
                                 .textCase(.uppercase)
@@ -6542,7 +6580,7 @@ struct AddSavingGoalSheet: View {
                         
                         // Current Amount (Optional)
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Current Amount (Optional)")
+                            Text(AppL10n.t("finance.current_amount_optional"))
                                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white.opacity(0.6))
                                 .textCase(.uppercase)
@@ -6563,7 +6601,7 @@ struct AddSavingGoalSheet: View {
                         
                         // Description (Optional)
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Description (Optional)")
+                            Text(AppL10n.t("finance.description_optional"))
                                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white.opacity(0.6))
                                 .textCase(.uppercase)
@@ -6600,7 +6638,7 @@ struct AddSavingGoalSheet: View {
                                     ProgressView()
                                         .tint(.white)
                                 } else {
-                                    Text("Add Saving Goal")
+                                    Text(AppL10n.t("finance.add_saving_goal"))
                                         .font(.system(size: 18, weight: .semibold, design: .rounded))
                                         .foregroundColor(.white)
                                 }
@@ -6647,7 +6685,7 @@ struct AddSavingGoalSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button(AppL10n.t("settings.done")) {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -6726,7 +6764,7 @@ struct AddSavingLimitSheet: View {
                     VStack(spacing: 24) {
                         // Header
                         VStack(spacing: 8) {
-                            Text("Add Saving Limit")
+                            Text(AppL10n.t("finance.add_saving_limit"))
                                 .font(.system(size: 24, weight: .bold, design: .rounded))
                                 .foregroundColor(.white)
                         }
@@ -6735,7 +6773,7 @@ struct AddSavingLimitSheet: View {
                         
                         // Category Selection
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Category")
+                            Text(AppL10n.t("finance.category"))
                                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white.opacity(0.6))
                                 .textCase(.uppercase)
@@ -6747,7 +6785,7 @@ struct AddSavingLimitSheet: View {
                                         selectedCategory = category
                                     }) {
                                         HStack {
-                                            Text(category)
+                                            Text(CategoryDefinitions.shared.getTranslatedCategoryName(category))
                                             if selectedCategory == category {
                                                 Image(systemName: "checkmark")
                                             }
@@ -6756,7 +6794,7 @@ struct AddSavingLimitSheet: View {
                                 }
                             } label: {
                                 HStack {
-                                    Text(selectedCategory)
+                                    Text(CategoryDefinitions.shared.getTranslatedCategoryName(selectedCategory))
                                         .font(.system(size: 16, weight: .medium, design: .rounded))
                                         .foregroundColor(.white)
                                     
@@ -6778,7 +6816,7 @@ struct AddSavingLimitSheet: View {
                         
                         // Limit Amount
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Monthly Limit")
+                            Text(AppL10n.t("finance.monthly_limit"))
                                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white.opacity(0.6))
                                 .textCase(.uppercase)
@@ -6799,7 +6837,7 @@ struct AddSavingLimitSheet: View {
                         
                         // Description (Optional)
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Description (Optional)")
+                            Text(AppL10n.t("finance.description_optional"))
                                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white.opacity(0.6))
                                 .textCase(.uppercase)
@@ -6836,7 +6874,7 @@ struct AddSavingLimitSheet: View {
                                     ProgressView()
                                         .tint(.white)
                                 } else {
-                                    Text("Add Saving Limit")
+                                    Text(AppL10n.t("finance.add_saving_limit"))
                                         .font(.system(size: 18, weight: .semibold, design: .rounded))
                                         .foregroundColor(.white)
                                 }
@@ -6883,7 +6921,7 @@ struct AddSavingLimitSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button(AppL10n.t("settings.done")) {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -6904,7 +6942,8 @@ struct AddSavingLimitSheet: View {
         Task {
             do {
                 // Create title in format "Monthly Limit: [Category]"
-                let title = "Monthly Limit: \(selectedCategory)"
+                let translatedCategory = CategoryDefinitions.shared.getTranslatedCategoryName(selectedCategory)
+                let title = "\(AppL10n.t("finance.monthly_limit")): \(translatedCategory)"
                 
                 try await viewModel.addTarget(
                     title: title,
@@ -6933,7 +6972,7 @@ struct AddSavingLimitSheet: View {
 struct AddSpendingLimitSheet: View {
     @ObservedObject var viewModel: FinanceViewModel
     @Environment(\.dismiss) var dismiss
-    @State private var selectedCategory: String = "Other"
+    @State private var selectedCategory: String = CategoryDefinitions.defaultCategory
     @State private var limitAmount: String = "0"
     @State private var description: String = ""
     @State private var isAdding = false
@@ -6959,7 +6998,7 @@ struct AddSpendingLimitSheet: View {
                     VStack(spacing: 24) {
                         // Header
                         VStack(spacing: 8) {
-                            Text("Add Spending Limit")
+                            Text(AppL10n.t("finance.add_spending_limit"))
                                 .font(.system(size: 24, weight: .bold, design: .rounded))
                                 .foregroundColor(.white)
                         }
@@ -6968,7 +7007,7 @@ struct AddSpendingLimitSheet: View {
                         
                         // Category Selection
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Category")
+                            Text(AppL10n.t("finance.category"))
                                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white.opacity(0.6))
                                 .textCase(.uppercase)
@@ -6980,7 +7019,7 @@ struct AddSpendingLimitSheet: View {
                                         selectedCategory = category
                                     }) {
                                         HStack {
-                                            Text(category)
+                                            Text(CategoryDefinitions.shared.getTranslatedCategoryName(category))
                                             if selectedCategory == category {
                                                 Image(systemName: "checkmark")
                                             }
@@ -6989,7 +7028,7 @@ struct AddSpendingLimitSheet: View {
                                 }
                             } label: {
                                 HStack {
-                                    Text(selectedCategory)
+                                    Text(CategoryDefinitions.shared.getTranslatedCategoryName(selectedCategory))
                                         .font(.system(size: 16, weight: .medium, design: .rounded))
                                         .foregroundColor(.white)
                                     
@@ -7011,7 +7050,7 @@ struct AddSpendingLimitSheet: View {
                         
                         // Limit Amount
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Monthly Limit")
+                            Text(AppL10n.t("finance.monthly_limit"))
                                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white.opacity(0.6))
                                 .textCase(.uppercase)
@@ -7032,7 +7071,7 @@ struct AddSpendingLimitSheet: View {
                         
                         // Description (Optional)
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Description (Optional)")
+                            Text(AppL10n.t("finance.description_optional"))
                                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white.opacity(0.6))
                                 .textCase(.uppercase)
@@ -7069,7 +7108,7 @@ struct AddSpendingLimitSheet: View {
                                     ProgressView()
                                         .tint(.white)
                                 } else {
-                                    Text("Add Spending Limit")
+                                    Text(AppL10n.t("finance.add_spending_limit"))
                                         .font(.system(size: 18, weight: .semibold, design: .rounded))
                                         .foregroundColor(.white)
                                 }
@@ -7116,7 +7155,7 @@ struct AddSpendingLimitSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button(AppL10n.t("settings.done")) {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -7137,7 +7176,8 @@ struct AddSpendingLimitSheet: View {
         Task {
             do {
                 // Create title in format "Monthly Limit: [Category]"
-                let title = "Monthly Limit: \(selectedCategory)"
+                let translatedCategory = CategoryDefinitions.shared.getTranslatedCategoryName(selectedCategory)
+                let title = "\(AppL10n.t("finance.monthly_limit")): \(translatedCategory)"
                 
                 try await viewModel.addTarget(
                     title: title,
@@ -7184,7 +7224,7 @@ struct MonthPickerSheet: View {
                 VStack(spacing: 0) {
                     // Header
                     VStack(spacing: 8) {
-                        Text("Select Month")
+                        Text(AppL10n.t("finance.select_month"))
                             .font(.system(size: 24, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                             .padding(.top, 20)
@@ -7270,7 +7310,7 @@ struct MonthPickerSheet: View {
                         Button(action: {
                             onCancel()
                         }) {
-                            Text("Cancel")
+                            Text(AppL10n.t("common.cancel"))
                                 .font(.system(size: 16, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white.opacity(0.7))
                                 .frame(maxWidth: .infinity)
@@ -7283,7 +7323,7 @@ struct MonthPickerSheet: View {
                         Button(action: {
                             onConfirm()
                         }) {
-                            Text("Done")
+                            Text(AppL10n.t("settings.done"))
                                 .font(.system(size: 16, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
@@ -7304,9 +7344,33 @@ struct MonthPickerSheet: View {
     // MARK: - Helper Functions
     func monthName(from month: Int) -> String {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: AppL10n.localeIdentifier(for: AppL10n.currentLanguageCode()))
         formatter.dateFormat = "MMMM"
         let date = Calendar.current.date(from: DateComponents(year: 2000, month: month, day: 1))!
         return formatter.string(from: date)
+    }
+    
+    func monthAbbreviation(from month: Int) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: AppL10n.localeIdentifier(for: AppL10n.currentLanguageCode()))
+        formatter.locale = Locale(identifier: AppL10n.localeIdentifier(for: AppL10n.currentLanguageCode()))
+        formatter.dateFormat = "MMM"
+        let date = Calendar.current.date(from: DateComponents(year: 2000, month: month, day: 1))!
+        return formatter.string(from: date)
+    }
+    
+    func getTranslatedAssetType(_ type: String) -> String {
+        let keyMap: [String: String] = [
+            "savings": "asset_type.savings",
+            "investment": "asset_type.investment",
+            "property": "asset_type.property",
+            "vehicle": "asset_type.vehicle",
+            "cash": "asset_type.cash"
+        ]
+        if let key = keyMap[type.lowercased()] {
+            return AppL10n.t(key).uppercased()
+        }
+        return type.uppercased()
     }
 }
 
@@ -7316,7 +7380,7 @@ struct AddTransactionSheet: View {
     @Environment(\.dismiss) var dismiss
     @State private var transactionType: String = "expense"
     @State private var amount: String = ""
-    @State private var selectedCategory: String = "Other"
+    @State private var selectedCategory: String = CategoryDefinitions.defaultCategory
     @State private var description: String = ""
     @State private var selectedDate: Date = Date()
     @State private var isAdding = false
@@ -7336,6 +7400,11 @@ struct AddTransactionSheet: View {
                 .filter { !$0.id.hasPrefix("Income_") }
                 .map { $0.name }
         }
+    }
+    
+    // Get display name for category (translated)
+    private func getCategoryDisplayName(_ categoryName: String) -> String {
+        return CategoryDefinitions.shared.getTranslatedCategoryName(categoryName)
     }
     
     var body: some View {
@@ -7373,7 +7442,7 @@ struct AddTransactionSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button(AppL10n.t("settings.done")) {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -7386,7 +7455,7 @@ struct AddTransactionSheet: View {
     
     private var headerView: some View {
         VStack(spacing: 8) {
-            Text("Add Transaction")
+            Text(AppL10n.t("finance.add_transaction"))
                 .font(.system(size: 24, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
         }
@@ -7396,7 +7465,7 @@ struct AddTransactionSheet: View {
     
     private var typeSelectorView: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Type")
+            Text(AppL10n.t("finance.type"))
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundColor(.white.opacity(0.6))
                 .textCase(.uppercase)
@@ -7417,9 +7486,9 @@ struct AddTransactionSheet: View {
             // Reset category to default when switching transaction type
             if type == "income" {
                 // Set to first income category or "Other"
-                selectedCategory = categories.first ?? "Other"
+                selectedCategory = categories.first ?? CategoryDefinitions.defaultCategory
             } else {
-                selectedCategory = "Other"
+                selectedCategory = CategoryDefinitions.defaultCategory
             }
         }) {
             HStack {
@@ -7451,7 +7520,7 @@ struct AddTransactionSheet: View {
     
     private var amountFieldView: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Amount")
+            Text(AppL10n.t("finance.amount"))
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundColor(.white.opacity(0.6))
                 .textCase(.uppercase)
@@ -7473,7 +7542,7 @@ struct AddTransactionSheet: View {
     
     private var categoryPickerView: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Category")
+            Text(AppL10n.t("finance.category"))
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundColor(.white.opacity(0.6))
                 .textCase(.uppercase)
@@ -7485,7 +7554,7 @@ struct AddTransactionSheet: View {
                         selectedCategory = category
                     }) {
                         HStack {
-                            Text(category)
+                            Text(CategoryDefinitions.shared.getTranslatedCategoryName(category))
                             if selectedCategory == category {
                                 Image(systemName: "checkmark")
                             }
@@ -7493,10 +7562,10 @@ struct AddTransactionSheet: View {
                     }
                 }
             } label: {
-                HStack {
-                    Text(categories.contains(selectedCategory) ? selectedCategory : (categories.first ?? "Other"))
-                        .font(.system(size: 16, weight: .medium, design: .rounded))
-                        .foregroundColor(.white)
+                    HStack {
+                        Text(categories.contains(selectedCategory) ? CategoryDefinitions.shared.getTranslatedCategoryName(selectedCategory) : CategoryDefinitions.shared.getTranslatedCategoryName(categories.first ?? CategoryDefinitions.defaultCategory))
+                            .font(.system(size: 16, weight: .medium, design: .rounded))
+                            .foregroundColor(.white)
                     
                     Spacer()
                     
@@ -7514,7 +7583,7 @@ struct AddTransactionSheet: View {
             .onChange(of: transactionType) { oldValue, newValue in
                 // Ensure selected category is valid for the new transaction type
                 if !categories.contains(selectedCategory) {
-                    selectedCategory = categories.first ?? "Other"
+                    selectedCategory = categories.first ?? CategoryDefinitions.defaultCategory
                 }
             }
         }
@@ -7523,13 +7592,13 @@ struct AddTransactionSheet: View {
     
     private var descriptionFieldView: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Description")
+            Text(AppL10n.t("finance.description"))
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundColor(.white.opacity(0.6))
                 .textCase(.uppercase)
                 .tracking(0.8)
             
-            TextField("e.g., Groceries at Walmart", text: $description)
+            TextField(AppL10n.t("finance.placeholder.transaction_description"), text: $description)
                 .font(.system(size: 16, weight: .medium, design: .rounded))
                 .foregroundColor(.white)
                 .padding(.horizontal, 16)
@@ -7544,7 +7613,7 @@ struct AddTransactionSheet: View {
     
     private var datePickerView: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Date")
+            Text(AppL10n.t("finance.date"))
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundColor(.white.opacity(0.6))
                 .textCase(.uppercase)
@@ -7578,7 +7647,7 @@ struct AddTransactionSheet: View {
                     ProgressView()
                         .tint(.white)
                 } else {
-                    Text("Add Transaction")
+                    Text(AppL10n.t("finance.add_transaction"))
                         .font(.system(size: 18, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
                 }
@@ -7617,7 +7686,7 @@ struct AddTransactionSheet: View {
         }
         
         // Ensure selected category is valid for current transaction type
-        let validCategory = categories.contains(selectedCategory) ? selectedCategory : (categories.first ?? "Other")
+        let validCategory = categories.contains(selectedCategory) ? selectedCategory : (categories.first ?? CategoryDefinitions.defaultCategory)
         
         isAdding = true
         errorMessage = nil
@@ -7674,6 +7743,11 @@ struct EditTransactionSheet: View {
         }
     }
     
+    // Get display name for category (translated)
+    private func getCategoryDisplayName(_ categoryName: String) -> String {
+        return CategoryDefinitions.shared.getTranslatedCategoryName(categoryName)
+    }
+    
     init(transaction: TransactionItem, viewModel: FinanceViewModel) {
         self.transaction = transaction
         self.viewModel = viewModel
@@ -7725,7 +7799,7 @@ struct EditTransactionSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button(AppL10n.t("settings.done")) {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -7739,7 +7813,7 @@ struct EditTransactionSheet: View {
     
     private var headerView: some View {
         VStack(spacing: 8) {
-            Text("Edit Transaction")
+                        Text(AppL10n.t("finance.edit_transaction"))
                 .font(.system(size: 24, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
         }
@@ -7749,7 +7823,7 @@ struct EditTransactionSheet: View {
     
     private var typeSelectorView: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Type")
+            Text(AppL10n.t("finance.type"))
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundColor(.white.opacity(0.6))
                 .textCase(.uppercase)
@@ -7760,12 +7834,12 @@ struct EditTransactionSheet: View {
                     Button(action: {
                         transactionType = type
                         if !categories.contains(selectedCategory) {
-                            selectedCategory = categories.first ?? "Other"
+                            selectedCategory = categories.first ?? CategoryDefinitions.defaultCategory
                         }
                     }) {
                         HStack {
                             Spacer()
-                            Text(type.capitalized)
+                            Text(type == "income" ? AppL10n.t("transaction.income") : AppL10n.t("transaction.expense"))
                                 .font(.system(size: 16, weight: .semibold, design: .rounded))
                                 .foregroundColor(transactionType == type ? .white : .white.opacity(0.6))
                             Spacer()
@@ -7792,7 +7866,7 @@ struct EditTransactionSheet: View {
     
     private var amountFieldView: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Amount")
+            Text(AppL10n.t("finance.amount"))
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundColor(.white.opacity(0.6))
                 .textCase(.uppercase)
@@ -7814,7 +7888,7 @@ struct EditTransactionSheet: View {
     
     private var categoryPickerView: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Category")
+            Text(AppL10n.t("finance.category"))
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundColor(.white.opacity(0.6))
                 .textCase(.uppercase)
@@ -7822,7 +7896,7 @@ struct EditTransactionSheet: View {
             
             Picker("Category", selection: $selectedCategory) {
                 ForEach(categories, id: \.self) { category in
-                    Text(category).tag(category)
+                    Text(CategoryDefinitions.shared.getTranslatedCategoryName(category)).tag(category)
                 }
             }
             .pickerStyle(.wheel)
@@ -7836,13 +7910,13 @@ struct EditTransactionSheet: View {
     
     private var descriptionFieldView: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Description")
+            Text(AppL10n.t("finance.description"))
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundColor(.white.opacity(0.6))
                 .textCase(.uppercase)
                 .tracking(0.8)
             
-            TextField("e.g., Groceries at Walmart", text: $description)
+            TextField(AppL10n.t("finance.placeholder.transaction_description"), text: $description)
                 .font(.system(size: 16, weight: .medium, design: .rounded))
                 .foregroundColor(.white)
                 .padding(.horizontal, 16)
@@ -7857,7 +7931,7 @@ struct EditTransactionSheet: View {
     
     private var datePickerView: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Date")
+            Text(AppL10n.t("finance.date"))
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundColor(.white.opacity(0.6))
                 .textCase(.uppercase)
@@ -7891,7 +7965,7 @@ struct EditTransactionSheet: View {
                     ProgressView()
                         .tint(.white)
                 } else {
-                    Text("Update Transaction")
+                    Text(AppL10n.t("finance.update_transaction"))
                         .font(.system(size: 18, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
                 }
@@ -7924,7 +7998,7 @@ struct EditTransactionSheet: View {
         }) {
             HStack {
                 Spacer()
-                Text("Delete Transaction")
+                Text(AppL10n.t("finance.delete_transaction"))
                     .font(.system(size: 18, weight: .semibold, design: .rounded))
                     .foregroundColor(.white)
                 Spacer()
@@ -7954,7 +8028,7 @@ struct EditTransactionSheet: View {
             return
         }
         
-        let validCategory = categories.contains(selectedCategory) ? selectedCategory : (categories.first ?? "Other")
+        let validCategory = categories.contains(selectedCategory) ? selectedCategory : (categories.first ?? CategoryDefinitions.defaultCategory)
         
         isUpdating = true
         errorMessage = nil
@@ -8015,11 +8089,11 @@ struct DeleteTransactionSheet: View {
                 VStack(spacing: 0) {
                     // Header
                     VStack(spacing: 12) {
-                        Text("Delete Transaction")
+                        Text(AppL10n.t("finance.delete_transaction"))
                             .font(.system(size: 24, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                         
-                        Text("Are you sure you want to delete this transaction?")
+                        Text(AppL10n.t("finance.delete_transaction_confirm"))
                             .font(.system(size: 16, weight: .medium, design: .rounded))
                             .foregroundColor(.white.opacity(0.7))
                             .multilineTextAlignment(.center)
@@ -8031,7 +8105,7 @@ struct DeleteTransactionSheet: View {
                     // Transaction details
                     VStack(spacing: 16) {
                         HStack {
-                            Text("Description:")
+                            Text("\(AppL10n.t("finance.description")):")
                                 .font(.system(size: 14, weight: .medium, design: .rounded))
                                 .foregroundColor(.white.opacity(0.6))
                             Spacer()
@@ -8041,7 +8115,7 @@ struct DeleteTransactionSheet: View {
                         }
                         
                         HStack {
-                            Text("Amount:")
+                            Text(AppL10n.t("finance.amount_label"))
                                 .font(.system(size: 14, weight: .medium, design: .rounded))
                                 .foregroundColor(.white.opacity(0.6))
                             Spacer()
@@ -8052,7 +8126,7 @@ struct DeleteTransactionSheet: View {
                         }
                         
                         HStack {
-                            Text("Category:")
+                            Text(AppL10n.t("finance.category_label"))
                                 .font(.system(size: 14, weight: .medium, design: .rounded))
                                 .foregroundColor(.white.opacity(0.6))
                             Spacer()
@@ -8089,7 +8163,7 @@ struct DeleteTransactionSheet: View {
                                     ProgressView()
                                         .tint(.white)
                                 } else {
-                                    Text("Delete Transaction")
+                                    Text(AppL10n.t("finance.delete_transaction"))
                                         .font(.system(size: 18, weight: .semibold, design: .rounded))
                                         .foregroundColor(.white)
                                 }
@@ -8118,7 +8192,7 @@ struct DeleteTransactionSheet: View {
                         }) {
                             HStack {
                                 Spacer()
-                                Text("Cancel")
+                                Text(AppL10n.t("common.cancel"))
                                     .font(.system(size: 18, weight: .semibold, design: .rounded))
                                     .foregroundColor(.white.opacity(0.8))
                                 Spacer()
@@ -8149,7 +8223,7 @@ struct DeleteTransactionSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button(AppL10n.t("settings.done")) {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
@@ -8288,7 +8362,7 @@ struct TrackedCategoryRow: View {
             
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text(category.name)
+                    Text(CategoryDefinitions.shared.getTranslatedCategoryName(category.name))
                         .font(.system(size: 15, weight: .semibold, design: .rounded))
                         .foregroundColor(.white.opacity(0.95))
                     
@@ -8309,7 +8383,7 @@ struct TrackedCategoryRow: View {
                         .font(.system(size: 13, weight: .regular))
                         .foregroundColor(.white.opacity(0.4))
                     
-                    Text("\(category.transactionCount) transaction\(category.transactionCount == 1 ? "" : "s")")
+                    Text("\(category.transactionCount) \(category.transactionCount == 1 ? AppL10n.t("finance.transaction") : AppL10n.t("finance.transactions"))")
                         .font(.system(size: 13, weight: .regular, design: .rounded))
                         .foregroundColor(.white.opacity(0.5))
                         .digit3D(baseColor: .white.opacity(0.5))
@@ -8340,6 +8414,7 @@ struct BalanceLineChart: View {
     
     private func formatMonth(_ date: Date) -> String {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: AppL10n.localeIdentifier(for: AppL10n.currentLanguageCode()))
         formatter.dateFormat = "MMM"
         return formatter.string(from: date)
     }
@@ -8350,7 +8425,7 @@ struct BalanceLineChart: View {
                 Image(systemName: "chart.line.uptrend.xyaxis")
                     .font(.system(size: 32, weight: .light))
                     .foregroundColor(.white.opacity(0.3))
-                Text("No data available")
+                Text(AppL10n.t("finance.no_data_available"))
                     .font(.system(size: 13, weight: .regular, design: .rounded))
                     .foregroundColor(.white.opacity(0.5))
             }
@@ -8449,6 +8524,7 @@ struct IncomeExpenseBarChart: View {
     
     private func formatMonth(_ date: Date) -> String {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: AppL10n.localeIdentifier(for: AppL10n.currentLanguageCode()))
         formatter.dateFormat = "MMM"
         return formatter.string(from: date)
     }
@@ -8459,7 +8535,7 @@ struct IncomeExpenseBarChart: View {
                 Image(systemName: "chart.bar.fill")
                     .font(.system(size: 32, weight: .light))
                     .foregroundColor(.white.opacity(0.3))
-                Text("No data available")
+                Text(AppL10n.t("finance.no_data_available"))
                     .font(.system(size: 13, weight: .regular, design: .rounded))
                     .foregroundColor(.white.opacity(0.5))
             }
@@ -8613,7 +8689,7 @@ struct MonthToMonthComparisonView: View {
     var body: some View {
         VStack(spacing: 16) {
             HStack {
-                Text("Month to Month")
+                Text(AppL10n.t("finance.month_to_month"))
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .foregroundColor(.white.opacity(0.9))
                 Spacer()
@@ -8623,7 +8699,7 @@ struct MonthToMonthComparisonView: View {
                 // Income comparison
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Income")
+                        Text(AppL10n.t("finance.income"))
                             .font(.system(size: 12, weight: .medium, design: .rounded))
                             .foregroundColor(.white.opacity(0.6))
                         Text(formatCurrency(viewModel.monthlyIncome))
@@ -8642,7 +8718,7 @@ struct MonthToMonthComparisonView: View {
                 // Expenses comparison
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Expenses")
+                        Text(AppL10n.t("finance.expenses"))
                             .font(.system(size: 12, weight: .medium, design: .rounded))
                             .foregroundColor(.white.opacity(0.6))
                         Text(formatCurrency(viewModel.monthlyExpenses))
@@ -8695,7 +8771,7 @@ struct ComparisonPeriodSelectorView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Months")
+                Text(AppL10n.t("finance.months"))
                     .font(.system(size: 16, weight: .bold, design: .rounded))
                     .foregroundStyle(
                         LinearGradient(
@@ -8856,7 +8932,7 @@ struct EnhancedMonthToMonthComparisonView: View {
         VStack(spacing: 20) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Month to Month")
+                    Text(AppL10n.t("finance.month_to_month"))
                         .font(.system(size: 15, weight: .bold, design: .rounded))
                         .foregroundColor(.white.opacity(0.95))
                 }
@@ -8871,7 +8947,7 @@ struct EnhancedMonthToMonthComparisonView: View {
                             Image(systemName: "arrow.up.circle.fill")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(.green.opacity(0.9))
-                            Text("Income")
+                            Text(AppL10n.t("finance.income"))
                                 .font(.system(size: 13, weight: .medium, design: .rounded))
                                 .foregroundColor(.white.opacity(0.7))
                         }
@@ -8930,7 +9006,7 @@ struct EnhancedMonthToMonthComparisonView: View {
                             Image(systemName: "arrow.down.circle.fill")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(.red.opacity(0.9))
-                            Text("Expenses")
+                            Text(AppL10n.t("finance.expenses"))
                                 .font(.system(size: 13, weight: .medium, design: .rounded))
                                 .foregroundColor(.white.opacity(0.7))
                         }
@@ -9034,6 +9110,7 @@ struct EnhancedInteractiveBalanceChart: View {
     
     private func formatMonth(_ date: Date) -> String {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: AppL10n.localeIdentifier(for: AppL10n.currentLanguageCode()))
         formatter.dateFormat = "MMM"
         return formatter.string(from: date)
     }
@@ -9072,7 +9149,7 @@ struct EnhancedInteractiveBalanceChart: View {
                 Image(systemName: "chart.line.uptrend.xyaxis")
                     .font(.system(size: 32, weight: .light))
                     .foregroundColor(.white.opacity(0.3))
-                Text("No data available")
+                Text(AppL10n.t("finance.no_data_available"))
                     .font(.system(size: 13, weight: .regular, design: .rounded))
                     .foregroundColor(.white.opacity(0.5))
             }
@@ -9131,7 +9208,7 @@ struct BalanceDetailSheet: View {
                         Text(formatFullDate(data.month))
                             .font(.system(size: 24, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
-                        Text("Financial Overview")
+                        Text(AppL10n.t("finance.financial_overview"))
                             .font(.system(size: 14, weight: .medium, design: .rounded))
                             .foregroundColor(.white.opacity(0.6))
                     }
@@ -9143,7 +9220,7 @@ struct BalanceDetailSheet: View {
                             Image(systemName: "chart.line.uptrend.xyaxis")
                                 .font(.system(size: 18, weight: .semibold))
                                 .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
-                            Text("Monthly Balance")
+                            Text(AppL10n.t("finance.monthly_balance"))
                                 .font(.system(size: 16, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white.opacity(0.9))
                         }
@@ -9180,7 +9257,7 @@ struct BalanceDetailSheet: View {
                                 Image(systemName: "arrow.up.circle.fill")
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
-                                Text("Income")
+                                Text(AppL10n.t("finance.income"))
                                     .font(.system(size: 13, weight: .medium, design: .rounded))
                                     .foregroundColor(.white.opacity(0.7))
                             }
@@ -9206,7 +9283,7 @@ struct BalanceDetailSheet: View {
                                 Image(systemName: "arrow.down.circle.fill")
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(Color(red: 1.0, green: 0.3, blue: 0.3))
-                                Text("Expenses")
+                                Text(AppL10n.t("finance.expenses"))
                                     .font(.system(size: 13, weight: .medium, design: .rounded))
                                     .foregroundColor(.white.opacity(0.7))
                             }
@@ -9233,7 +9310,7 @@ struct BalanceDetailSheet: View {
                             Image(systemName: "dollarsign.circle.fill")
                                 .font(.system(size: 18, weight: .semibold))
                                 .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
-                            Text("Cash Available")
+                            Text(AppL10n.t("finance.cash_available"))
                                 .font(.system(size: 16, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white.opacity(0.9))
                         }
@@ -9241,7 +9318,7 @@ struct BalanceDetailSheet: View {
                             .font(.system(size: 28, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                             .digit3D(baseColor: .white)
-                        Text("Cumulative balance up to this month")
+                        Text(AppL10n.t("finance.cumulative_balance_up_to"))
                             .font(.system(size: 12, weight: .regular, design: .rounded))
                             .foregroundColor(.white.opacity(0.5))
                     }
@@ -9271,7 +9348,7 @@ struct BalanceDetailSheet: View {
                             Image(systemName: "building.columns.fill")
                                 .font(.system(size: 18, weight: .semibold))
                                 .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
-                            Text("Total Assets")
+                            Text(AppL10n.t("finance.total_assets"))
                                 .font(.system(size: 16, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white.opacity(0.9))
                         }
@@ -9279,7 +9356,7 @@ struct BalanceDetailSheet: View {
                             .font(.system(size: 28, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                             .digit3D(baseColor: .white)
-                        Text("All assets and savings goals")
+                        Text(AppL10n.t("finance.all_assets_and_goals"))
                             .font(.system(size: 12, weight: .regular, design: .rounded))
                             .foregroundColor(.white.opacity(0.5))
                     }
@@ -9339,6 +9416,7 @@ struct EnhancedNetWorthChart: View {
     
     private func formatMonth(_ date: Date) -> String {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: AppL10n.localeIdentifier(for: AppL10n.currentLanguageCode()))
         formatter.dateFormat = "MMM"
         return formatter.string(from: date)
     }
@@ -9387,7 +9465,7 @@ struct EnhancedNetWorthChart: View {
                 Image(systemName: "chart.line.uptrend.xyaxis")
                     .font(.system(size: 32, weight: .light))
                     .foregroundColor(.white.opacity(0.3))
-                Text("No data available")
+                Text(AppL10n.t("finance.no_data_available"))
                     .font(.system(size: 13, weight: .regular, design: .rounded))
                     .foregroundColor(.white.opacity(0.5))
             }
@@ -9411,11 +9489,11 @@ struct EnhancedNetWorthChart: View {
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Net Worth")
+                            Text(AppL10n.t("finance.net_worth"))
                                 .font(.system(size: 11, weight: .medium, design: .rounded))
                                 .foregroundColor(.white.opacity(0.6))
                             if let displayData = displayData {
-                                Text("Income: \(formatCurrency(displayData.income)) | Expenses: \(formatCurrency(displayData.expenses))")
+                                Text("\(AppL10n.t("finance.income_label")) \(formatCurrency(displayData.income)) | \(AppL10n.t("finance.expenses_label")) \(formatCurrency(displayData.expenses))")
                                     .font(.system(size: 9, weight: .regular, design: .rounded))
                                     .foregroundColor(.white.opacity(0.5))
                             }
@@ -9829,7 +9907,7 @@ struct NetWorthDetailSheet: View {
                         Text(formatFullDate(data.month))
                             .font(.system(size: 24, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
-                        Text("Net Worth Overview")
+                        Text(AppL10n.t("finance.net_worth_overview"))
                             .font(.system(size: 14, weight: .medium, design: .rounded))
                             .foregroundColor(.white.opacity(0.6))
                     }
@@ -9841,7 +9919,7 @@ struct NetWorthDetailSheet: View {
                             Image(systemName: "chart.line.uptrend.xyaxis")
                                 .font(.system(size: 18, weight: .semibold))
                                 .foregroundColor(Color(red: 0.6, green: 0.4, blue: 0.9))
-                            Text("Total Net Worth")
+                            Text(AppL10n.t("finance.total_net_worth"))
                                 .font(.system(size: 16, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white.opacity(0.9))
                         }
@@ -9849,7 +9927,7 @@ struct NetWorthDetailSheet: View {
                             .font(.system(size: 32, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                             .digit3D(baseColor: .white)
-                        Text("Assets + Cash Available")
+                        Text(AppL10n.t("finance.assets_plus_cash"))
                             .font(.system(size: 12, weight: .regular, design: .rounded))
                             .foregroundColor(.white.opacity(0.5))
                     }
@@ -9881,7 +9959,7 @@ struct NetWorthDetailSheet: View {
                                 Image(systemName: "building.columns.fill")
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
-                                Text("Assets")
+                                Text(AppL10n.t("finance.assets"))
                                     .font(.system(size: 13, weight: .medium, design: .rounded))
                                     .foregroundColor(.white.opacity(0.7))
                             }
@@ -9889,7 +9967,7 @@ struct NetWorthDetailSheet: View {
                                 .font(.system(size: 20, weight: .bold, design: .rounded))
                                 .foregroundColor(.white)
                                 .digit3D(baseColor: .white)
-                            Text("All assets & goals")
+                            Text(AppL10n.t("finance.all_assets_goals"))
                                 .font(.system(size: 11, weight: .regular, design: .rounded))
                                 .foregroundColor(.white.opacity(0.5))
                         }
@@ -9910,7 +9988,7 @@ struct NetWorthDetailSheet: View {
                                 Image(systemName: "dollarsign.circle.fill")
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
-                                Text("Cash")
+                                Text(AppL10n.t("finance.cash"))
                                     .font(.system(size: 13, weight: .medium, design: .rounded))
                                     .foregroundColor(.white.opacity(0.7))
                             }
@@ -9918,7 +9996,7 @@ struct NetWorthDetailSheet: View {
                                 .font(.system(size: 20, weight: .bold, design: .rounded))
                                 .foregroundColor(.white)
                                 .digit3D(baseColor: .white)
-                            Text("Cumulative balance")
+                            Text(AppL10n.t("finance.cumulative_balance"))
                                 .font(.system(size: 11, weight: .regular, design: .rounded))
                                 .foregroundColor(.white.opacity(0.5))
                         }
@@ -9971,12 +10049,14 @@ struct EnhancedIncomeExpenseBarChart: View {
     
     private func formatMonth(_ date: Date) -> String {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: AppL10n.localeIdentifier(for: AppL10n.currentLanguageCode()))
         formatter.dateFormat = "MMM"
         return formatter.string(from: date)
     }
     
     private func formatFullMonth(_ date: Date) -> String {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: AppL10n.localeIdentifier(for: AppL10n.currentLanguageCode()))
         formatter.dateFormat = "MMMM yyyy"
         return formatter.string(from: date)
     }
@@ -9987,7 +10067,7 @@ struct EnhancedIncomeExpenseBarChart: View {
                 Image(systemName: "chart.bar.fill")
                     .font(.system(size: 32, weight: .light))
                     .foregroundColor(.white.opacity(0.3))
-                Text("No data available")
+                Text(AppL10n.t("finance.no_data_available"))
                     .font(.system(size: 13, weight: .regular, design: .rounded))
                     .foregroundColor(.white.opacity(0.5))
             }
@@ -10046,7 +10126,7 @@ struct EnhancedIncomeExpenseBarChart: View {
                                 Image(systemName: "arrow.up.circle.fill")
                                     .font(.system(size: 11, weight: .semibold))
                                     .foregroundColor(Color(red: 0.3, green: 0.7, blue: 0.4))
-                                Text("Income")
+                                Text(AppL10n.t("finance.income"))
                                     .font(.system(size: 10, weight: .medium, design: .rounded))
                                     .foregroundColor(.white.opacity(0.6))
                             }
@@ -10083,7 +10163,7 @@ struct EnhancedIncomeExpenseBarChart: View {
                                 Image(systemName: "arrow.down.circle.fill")
                                     .font(.system(size: 11, weight: .semibold))
                                     .foregroundColor(Color(red: 0.9, green: 0.3, blue: 0.3))
-                                Text("Expense")
+                                Text(AppL10n.t("finance.expense"))
                                     .font(.system(size: 10, weight: .medium, design: .rounded))
                                     .foregroundColor(.white.opacity(0.6))
                             }
@@ -10120,7 +10200,7 @@ struct EnhancedIncomeExpenseBarChart: View {
                                 Image(systemName: displayData.balance >= 0 ? "equal.circle.fill" : "minus.circle.fill")
                                     .font(.system(size: 11, weight: .semibold))
                                     .foregroundColor(displayData.balance >= 0 ? Color(red: 0.4, green: 0.49, blue: 0.92) : Color(red: 0.9, green: 0.5, blue: 0.3))
-                                Text("Balance")
+                                Text(AppL10n.t("finance.balance_label"))
                                     .font(.system(size: 10, weight: .medium, design: .rounded))
                                     .foregroundColor(.white.opacity(0.6))
                             }

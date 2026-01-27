@@ -212,7 +212,7 @@ struct UpgradeView: View {
                 }
             } else {
                 await MainActor.run {
-                    checkoutError = "Failed to create checkout session. Please try again."
+                    checkoutError = AppL10n.t("plans.checkout_error")
                     isCreatingCheckout = false
                 }
             }
