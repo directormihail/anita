@@ -1945,61 +1945,6 @@ struct FinanceView: View {
                             .frame(maxHeight: 200)
                         }
                     }
-                    
-                    // Tracked Categories Section
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text(AppL10n.t("finance.tracked_categories"))
-                                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                                .foregroundColor(.white.opacity(0.6))
-                                .tracking(0.8)
-                            
-                            Spacer()
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 8)
-                        
-                        let trackedCategories = getTrackedCategories()
-                        
-                        if trackedCategories.isEmpty {
-                            VStack(spacing: 8) {
-                                Image(systemName: "tag")
-                                    .font(.system(size: 32, weight: .light))
-                                    .foregroundColor(.white.opacity(0.3))
-                                Text(AppL10n.t("finance.no_tracked_categories"))
-                                    .font(.system(size: 14, weight: .medium, design: .rounded))
-                                    .foregroundColor(.white.opacity(0.5))
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 24)
-                        } else {
-                            ScrollView {
-                                VStack(spacing: 0) {
-                                    ForEach(Array(trackedCategories.enumerated()), id: \.offset) { index, category in
-                                        TrackedCategoryRow(category: category, viewModel: viewModel)
-                                            .opacity(isAnitaInsightsExpanded ? 1 : 0)
-                                            .animation(
-                                                .spring(response: 0.4, dampingFraction: 0.8)
-                                                    .delay(Double(index) * 0.025),
-                                                value: isAnitaInsightsExpanded
-                                            )
-                                        
-                                        if index < trackedCategories.count - 1 {
-                                            PremiumDivider()
-                                                .padding(.leading, 76)
-                                                .opacity(isAnitaInsightsExpanded ? 1 : 0)
-                                                .animation(
-                                                    .spring(response: 0.4, dampingFraction: 0.8)
-                                                        .delay(Double(index) * 0.025 + 0.01),
-                                                    value: isAnitaInsightsExpanded
-                                                )
-                                        }
-                                    }
-                                }
-                            }
-                            .frame(maxHeight: 200)
-                        }
-                    }
                 }
                 .liquidGlass(cornerRadius: 18)
                 .padding(.horizontal, 20)
@@ -2096,35 +2041,6 @@ struct FinanceView: View {
         }
         
         return recommendations
-    }
-    
-    private func getTrackedCategories() -> [TrackedCategory] {
-        var trackedCategories: [TrackedCategory] = []
-        
-        // Get unique categories from transactions
-        let categorySpending = Dictionary(grouping: viewModel.transactions.filter { $0.type == "expense" }, by: { $0.category ?? "Uncategorized" })
-        
-        for (categoryName, transactions) in categorySpending {
-            if categoryName != "Uncategorized" && !transactions.isEmpty {
-                let total = transactions.reduce(0.0) { $0 + $1.amount }
-                let transactionCount = transactions.count
-                
-                // Check if there's a spending limit for this category
-                let hasLimit = viewModel.goals.contains { $0.category?.lowercased() == categoryName.lowercased() }
-                
-                trackedCategories.append(TrackedCategory(
-                    name: categoryName,
-                    totalSpent: total,
-                    transactionCount: transactionCount,
-                    hasLimit: hasLimit
-                ))
-            }
-        }
-        
-        // Sort by total spent (descending)
-        trackedCategories.sort { $0.totalSpent > $1.totalSpent }
-        
-        return trackedCategories
     }
     
     private var xpLevelWidgetView: some View {
@@ -2280,16 +2196,14 @@ struct FinanceView: View {
                     .padding(.horizontal, 20)
                     .transition(.expandSection)
                 } else {
-                    // Filter transactions by category if selected
-                    let filteredTransactions = selectedCategory != nil 
-                        ? viewModel.transactions.filter { $0.category.lowercased() == selectedCategory!.lowercased() }
-                        : viewModel.transactions
+                    // Always show all transactions - Transactions section is independent
+                    let allTransactions = viewModel.transactions
                     
                     // Row height: ~85px (28px vertical padding + ~57px content height)
                     let rowHeight: CGFloat = 85
                     let dividerHeight: CGFloat = 1
                     let maxVisibleRows: CGFloat = 3.5
-                    let itemCount = CGFloat(filteredTransactions.count)
+                    let itemCount = CGFloat(allTransactions.count)
                     let calculatedHeight: CGFloat = {
                         if itemCount <= maxVisibleRows {
                             // Show all items with dividers
@@ -2306,87 +2220,50 @@ struct FinanceView: View {
                     
                     ScrollView {
                         VStack(spacing: 0) {
-                            // Show filter indicator if category is selected
-                            if selectedCategory != nil {
-                                HStack {
-                                    Text("\(AppL10n.t("finance.filtered")): \(selectedCategory!)")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(.white.opacity(0.6))
-                                    
-                                    Spacer()
-                                    
-                                    Button(action: {
-                                        withAnimation {
-                                            selectedCategory = nil
-                                        }
-                                    }) {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .font(.system(size: 16))
-                                            .foregroundColor(.white.opacity(0.6))
-                                    }
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
+                            // Add Transaction button as first item (inline with transactions)
+                            AddTransactionRow(action: {
+                                let impact = UIImpactFeedbackGenerator(style: .light)
+                                impact.impactOccurred()
+                                showAddTransactionSheet = true
+                            })
+                            .opacity(isTransactionsExpanded ? 1 : 0)
+                            .animation(
+                                .spring(response: 0.4, dampingFraction: 0.8)
+                                    .delay(0.01),
+                                value: isTransactionsExpanded
+                            )
+                            
+                            // Divider after Add Transaction button
+                            if !allTransactions.isEmpty {
+                                PremiumDivider()
+                                    .padding(.leading, 82)
+                                    .opacity(isTransactionsExpanded ? 1 : 0)
+                                    .animation(
+                                        .spring(response: 0.4, dampingFraction: 0.8)
+                                            .delay(0.02),
+                                        value: isTransactionsExpanded
+                                    )
                             }
                             
-                            if filteredTransactions.isEmpty && selectedCategory != nil {
-                                VStack(spacing: 12) {
-                                    Text(AppL10n.t("finance.no_transactions_found"))
-                                        .font(.system(size: 16, weight: .medium))
-                                        .foregroundColor(.white.opacity(0.6))
-                                    
-                                    Text("\(AppL10n.t("finance.no_transactions_category")) \(selectedCategory!)")
-                                        .font(.system(size: 14, weight: .regular))
-                                        .foregroundColor(.white.opacity(0.4))
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 40)
-                            } else {
-                                // Add Transaction button as first item (inline with transactions)
-                                AddTransactionRow(action: {
-                                    let impact = UIImpactFeedbackGenerator(style: .light)
-                                    impact.impactOccurred()
-                                    showAddTransactionSheet = true
-                                })
-                                .opacity(isTransactionsExpanded ? 1 : 0)
-                                .animation(
-                                    .spring(response: 0.4, dampingFraction: 0.8)
-                                        .delay(0.01),
-                                    value: isTransactionsExpanded
-                                )
+                            // Transaction list - always shows all transactions
+                            ForEach(Array(allTransactions.enumerated()), id: \.element.id) { index, transaction in
+                                TransactionRow(transaction: transaction, viewModel: viewModel)
+                                    .opacity(isTransactionsExpanded ? 1 : 0)
+                                    .animation(
+                                        .spring(response: 0.4, dampingFraction: 0.8)
+                                            .delay(Double(index + 1) * 0.025),
+                                        value: isTransactionsExpanded
+                                    )
                                 
-                                // Divider after Add Transaction button
-                                if !filteredTransactions.isEmpty {
+                                if index < allTransactions.count - 1 {
                                     PremiumDivider()
                                         .padding(.leading, 82)
                                         .opacity(isTransactionsExpanded ? 1 : 0)
                                         .animation(
                                             .spring(response: 0.4, dampingFraction: 0.8)
-                                                .delay(0.02),
+                                                .delay(Double(index + 1) * 0.025 + 0.01),
                                             value: isTransactionsExpanded
                                         )
-                                }
-                                
-                                // Transaction list
-                                ForEach(Array(filteredTransactions.enumerated()), id: \.element.id) { index, transaction in
-                                    TransactionRow(transaction: transaction, viewModel: viewModel)
-                                        .opacity(isTransactionsExpanded ? 1 : 0)
-                                        .animation(
-                                            .spring(response: 0.4, dampingFraction: 0.8)
-                                                .delay(Double(index + 1) * 0.025),
-                                            value: isTransactionsExpanded
-                                        )
-                                    
-                                    if index < filteredTransactions.count - 1 {
-                                        PremiumDivider()
-                                            .padding(.leading, 82)
-                                            .opacity(isTransactionsExpanded ? 1 : 0)
-                                            .animation(
-                                                .spring(response: 0.4, dampingFraction: 0.8)
-                                                    .delay(Double(index + 1) * 0.025 + 0.01),
-                                                value: isTransactionsExpanded
-                                            )
-                                    }
                                 }
                             }
                         }
@@ -8273,14 +8150,6 @@ struct AIRecommendation: Identifiable {
     let category: String
 }
 
-struct TrackedCategory: Identifiable {
-    let id = UUID()
-    let name: String
-    let totalSpent: Double
-    let transactionCount: Int
-    let hasLimit: Bool
-}
-
 // MARK: - Recommendation Row
 
 struct RecommendationRow: View {
@@ -8313,81 +8182,6 @@ struct RecommendationRow: View {
                     .font(.system(size: 13, weight: .regular, design: .rounded))
                     .foregroundColor(.white.opacity(0.6))
                     .lineLimit(2)
-            }
-            
-            Spacer()
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-    }
-}
-
-// MARK: - Tracked Category Row
-
-struct TrackedCategoryRow: View {
-    let category: TrackedCategory
-    @ObservedObject var viewModel: FinanceViewModel
-    
-    private func formatCurrency(_ amount: Double) -> String {
-        let currency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = currency
-        formatter.minimumFractionDigits = 2
-        formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
-    }
-    
-    var body: some View {
-        HStack(spacing: 16) {
-            // Category icon
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(white: 0.2).opacity(0.3),
-                                Color(white: 0.15).opacity(0.2)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 36, height: 36)
-                
-                Image(systemName: "tag.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.7))
-            }
-            
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(CategoryDefinitions.shared.getTranslatedCategoryName(category.name))
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white.opacity(0.95))
-                    
-                    if category.hasLimit {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.green.opacity(0.8))
-                    }
-                }
-                
-                HStack(spacing: 8) {
-                    Text(formatCurrency(category.totalSpent))
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundColor(.white.opacity(0.7))
-                        .digit3D(baseColor: .white.opacity(0.7))
-                    
-                    Text("•")
-                        .font(.system(size: 13, weight: .regular))
-                        .foregroundColor(.white.opacity(0.4))
-                    
-                    Text("\(category.transactionCount) \(category.transactionCount == 1 ? AppL10n.t("finance.transaction") : AppL10n.t("finance.transactions"))")
-                        .font(.system(size: 13, weight: .regular, design: .rounded))
-                        .foregroundColor(.white.opacity(0.5))
-                        .digit3D(baseColor: .white.opacity(0.5))
-                }
             }
             
             Spacer()
