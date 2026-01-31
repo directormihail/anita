@@ -74,11 +74,22 @@
 		<dict>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>anita</string>
 				<string>com.googleusercontent.apps.730448941091-ckogfhc8vjhgce8l2bf7l2mpnjaku0i9</string>
 			</array>
 			<key>CFBundleURLName</key>
+			<string>Google Sign-In</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+		</dict>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>anita</string>
+			</array>
+			<key>CFBundleURLName</key>
 			<string>com.anita.app</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
 		</dict>
 	</array>
 </dict>

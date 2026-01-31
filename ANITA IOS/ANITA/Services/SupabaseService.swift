@@ -296,26 +296,32 @@ class SupabaseService {
     }
     
     private func signInWithIdToken(idToken: String, accessToken: String) async throws -> AuthResponse {
+        guard !supabaseUrl.isEmpty, !supabaseAnonKey.isEmpty else {
+            throw SupabaseError.notConfigured
+        }
+        
         let baseUrl = supabaseUrl.hasSuffix("/") ? String(supabaseUrl.dropLast()) : supabaseUrl
-        // Use the correct endpoint for ID token exchange - Supabase expects this format
         let url = URL(string: "\(baseUrl)/auth/v1/token?grant_type=id_token")!
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
         request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.setValue("2024-01-01", forHTTPHeaderField: "X-Supabase-Api-Version")
         
-        // Build form data properly - URL encode each parameter value
-        var components = URLComponents()
-        components.queryItems = [
-            URLQueryItem(name: "provider", value: "google"),
-            URLQueryItem(name: "id_token", value: idToken),
-            URLQueryItem(name: "access_token", value: accessToken)
+        // Do NOT pass nonce for Google: GoTrue hashes the passed nonce and compares to the token,
+        // but Google's id_token contains raw nonce, so that causes "Nonces mismatch". Enable
+        // "Skip nonce checks" for Google in Supabase Dashboard (Auth → Providers → Google).
+        let clientId = Config.googleClientID
+        var body: [String: Any] = [
+            "provider": "google",
+            "id_token": idToken,
+            "access_token": accessToken
         ]
-        
-        // Convert to form-encoded string (without the leading ?)
-        let formBody = components.query ?? ""
-        request.httpBody = formBody.data(using: .utf8)
+        if !clientId.isEmpty {
+            body["client_id"] = clientId
+        }
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
         print("[Supabase] Exchanging Google ID token with Supabase")
         print("[Supabase] URL: \(url.absoluteString)")
@@ -352,12 +358,11 @@ class SupabaseService {
             print("[Supabase] ❌ Google sign-in failed with status \(httpResponse.statusCode)")
             print("[Supabase] Full error response: \(errorString)")
             
-            // Try to parse error message
+            // Try to parse error message (error_description has the real reason, e.g. "Unacceptable audience")
             if let error = try? JSONDecoder().decode(SupabaseAuthError.self, from: data) {
-                let errorMsg = error.message ?? error.error ?? "Authentication failed"
+                let errorMsg = error.errorDescription ?? error.message ?? error.error ?? "Authentication failed"
                 throw SupabaseError.authFailed(errorMsg)
             } else if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                // Try to extract error message from JSON
                 if let msg = json["error_description"] as? String {
                     throw SupabaseError.authFailed(msg)
                 } else if let msg = json["message"] as? String {
@@ -385,10 +390,11 @@ class SupabaseService {
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
         request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.setValue("2024-01-01", forHTTPHeaderField: "X-Supabase-Api-Version")
         
-        // Supabase GoTrue expects JSON body (not form-urlencoded)
+        // Supabase GoTrue expects JSON body; Client IDs in Dashboard must include this bundle ID
         let clientId = Bundle.main.bundleIdentifier ?? "com.anita.app"
         var body: [String: Any] = [
             "provider": "apple",
@@ -398,7 +404,6 @@ class SupabaseService {
         if let nonce = nonce, !nonce.isEmpty {
             body["nonce"] = nonce
         }
-        
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
         print("[Supabase] Exchanging Apple ID token with Supabase")
@@ -436,12 +441,11 @@ class SupabaseService {
             print("[Supabase] ❌ Apple sign-in failed with status \(httpResponse.statusCode)")
             print("[Supabase] Full error response: \(errorString)")
             
-            // Try to parse error message
+            // Try to parse error message (error_description has the real reason, e.g. "Unacceptable audience")
             if let error = try? JSONDecoder().decode(SupabaseAuthError.self, from: data) {
-                let errorMsg = error.message ?? error.error ?? "Authentication failed"
+                let errorMsg = error.errorDescription ?? error.message ?? error.error ?? "Authentication failed"
                 throw SupabaseError.authFailed(errorMsg)
             } else if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                // Try to extract error message from JSON
                 if let msg = json["error_description"] as? String {
                     throw SupabaseError.authFailed(msg)
                 } else if let msg = json["message"] as? String {
@@ -677,6 +681,12 @@ struct User: Codable {
 struct SupabaseAuthError: Codable {
     let message: String?
     let error: String?
+    let errorDescription: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case message, error
+        case errorDescription = "error_description"
+    }
 }
 
 struct SupabaseErrorResponse: Codable {

@@ -9,6 +9,11 @@ import SwiftUI
 import AuthenticationServices
 import CryptoKit
 
+/// Static storage so the nonce set in onRequest is always visible in onCompletion (no SwiftUI state timing).
+private enum AppleSignInNonce {
+    static var raw: String?
+}
+
 struct LoginView: View {
     @StateObject private var viewModel = AuthViewModel()
     @State private var email: String = ""
@@ -16,30 +21,20 @@ struct LoginView: View {
     @State private var showPassword: Bool = false
     @State private var showForgotPassword: Bool = false
     @FocusState private var focusedField: Field?
-    @State private var currentAppleNonce: String?
     
     enum Field {
         case email, password
     }
     
     private static func randomNonce(length: Int = 32) -> String {
-        precondition(length > 0)
         let charset: [Character] = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
-        var result = ""
-        while result.count < length {
-            let randoms: [UInt8] = (0 ..< 16).map { _ in UInt8.random(in: .min ... .max) }
-            for random in randoms {
-                guard result.count < length else { break }
-                result.append(charset[Int(random) % charset.count])
-            }
-        }
-        return result
+        return (0..<length).compactMap { _ in charset.randomElement() }.map(String.init).joined()
     }
     
     private static func sha256Nonce(_ nonce: String) -> String {
-        let input = Data(nonce.utf8)
-        let hash = SHA256.hash(data: input)
-        return hash.compactMap { String(format: "%02x", $0) }.joined()
+        let data = Data(nonce.utf8)
+        let hash = SHA256.hash(data: data)
+        return hash.map { String(format: "%02x", $0) }.joined()
     }
     
     var onAuthSuccess: () -> Void
@@ -263,12 +258,12 @@ struct LoginView: View {
                     .padding(.horizontal, 24)
                     .padding(.bottom, 12)
                     
-                    // Apple Sign In Button
+                    // Apple Sign In — nonce must match token (static so onCompletion always sees value set in onRequest)
                     SignInWithAppleButton(
                         onRequest: { request in
                             request.requestedScopes = [.fullName, .email]
                             let rawNonce = Self.randomNonce()
-                            currentAppleNonce = rawNonce
+                            AppleSignInNonce.raw = rawNonce
                             request.nonce = Self.sha256Nonce(rawNonce)
                         },
                         onCompletion: { result in
@@ -281,11 +276,11 @@ struct LoginView: View {
                                     guard let identityToken = appleIDCredential.identityToken,
                                           let idTokenString = String(data: identityToken, encoding: .utf8) else {
                                         print("Apple Sign-In: Failed to get identity token")
-                                        currentAppleNonce = nil
+                                        AppleSignInNonce.raw = nil
                                         return
                                     }
-                                    let nonceToSend = currentAppleNonce
-                                    currentAppleNonce = nil
+                                    let nonceToSend = AppleSignInNonce.raw
+                                    AppleSignInNonce.raw = nil
                                     Task {
                                         await viewModel.signInWithApple(idToken: idTokenString, nonce: nonceToSend)
                                         if viewModel.isAuthenticated {
@@ -294,12 +289,12 @@ struct LoginView: View {
                                     }
                                 } else {
                                     print("Apple Sign-In: Failed to get Apple ID credential")
-                                    currentAppleNonce = nil
+                                    AppleSignInNonce.raw = nil
                                 }
                             case .failure(let error):
                                 print("Apple Sign-In failed: \(error.localizedDescription)")
                                 viewModel.errorMessage = error.localizedDescription
-                                currentAppleNonce = nil
+                                AppleSignInNonce.raw = nil
                             }
                         }
                     )
