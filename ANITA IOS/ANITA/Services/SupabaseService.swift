@@ -385,26 +385,21 @@ class SupabaseService {
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
         
-        // Build form data for Apple Sign-In
-        var components = URLComponents()
-        var queryItems = [
-            URLQueryItem(name: "provider", value: "apple"),
-            URLQueryItem(name: "id_token", value: idToken)
+        // Supabase GoTrue expects JSON body (not form-urlencoded)
+        let clientId = Bundle.main.bundleIdentifier ?? "com.anita.app"
+        var body: [String: Any] = [
+            "provider": "apple",
+            "id_token": idToken,
+            "client_id": clientId
         ]
-        
-        // Add nonce if provided
-        if let nonce = nonce {
-            queryItems.append(URLQueryItem(name: "nonce", value: nonce))
+        if let nonce = nonce, !nonce.isEmpty {
+            body["nonce"] = nonce
         }
         
-        components.queryItems = queryItems
-        
-        // Convert to form-encoded string
-        let formBody = components.query ?? ""
-        request.httpBody = formBody.data(using: .utf8)
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
         print("[Supabase] Exchanging Apple ID token with Supabase")
         print("[Supabase] URL: \(url.absoluteString)")
