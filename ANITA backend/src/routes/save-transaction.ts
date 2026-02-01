@@ -210,7 +210,7 @@ export async function handleSaveTransaction(req: Request, res: Response): Promis
     };
 
     // Save transaction to anita_data table
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('anita_data')
       .insert([transactionData])
       .select()

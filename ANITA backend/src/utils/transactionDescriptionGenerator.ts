@@ -152,7 +152,7 @@ function isDescriptionClean(description: string): boolean {
 function cleanDescriptionFallback(
   userInput: string,
   type: 'income' | 'expense',
-  amount: number,
+  _amount: number,
   category: string
 ): string {
   const trimmed = userInput.trim();

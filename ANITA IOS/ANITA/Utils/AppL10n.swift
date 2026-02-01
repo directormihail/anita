@@ -386,6 +386,13 @@ enum AppL10n {
             "ai_recommendation.accelerate_goal": "Accelerate %@",
             "ai_recommendation.goal_progress_description": "You're %@%% towards your goal with %d days remaining. Consider increasing monthly contributions.",
             
+            // XP Info (sidebar i button)
+            "xp_info.title": "How XP Works",
+            "xp_info.earn": "Earn points when you chat, add transactions, or set goals.",
+            "xp_info.bar": "The bar shows how close you are to the next level.",
+            "xp_info.levels": "Level up = you're building better money habits.",
+            "xp_info.got_it": "Got it",
+            
             // Level Titles
             "level.newcomer": "Newcomer",
             "level.wealth_builder": "Wealth Builder",

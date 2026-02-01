@@ -10,6 +10,7 @@ import SwiftUI
 struct SidebarMenu: View {
     @Binding var isPresented: Bool
     @StateObject private var viewModel = SidebarViewModel()
+    @State private var showXPInfoSheet = false
     
     var body: some View {
         ZStack {
@@ -26,10 +27,10 @@ struct SidebarMenu: View {
                         }
                     }) {
                         Image(systemName: "xmark")
-                            .font(.system(size: 18, weight: .medium))
+                            .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.white)
-                            .frame(width: 32, height: 32)
-                            .liquidGlass(cornerRadius: 16)
+                            .frame(width: 28, height: 28)
+                            .liquidGlass(cornerRadius: 14)
                     }
                     .padding(.leading, 16)
                     
@@ -38,109 +39,82 @@ struct SidebarMenu: View {
                 .padding(.top, 16)
                 .padding(.bottom, 12)
                 
-                // Progress/XP Section (Fixed)
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        HStack(spacing: 8) {
-                            Image(systemName: "flame.fill")
-                                .font(.system(size: 16))
-                                .foregroundColor(Color(red: 0.5, green: 0.6, blue: 0.85))
-                            
-                            if viewModel.isLoading {
-                                ProgressView()
-                                    .tint(Color(red: 0.5, green: 0.6, blue: 0.85))
-                                    .scaleEffect(0.8)
-                            } else {
-                                Text("\(viewModel.xp) \(AppL10n.t("finance.xp"))")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(Color(red: 0.5, green: 0.6, blue: 0.85))
-                                    .digit3D(baseColor: Color(red: 0.5, green: 0.6, blue: 0.85))
+                // XP / Level card — compact variant; info (i) inside card next to XP
+                Group {
+                    if let xpStats = viewModel.xpStats {
+                        XPLevelWidget(xpStats: xpStats, compact: true, onInfoTap: { showXPInfoSheet = true })
+                    } else {
+                        // Loading placeholder: compact card shape
+                        VStack(spacing: 14) {
+                            HStack {
+                                HStack(spacing: 12) {
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(Color.white.opacity(0.15))
+                                        .frame(width: 32, height: 32)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        RoundedRectangle(cornerRadius: 5)
+                                            .fill(Color.white.opacity(0.2))
+                                            .frame(width: 64, height: 17)
+                                        RoundedRectangle(cornerRadius: 3)
+                                            .fill(Color.white.opacity(0.12))
+                                            .frame(width: 80, height: 12)
+                                    }
+                                }
+                                Spacer()
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    RoundedRectangle(cornerRadius: 5)
+                                        .fill(Color.white.opacity(0.2))
+                                        .frame(width: 40, height: 20)
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .fill(Color.white.opacity(0.12))
+                                        .frame(width: 20, height: 10)
+                                }
+                            }
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .fill(Color.white.opacity(0.12))
+                                        .frame(width: 100, height: 11)
+                                    Spacer()
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .fill(Color.white.opacity(0.15))
+                                        .frame(width: 28, height: 11)
+                                }
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(Color.white.opacity(0.12))
+                                    .frame(height: 8)
                             }
                         }
-                        
-                        Spacer()
-                        
-                        Button(action: {
-                            // TODO: Show XP info modal
-                            print("XP info tapped")
-                        }) {
-                            Image(systemName: "info.circle")
-                                .font(.system(size: 18))
-                                .foregroundColor(.gray)
-                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 14)
+                        .liquidGlass(cornerRadius: 14)
                     }
-                    
-                    // Progress bar
-                    GeometryReader { geometry in
-                        ZStack(alignment: .leading) {
-                            // Background
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color.white.opacity(0.15))
-                                .frame(height: 10)
-                            
-                            // Progress
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color(red: 0.5, green: 0.6, blue: 0.85))
-                                .frame(
-                                    width: geometry.size.width * progressPercentage,
-                                    height: 10
-                                )
-                        }
-                    }
-                    .frame(height: 10)
-                    
-                    Text("\(viewModel.xpToNextLevel) \(AppL10n.t("finance.xp_to_next_level"))")
-                        .font(.system(size: 12))
-                        .foregroundColor(.gray)
-                        .digit3D(baseColor: .gray)
-                    
-                    // Level Card
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("\(AppL10n.t("finance.level")) \(viewModel.level)")
-                                .font(.system(size: 20, weight: .bold))
-                                .foregroundColor(Color(red: 0.5, green: 0.6, blue: 0.85))
-                                .digit3D(baseColor: Color(red: 0.5, green: 0.6, blue: 0.85))
-                            
-                            Text(getTranslatedLevelTitle(viewModel.levelTitle))
-                                .font(.system(size: 12))
-                                .foregroundColor(.gray)
-                        }
-                        
-                        Spacer()
-                    }
-                    .padding(16)
-                    .liquidGlass(cornerRadius: 12)
                 }
                 .padding(.horizontal, 16)
-                .padding(.bottom, 24)
+                .padding(.bottom, 20)
                 
-                // Conversations Section Header (Fixed)
-                VStack(alignment: .leading, spacing: 12) {
+                // Conversations Section — aligned padding with card
+                VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         if viewModel.isLoading {
                             Text("\(AppL10n.t("sidebar.conversations"))...")
-                                .font(.system(size: 18, weight: .semibold))
+                                .font(.system(size: 15, weight: .semibold))
                                 .foregroundColor(.white)
                         } else {
                             Text("\(AppL10n.t("sidebar.conversations")) (\(viewModel.conversations.count))")
-                                .font(.system(size: 18, weight: .semibold))
+                                .font(.system(size: 15, weight: .semibold))
                                 .foregroundColor(.white)
                                 .digit3D(baseColor: .white)
                         }
-                        
-                        Spacer()
-                        
-                        Button(action: {
-                            handleNewConversation()
-                        }) {
+                        Spacer(minLength: 4)
+                        Button(action: { handleNewConversation() }) {
                             Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 24))
+                                .font(.system(size: 20))
                                 .foregroundColor(.white)
                         }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 4)
                     
                     // Scrollable Conversations List
                     ScrollView {
@@ -148,19 +122,18 @@ struct SidebarMenu: View {
                             if viewModel.isLoading && viewModel.conversations.isEmpty {
                                 ProgressView()
                                     .tint(.white)
-                                    .padding()
+                                    .padding(.vertical, 20)
                             } else if viewModel.conversations.isEmpty {
                                 Text(AppL10n.t("sidebar.no_conversations"))
-                                    .font(.subheadline)
+                                    .font(.system(size: 13))
                                     .foregroundColor(.gray)
-                                    .padding()
+                                    .padding(.vertical, 16)
                             } else {
                                 VStack(spacing: 0) {
                                     ForEach(viewModel.conversations) { conversation in
                                         ConversationRow(conversation: conversation) {
                                             handleConversationTap(conversation.id)
                                         }
-                                        
                                         if conversation.id != viewModel.conversations.last?.id {
                                             Divider()
                                                 .background(Color.white.opacity(0.1))
@@ -170,43 +143,37 @@ struct SidebarMenu: View {
                                 }
                                 .liquidGlass(cornerRadius: 12)
                             }
-                            
                             if let errorMessage = viewModel.errorMessage {
-                                VStack(alignment: .leading, spacing: 8) {
+                                VStack(alignment: .leading, spacing: 6) {
                                     Text(AppL10n.t("sidebar.connection_error"))
-                                        .font(.headline)
+                                        .font(.system(size: 14, weight: .semibold))
                                         .foregroundColor(.red)
-                                    
                                     Text(errorMessage)
-                                        .font(.subheadline)
+                                        .font(.system(size: 12))
                                         .foregroundColor(.red.opacity(0.9))
                                         .fixedSize(horizontal: false, vertical: true)
                                 }
-                                .padding(16)
+                                .padding(12)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .background(Color.red.opacity(0.1))
                                 .cornerRadius(12)
                                 .padding(.horizontal, 16)
-                                .padding(.top, 12)
+                                .padding(.top, 8)
                             }
                         }
                         .padding(.horizontal, 16)
                     }
-                    .refreshable {
-                        viewModel.refresh()
-                    }
+                    .refreshable { viewModel.refresh() }
                 }
-                .padding(.bottom, 16)
+                .padding(.bottom, 12)
             }
+        }
+        .sheet(isPresented: $showXPInfoSheet) {
+            XPInfoSheet()
         }
         .onAppear {
             viewModel.loadData()
         }
-    }
-    
-    private var progressPercentage: Double {
-        let totalXP = Double(viewModel.xp + viewModel.xpToNextLevel)
-        return totalXP > 0 ? Double(viewModel.xp) / totalXP : 0
     }
     
     private func handleNewConversation() {
@@ -237,6 +204,74 @@ struct SidebarMenu: View {
             return AppL10n.t(key)
         }
         return title
+    }
+}
+
+// XP Info sheet — ANITA design: liquid glass, white/gray hierarchy, no blue
+struct XPInfoSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 0) {
+                // Header: title + close (same as sidebar)
+                HStack {
+                    Text(AppL10n.t("xp_info.title"))
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.white)
+                    Spacer()
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white)
+                            .frame(width: 32, height: 32)
+                            .liquidGlass(cornerRadius: 16)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 20)
+                
+                // Content card — liquid glass like rest of ANITA
+                VStack(alignment: .leading, spacing: 18) {
+                    row(icon: "flame.fill", text: AppL10n.t("xp_info.earn"))
+                    row(icon: "chart.bar.fill", text: AppL10n.t("xp_info.bar"))
+                    row(icon: "star.fill", text: AppL10n.t("xp_info.levels"))
+                }
+                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .liquidGlass(cornerRadius: 16)
+                .padding(.horizontal, 20)
+                
+                Spacer(minLength: 24)
+                
+                // Primary action — liquid glass button, white text (no blue)
+                Button(action: { dismiss() }) {
+                    Text(AppL10n.t("xp_info.got_it"))
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                }
+                .liquidGlass(cornerRadius: 14)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 32)
+            }
+        }
+    }
+    
+    private func row(icon: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: icon)
+                .font(.system(size: 18))
+                .foregroundColor(.white.opacity(0.9))
+                .frame(width: 24, alignment: .center)
+            Text(text)
+                .font(.system(size: 16))
+                .foregroundColor(.white.opacity(0.9))
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 
@@ -304,25 +339,22 @@ struct ConversationRow: View {
     var onTap: () -> Void = {}
     
     var body: some View {
-        Button(action: {
-            onTap()
-        }) {
+        Button(action: { onTap() }) {
             HStack {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(conversation.title)
-                        .font(.system(size: 14))
+                        .font(.system(size: 13))
                         .foregroundColor(.white)
                         .multilineTextAlignment(.leading)
-                    
+                        .lineLimit(2)
                     Text(formatDate(conversation.date, isToday: conversation.isToday))
-                        .font(.system(size: 12))
+                        .font(.system(size: 11))
                         .foregroundColor(.gray)
                 }
-                
                 Spacer()
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
         }
         .buttonStyle(PlainButtonStyle())
     }

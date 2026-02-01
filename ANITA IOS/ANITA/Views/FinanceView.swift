@@ -5912,70 +5912,94 @@ struct AssetRow: View {
 
 struct XPLevelWidget: View {
     let xpStats: XPStats
+    /// When true, uses smaller fonts and padding for sidebar / narrow contexts.
+    var compact: Bool = false
+    /// When set, shows an info (i) button on the progress row; tap opens XP explanation.
+    var onInfoTap: (() -> Void)? = nil
+    
+    private var emojiSize: CGFloat { compact ? 32 : 40 }
+    private var levelFontSize: CGFloat { compact ? 17 : 20 }
+    private var titleFontSize: CGFloat { compact ? 12 : 14 }
+    private var xpFontSize: CGFloat { compact ? 20 : 24 }
+    private var xpLabelFontSize: CGFloat { compact ? 10 : 11 }
+    private var progressLabelSize: CGFloat { compact ? 11 : 12 }
+    private var stackSpacing: CGFloat { compact ? 14 : 20 }
+    private var innerHPadding: CGFloat { compact ? 14 : 20 }
+    private var innerVPadding: CGFloat { compact ? 14 : 18 }
+    private var progressHeight: CGFloat { compact ? 8 : 10 }
+    private var progressRadius: CGFloat { compact ? 4 : 5 }
+    private var progressSpacing: CGFloat { compact ? 8 : 12 }
+    private var glassRadius: CGFloat { compact ? 14 : 18 }
+    private var outerHPadding: CGFloat { compact ? 0 : 20 }
     
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: stackSpacing) {
             // Header with level info
             HStack {
-                // Level emoji and number
-                HStack(spacing: 16) {
+                HStack(spacing: compact ? 12 : 16) {
                     Text(xpStats.level_emoji)
-                        .font(.system(size: 40))
+                        .font(.system(size: emojiSize))
                     
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: compact ? 4 : 6) {
                         Text("\(AppL10n.t("finance.level")) \(xpStats.current_level)")
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .font(.system(size: levelFontSize, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                             .digit3D(baseColor: .white)
                         
                         Text(xpStats.level_title)
-                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                            .font(.system(size: titleFontSize, weight: .medium, design: .rounded))
                             .foregroundColor(.white.opacity(0.6))
                     }
                 }
                 
                 Spacer()
                 
-                // Total XP
-                VStack(alignment: .trailing, spacing: 4) {
+                VStack(alignment: .trailing, spacing: compact ? 2 : 4) {
                     Text("\(xpStats.total_xp)")
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .font(.system(size: xpFontSize, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
                         .digit3D(baseColor: .white)
                     
                     Text(AppL10n.t("finance.xp"))
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .font(.system(size: xpLabelFontSize, weight: .semibold, design: .rounded))
                         .foregroundColor(.white.opacity(0.5))
                         .textCase(.uppercase)
                         .tracking(0.8)
                 }
             }
             
-            // Progress bar
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
+            // Progress bar + info (i) on same row — "how XP works" next to progress
+            VStack(alignment: .leading, spacing: progressSpacing) {
+                HStack(spacing: 8) {
                     Text("\(xpStats.xp_to_next_level) \(AppL10n.t("finance.xp_to_next_level"))")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.system(size: progressLabelSize, weight: .medium, design: .rounded))
                         .foregroundColor(.white.opacity(0.5))
                         .digit3D(baseColor: .white.opacity(0.5))
                     
-                    Spacer()
+                    Spacer(minLength: 4)
                     
                     Text("\(xpStats.level_progress_percentage)%")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .font(.system(size: progressLabelSize, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
                         .digit3D(baseColor: .white)
+                    
+                    if onInfoTap != nil {
+                        Button(action: { onInfoTap?() }) {
+                            Image(systemName: "info.circle")
+                                .font(.system(size: compact ? 14 : 16))
+                                .foregroundColor(.white.opacity(0.5))
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
                 }
                 
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
-                        // Background
                         Rectangle()
                             .fill(Color.white.opacity(0.12))
-                            .frame(height: 10)
-                            .cornerRadius(5)
+                            .frame(height: progressHeight)
+                            .cornerRadius(progressRadius)
                         
-                        // Progress fill
                         Rectangle()
                             .fill(
                                 LinearGradient(
@@ -5989,19 +6013,19 @@ struct XPLevelWidget: View {
                             )
                             .frame(
                                 width: geometry.size.width * CGFloat(xpStats.level_progress_percentage) / 100,
-                                height: 10
+                                height: progressHeight
                             )
-                            .cornerRadius(5)
+                            .cornerRadius(progressRadius)
                             .shadow(color: Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.4), radius: 4, x: 0, y: 2)
                     }
                 }
-                .frame(height: 10)
+                .frame(height: progressHeight)
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 18)
-        .liquidGlass(cornerRadius: 18)
-        .padding(.horizontal, 20)
+        .padding(.horizontal, innerHPadding)
+        .padding(.vertical, innerVPadding)
+        .liquidGlass(cornerRadius: glassRadius)
+        .padding(.horizontal, outerHPadding)
     }
 }
 

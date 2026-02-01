@@ -67,6 +67,11 @@ export async function handleCreateConversation(req: Request, res: Response): Pro
       return;
     }
 
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const isUrlValid = supabaseUrl && supabaseUrl.trim() !== '' && !supabaseUrl.includes('YOUR_') && !supabaseUrl.includes('your_') && !supabaseUrl.includes('placeholder');
+    const isServiceKeyValid = supabaseServiceKey && supabaseServiceKey.trim() !== '' && !supabaseServiceKey.includes('YOUR_') && !supabaseServiceKey.includes('your_') && !supabaseServiceKey.includes('placeholder');
+
     const supabase = getSupabaseClient();
     if (!supabase) {
       const missingVars = [];

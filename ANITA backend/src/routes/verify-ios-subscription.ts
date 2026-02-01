@@ -144,7 +144,7 @@ export async function handleVerifyIOSSubscription(req: Request, res: Response): 
       return;
     }
 
-    const { userId, transactionId, productId, plan } = validation.data!;
+    const { userId, transactionId, plan } = validation.data!;
 
     // Check if subscription already exists for this user
     const { data: existingSubscription, error: fetchError } = await supabase

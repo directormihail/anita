@@ -79,7 +79,6 @@ const STANDARD_CATEGORIES: { [key: string]: string } = {
   'public transportation': 'Public Transportation',
   'bus': 'Public Transportation',
   'train': 'Public Transportation',
-  'subway': 'Public Transportation',
   'metro': 'Public Transportation',
   'rideshare': 'Rideshare & Taxi',
   'rideshare & taxi': 'Rideshare & Taxi',

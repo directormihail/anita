@@ -56,10 +56,10 @@ struct ChatView: View {
                         }
                     }
                 
-                // Sidebar menu
+                // Sidebar menu — proper width for card + list
                 HStack(spacing: 0) {
                     SidebarMenu(isPresented: $isSidebarPresented)
-                        .frame(width: UIScreen.main.bounds.width * 0.85)
+                        .frame(width: min(UIScreen.main.bounds.width * 0.72, 340))
                     
                     Spacer()
                 }

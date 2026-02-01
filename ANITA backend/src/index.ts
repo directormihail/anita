@@ -48,7 +48,7 @@ fetch('http://127.0.0.1:7242/ingest/60703aac-129d-4ef4-8e2a-73410ca29b0a',{metho
 // #endregion
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = Number(process.env.PORT) || 3001;
 
 // Trust proxy for accurate IP addresses
 app.set('trust proxy', true);

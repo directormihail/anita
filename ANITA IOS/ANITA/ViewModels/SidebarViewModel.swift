@@ -17,6 +17,7 @@ class SidebarViewModel: ObservableObject {
     @Published var xpToNextLevel: Int = 0
     @Published var level: Int = 1
     @Published var levelTitle: String = "NEWCOMER"
+    @Published var xpStats: XPStats?
     @Published var conversations: [ConversationItem] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
@@ -126,11 +127,13 @@ class SidebarViewModel: ObservableObject {
                     self.income = displayIncome.isNaN ? 0.0 : displayIncome
                     self.expense = displayExpense.isNaN ? 0.0 : displayExpense
                     
-                    // Update XP stats
-                    self.xp = xpStats.xpStats.total_xp
-                    self.xpToNextLevel = xpStats.xpStats.xp_to_next_level
-                    self.level = xpStats.xpStats.current_level
-                    self.levelTitle = xpStats.xpStats.level_title.uppercased()
+                    // Update XP stats (full object for 1:1 card with finance page)
+                    let stats = xpStats.xpStats
+                    self.xpStats = stats
+                    self.xp = stats.total_xp
+                    self.xpToNextLevel = stats.xp_to_next_level
+                    self.level = stats.current_level
+                    self.levelTitle = stats.level_title.uppercased()
                     
                     // Convert conversations to ConversationItem format
                     self.conversations = conversationsResponse.conversations.map { conv in

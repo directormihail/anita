@@ -107,6 +107,19 @@ export function warn(message: string, context?: Record<string, unknown>): void {
 }
 
 /**
+ * Log debug message
+ */
+export function debug(message: string, context?: Record<string, unknown>): void {
+  const entry: LogEntry = {
+    level: 'info',
+    message,
+    timestamp: new Date().toISOString(),
+    context
+  };
+  console.log(formatLog(entry));
+}
+
+/**
  * Log error message
  */
 export function error(message: string, context?: Record<string, unknown>): void {

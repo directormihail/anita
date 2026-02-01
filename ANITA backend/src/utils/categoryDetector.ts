@@ -4,8 +4,6 @@
  * Uses pattern matching and keyword detection
  */
 
-import { normalizeCategory } from './categoryNormalizer';
-
 /**
  * Detect category from transaction description
  * Returns normalized category name

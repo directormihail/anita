@@ -1060,23 +1060,17 @@ async function buildSystemPrompt(userId: string, conversationId: string): Promis
     return 'You are ANITA, a helpful and friendly personal finance AI assistant.';
   }
 
-  // Fetch user preferences (currency, date format)
+  // Fetch user preferences (currency)
   let userCurrency = 'USD';
-  let dateFormat = 'MM/DD/YYYY';
   try {
     const { data: profileData, error: profileError } = await supabase
       .from('profiles')
-      .select('currency_code, date_format')
+      .select('currency_code')
       .eq('id', userId)
       .single();
     
-    if (!profileError && profileData) {
-      if (profileData.currency_code) {
-        userCurrency = profileData.currency_code;
-      }
-      if (profileData.date_format) {
-        dateFormat = profileData.date_format;
-      }
+    if (!profileError && profileData?.currency_code) {
+      userCurrency = profileData.currency_code;
     }
   } catch (error) {
     logger.warn('Failed to fetch user preferences', { error: error instanceof Error ? error.message : 'Unknown' });
