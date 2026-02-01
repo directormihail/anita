@@ -125,7 +125,9 @@ enum AppL10n {
             "plans.purchase_success_title": "Purchase Successful",
             "plans.purchase_success_body": "Your subscription has been activated!",
             "plans.ok": "OK",
-            "plans.checkout_error": "Failed to create checkout session. Please try again."
+            "plans.checkout_error": "Failed to load or complete purchase. Please try again.",
+            "plans.restore_purchases": "Restore Purchases",
+            "plans.pending": "Purchase is pending approval."
             ,
             // Plan features
             "plans.feature.replies_20": "20 replies per month",
@@ -476,7 +478,9 @@ enum AppL10n {
             "plans.purchase_success_title": "Kauf erfolgreich",
             "plans.purchase_success_body": "Dein Abo wurde aktiviert!",
             "plans.ok": "OK",
-            "plans.checkout_error": "Checkout‑Session konnte nicht erstellt werden. Bitte versuche es erneut."
+            "plans.checkout_error": "Kauf konnte nicht abgeschlossen werden. Bitte versuche es erneut.",
+            "plans.restore_purchases": "Käufe wiederherstellen",
+            "plans.pending": "Kauf wartet auf Freigabe."
             ,
             "plans.feature.replies_20": "20 Antworten pro Monat",
             "plans.feature.basic_expense": "Einfache Ausgabenanalyse",
@@ -784,7 +788,9 @@ enum AppL10n {
             "plans.purchase_success_title": "Compra exitosa",
             "plans.purchase_success_body": "¡Tu suscripción está activa!",
             "plans.ok": "OK",
-            "plans.checkout_error": "Error al crear la sesión de pago. Por favor, inténtalo de nuevo."
+            "plans.checkout_error": "No se pudo completar la compra. Por favor, inténtalo de nuevo.",
+            "plans.restore_purchases": "Restaurar compras",
+            "plans.pending": "Compra pendiente de aprobación."
             ,
             "plans.feature.replies_20": "20 respuestas al mes",
             "plans.feature.basic_expense": "Análisis básico de gastos",
@@ -1092,7 +1098,9 @@ enum AppL10n {
             "plans.purchase_success_title": "Acquisto riuscito",
             "plans.purchase_success_body": "Il tuo abbonamento è attivo!",
             "plans.ok": "OK",
-            "plans.checkout_error": "Impossibile creare la sessione di checkout. Riprova."
+            "plans.checkout_error": "Impossibile completare l'acquisto. Riprova.",
+            "plans.restore_purchases": "Ripristina acquisti",
+            "plans.pending": "Acquisto in attesa di approvazione."
             ,
             "plans.feature.replies_20": "20 risposte al mese",
             "plans.feature.basic_expense": "Analisi spese di base",
@@ -1400,7 +1408,9 @@ enum AppL10n {
             "plans.purchase_success_title": "Покупка успешна",
             "plans.purchase_success_body": "Подписка активирована!",
             "plans.ok": "OK",
-            "plans.checkout_error": "Не удалось создать сессию оплаты. Пожалуйста, попробуйте снова."
+            "plans.checkout_error": "Не удалось завершить покупку. Попробуйте снова.",
+            "plans.restore_purchases": "Восстановить покупки",
+            "plans.pending": "Покупка ожидает подтверждения."
             ,
             "plans.feature.replies_20": "20 ответов в месяц",
             "plans.feature.basic_expense": "Базовый анализ расходов",
@@ -1708,7 +1718,9 @@ enum AppL10n {
             "plans.purchase_success_title": "Покупка успішна",
             "plans.purchase_success_body": "Підписку активовано!",
             "plans.ok": "OK",
-            "plans.checkout_error": "Не вдалося створити сесію оплати. Будь ласка, спробуйте ще раз."
+            "plans.checkout_error": "Не вдалося завершити покупку. Спробуйте ще раз.",
+            "plans.restore_purchases": "Відновити покупки",
+            "plans.pending": "Покупка очікує підтвердження."
             ,
             "plans.feature.replies_20": "20 відповідей на місяць",
             "plans.feature.basic_expense": "Базовий аналіз витрат",
@@ -2019,7 +2031,9 @@ enum AppL10n {
             "plans.purchase_success_title": "Achat réussi",
             "plans.purchase_success_body": "Ton abonnement est activé !",
             "plans.ok": "OK",
-            "plans.checkout_error": "Impossible de créer la session de paiement. Réessaye.",
+            "plans.checkout_error": "Impossible de finaliser l'achat. Réessaye.",
+            "plans.restore_purchases": "Restaurer les achats",
+            "plans.pending": "Achat en attente d'approbation.",
             
             "plans.feature.replies_20": "20 réponses par mois",
             "plans.feature.basic_expense": "Analyse basique des dépenses",
@@ -2327,7 +2341,9 @@ enum AppL10n {
             "plans.purchase_success_title": "Zakup udany",
             "plans.purchase_success_body": "Twoja subskrypcja jest aktywna!",
             "plans.ok": "OK",
-            "plans.checkout_error": "Nie udało się utworzyć sesji płatności. Spróbuj ponownie.",
+            "plans.checkout_error": "Nie udało się dokończyć zakupu. Spróbuj ponownie.",
+            "plans.restore_purchases": "Przywróć zakupy",
+            "plans.pending": "Zakup oczekuje na zatwierdzenie.",
             
             "plans.feature.replies_20": "20 odpowiedzi na miesiąc",
             "plans.feature.basic_expense": "Podstawowa analiza wydatków",
@@ -2635,7 +2651,9 @@ enum AppL10n {
             "plans.purchase_success_title": "Satın alma başarılı",
             "plans.purchase_success_body": "Aboneliğin etkinleştirildi!",
             "plans.ok": "Tamam",
-            "plans.checkout_error": "Ödeme oturumu oluşturulamadı. Lütfen tekrar deneyin.",
+            "plans.checkout_error": "Satın alma tamamlanamadı. Lütfen tekrar deneyin.",
+            "plans.restore_purchases": "Satın almaları geri yükle",
+            "plans.pending": "Satın alma onay bekliyor.",
             
             "plans.feature.replies_20": "Ayda 20 yanıt",
             "plans.feature.basic_expense": "Temel gider analizi",

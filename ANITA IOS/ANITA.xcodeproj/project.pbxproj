@@ -82,6 +82,7 @@
 		A1000080 /* AppL10n.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppL10n.swift; sourceTree = "<group>"; };
 		A1000082 /* PostSignupPlansView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostSignupPlansView.swift; sourceTree = "<group>"; };
 		A1000084 /* ANITA.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ANITA.entitlements; sourceTree = "<group>"; };
+		A1000086 /* Configuration.storekit */ = {isa = PBXFileReference; lastKnownFileType = file; path = Configuration.storekit; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -111,6 +112,7 @@
 				A1000002 /* ContentView.swift */,
 				A1000029 /* Info.plist */,
 				A1000084 /* ANITA.entitlements */,
+				A1000086 /* Configuration.storekit */,
 				A1000028 /* Views */,
 				A1000032 /* ViewModels */,
 				A1000030 /* Services */,

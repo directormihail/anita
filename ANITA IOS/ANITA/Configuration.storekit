@@ -1,0 +1,81 @@
+{
+  "identifier" : "ANITA-Subscriptions",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+
+  ],
+  "settings" : {
+
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "ANITA-Premium",
+      "localizations" : [
+        {
+          "description" : "ANITA Premium plans",
+          "displayName" : "ANITA Premium",
+          "locale" : "en_US"
+        }
+      ],
+      "name" : "ANITA Premium",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "4.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "PRO-MONTHLY",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Pro plan - 50 replies, full budget, goals, smart insights",
+              "displayName" : "Pro Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.anita.pro.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Pro Monthly",
+          "subscriptionGroupID" : "ANITA-Premium",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "9.99",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "ULTIMATE-MONTHLY",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Ultimate plan - unlimited replies, advanced analytics, priority support",
+              "displayName" : "Ultimate Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.anita.ultimate.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Ultimate Monthly",
+          "subscriptionGroupID" : "ANITA-Premium",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 2,
+    "minor" : 0
+  }
+}

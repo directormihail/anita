@@ -7,19 +7,16 @@
 
 import SwiftUI
 import StoreKit
-import UIKit
 import SafariServices
+import UIKit
 
 struct UpgradeView: View {
     @StateObject private var storeKitService = StoreKitService.shared
     @Environment(\.dismiss) private var dismiss
-    @State private var isCreatingCheckout = false
-    @State private var checkoutError: String?
     @State private var showSuccessAlert = false
     @State private var databaseSubscription: Subscription?
     @State private var isLoadingSubscription = false
-    @State private var showSafariView = false
-    @State private var checkoutURL: URL?
+    @State private var isRestoring = false
     
     private let networkService = NetworkService.shared
     
@@ -98,7 +95,7 @@ struct UpgradeView: View {
                         .padding(.horizontal, 20)
                         .padding(.top, 12)
                         
-                        // Subscription Plans - Always show all plans
+                        // Subscription Plans - Always show all plans (Apple In-App Purchase)
                         VStack(spacing: 24) {
                             // Free Plan - Always visible
                             FreePlanCard(isCurrentPlan: currentPlan == "free")
@@ -107,12 +104,10 @@ struct UpgradeView: View {
                             SubscriptionPlanCard(
                                 planType: .pro,
                                 isCurrentPlan: currentPlan == "pro",
-                                isCreatingCheckout: isCreatingCheckout,
-                                price: "$4.99",
+                                isCreatingCheckout: storeKitService.isLoading,
+                                price: storeKitService.getProduct("com.anita.pro.monthly")?.displayPrice ?? "$4.99",
                                 onCheckout: {
-                                    Task {
-                                        await createCheckoutSession(plan: "pro")
-                                    }
+                                    Task { await purchasePlan(productId: "com.anita.pro.monthly") }
                                 }
                             )
                             
@@ -120,19 +115,38 @@ struct UpgradeView: View {
                             SubscriptionPlanCard(
                                 planType: .ultimate,
                                 isCurrentPlan: currentPlan == "ultimate",
-                                isCreatingCheckout: isCreatingCheckout,
-                                price: "$9.99",
+                                isCreatingCheckout: storeKitService.isLoading,
+                                price: storeKitService.getProduct("com.anita.ultimate.monthly")?.displayPrice ?? "$9.99",
                                 onCheckout: {
-                                    Task {
-                                        await createCheckoutSession(plan: "ultimate")
-                                    }
+                                    Task { await purchasePlan(productId: "com.anita.ultimate.monthly") }
                                 }
                             )
                         }
                         .padding(.horizontal, 20)
                         
+                        // Restore Purchases
+                        Button(action: {
+                            Task { await restorePurchases() }
+                        }) {
+                            HStack(spacing: 8) {
+                                if isRestoring {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white.opacity(0.8)))
+                                } else {
+                                    Image(systemName: "arrow.clockwise")
+                                        .font(.system(size: 14, weight: .medium))
+                                }
+                                Text(AppL10n.t("plans.restore_purchases"))
+                                    .font(.system(size: 15, weight: .medium, design: .rounded))
+                            }
+                            .foregroundColor(.white.opacity(0.7))
+                        }
+                        .disabled(storeKitService.isLoading || isRestoring)
+                        .padding(.top, 8)
+                        .padding(.bottom, 16)
+                        
                         // Error message
-                        if let error = checkoutError {
+                        if let error = storeKitService.errorMessage {
                             Text(error)
                                 .font(.system(size: 14, weight: .medium, design: .rounded))
                                 .foregroundColor(.red.opacity(0.9))
@@ -149,24 +163,16 @@ struct UpgradeView: View {
         }
         .alert(AppL10n.t("plans.purchase_success_title"), isPresented: $showSuccessAlert) {
             Button(AppL10n.t("plans.ok")) {
-                dismiss()
+                Task {
+                    await loadSubscriptionFromDatabase()
+                    dismiss()
+                }
             }
         } message: {
             Text(AppL10n.t("plans.purchase_success_body"))
         }
         .task {
             await loadSubscriptionFromDatabase()
-        }
-        .sheet(isPresented: $showSafariView) {
-            if let url = checkoutURL {
-                SafariView(url: url)
-                    .onDisappear {
-                        // Refresh subscription when user returns from checkout
-                        Task {
-                            await loadSubscriptionFromDatabase()
-                        }
-                    }
-            }
         }
     }
     
@@ -188,39 +194,50 @@ struct UpgradeView: View {
         }
     }
     
-    private func createCheckoutSession(plan: String) async {
-        await MainActor.run {
-            isCreatingCheckout = true
-            checkoutError = nil
+    /// Purchase a subscription via Apple In-App Purchase
+    private func purchasePlan(productId: String) async {
+        guard let product = storeKitService.getProduct(productId) else {
+            await MainActor.run {
+                storeKitService.errorMessage = AppL10n.t("plans.checkout_error")
+            }
+            return
         }
         
-        let userId = UserManager.shared.userId
-        let userEmail = UserManager.shared.currentUser?.email
+        await MainActor.run {
+            storeKitService.errorMessage = nil
+        }
         
         do {
-            let response = try await networkService.createCheckoutSession(
-                plan: plan,
-                userId: userId,
-                userEmail: userEmail
-            )
-            
-            if let urlString = response.url, let url = URL(string: urlString) {
-                await MainActor.run {
-                    checkoutURL = url
-                    showSafariView = true
-                    isCreatingCheckout = false
-                }
-            } else {
-                await MainActor.run {
-                    checkoutError = AppL10n.t("plans.checkout_error")
-                    isCreatingCheckout = false
-                }
+            _ = try await storeKitService.purchase(product)
+            await MainActor.run {
+                showSuccessAlert = true
+            }
+            await loadSubscriptionFromDatabase()
+        } catch StoreKitError.userCancelled {
+            // User cancelled - no error to show
+        } catch StoreKitError.pending {
+            await MainActor.run {
+                storeKitService.errorMessage = AppL10n.t("plans.pending")
             }
         } catch {
             await MainActor.run {
-                checkoutError = error.localizedDescription
-                isCreatingCheckout = false
+                storeKitService.errorMessage = error.localizedDescription
             }
+        }
+    }
+    
+    /// Restore previous Apple purchases and sync with backend
+    private func restorePurchases() async {
+        await MainActor.run {
+            isRestoring = true
+            storeKitService.errorMessage = nil
+        }
+        
+        await storeKitService.restorePurchases()
+        await loadSubscriptionFromDatabase()
+        
+        await MainActor.run {
+            isRestoring = false
         }
     }
 }

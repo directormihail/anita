@@ -54,14 +54,17 @@ class StoreKitService: ObservableObject {
         case .success(let verification):
             let transaction = try checkVerified(verification)
             
-            // Verify receipt with backend and update subscription status
-            await verifyAndUpdateSubscription(transaction: transaction, product: product)
-            
-            // Update purchased products
+            // Update UI immediately so the screen doesn’t freeze
             await updatePurchasedProducts()
-            
-            // Finish the transaction
             await transaction.finish()
+            
+            // Verify with backend in the background (don’t block the main thread)
+            let userId = UserManager.shared.userId
+            if !userId.isEmpty {
+                Task {
+                    await verifyAndUpdateSubscription(transaction: transaction, product: product)
+                }
+            }
             
             return transaction
         case .userCancelled:

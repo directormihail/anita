@@ -9,11 +9,7 @@ import SwiftUI
 
 struct PostSignupPlansView: View {
     @StateObject private var storeKitService = StoreKitService.shared
-    @State private var isCreatingCheckout = false
-    @State private var checkoutError: String?
     @State private var databaseSubscription: Subscription?
-    @State private var showSafariView = false
-    @State private var checkoutURL: URL?
     
     private let networkService = NetworkService.shared
     let onContinue: () -> Void
@@ -85,22 +81,22 @@ struct PostSignupPlansView: View {
                             SubscriptionPlanCard(
                                 planType: .pro,
                                 isCurrentPlan: currentPlan == "pro",
-                                isCreatingCheckout: isCreatingCheckout,
-                                price: "$4.99",
-                                onCheckout: { Task { await createCheckoutSession(plan: "pro") } }
+                                isCreatingCheckout: storeKitService.isLoading,
+                                price: storeKitService.getProduct("com.anita.pro.monthly")?.displayPrice ?? "$4.99",
+                                onCheckout: { Task { await purchasePlan(productId: "com.anita.pro.monthly") } }
                             )
                             
                             SubscriptionPlanCard(
                                 planType: .ultimate,
                                 isCurrentPlan: currentPlan == "ultimate",
-                                isCreatingCheckout: isCreatingCheckout,
-                                price: "$9.99",
-                                onCheckout: { Task { await createCheckoutSession(plan: "ultimate") } }
+                                isCreatingCheckout: storeKitService.isLoading,
+                                price: storeKitService.getProduct("com.anita.ultimate.monthly")?.displayPrice ?? "$9.99",
+                                onCheckout: { Task { await purchasePlan(productId: "com.anita.ultimate.monthly") } }
                             )
                         }
                         .padding(.horizontal, 20)
                         
-                        if let error = checkoutError {
+                        if let error = storeKitService.errorMessage {
                             Text(error)
                                 .font(.system(size: 14, weight: .medium, design: .rounded))
                                 .foregroundColor(.red.opacity(0.9))
@@ -131,14 +127,6 @@ struct PostSignupPlansView: View {
         .task {
             await loadSubscriptionFromDatabase()
         }
-        .sheet(isPresented: $showSafariView) {
-            if let url = checkoutURL {
-                SafariView(url: url)
-                    .onDisappear {
-                        Task { await loadSubscriptionFromDatabase() }
-                    }
-            }
-        }
     }
     
     private func loadSubscriptionFromDatabase() async {
@@ -154,38 +142,31 @@ struct PostSignupPlansView: View {
         }
     }
     
-    private func createCheckoutSession(plan: String) async {
-        await MainActor.run {
-            isCreatingCheckout = true
-            checkoutError = nil
+    /// Purchase a subscription via Apple In-App Purchase
+    private func purchasePlan(productId: String) async {
+        guard let product = storeKitService.getProduct(productId) else {
+            await MainActor.run {
+                storeKitService.errorMessage = AppL10n.t("plans.checkout_error")
+            }
+            return
         }
         
-        let userId = UserManager.shared.userId
-        let userEmail = UserManager.shared.currentUser?.email
+        await MainActor.run {
+            storeKitService.errorMessage = nil
+        }
         
         do {
-            let response = try await networkService.createCheckoutSession(
-                plan: plan,
-                userId: userId,
-                userEmail: userEmail
-            )
-            
-            if let urlString = response.url, let url = URL(string: urlString) {
-                await MainActor.run {
-                    checkoutURL = url
-                    showSafariView = true
-                    isCreatingCheckout = false
-                }
-            } else {
-                await MainActor.run {
-                    checkoutError = "Failed to create checkout session. Please try again."
-                    isCreatingCheckout = false
-                }
+            _ = try await storeKitService.purchase(product)
+            await loadSubscriptionFromDatabase()
+        } catch StoreKitError.userCancelled {
+            // User cancelled
+        } catch StoreKitError.pending {
+            await MainActor.run {
+                storeKitService.errorMessage = AppL10n.t("plans.pending")
             }
         } catch {
             await MainActor.run {
-                checkoutError = error.localizedDescription
-                isCreatingCheckout = false
+                storeKitService.errorMessage = error.localizedDescription
             }
         }
     }
