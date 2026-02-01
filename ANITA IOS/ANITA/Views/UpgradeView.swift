@@ -139,11 +139,38 @@ struct UpgradeView: View {
                                 Text(AppL10n.t("plans.restore_purchases"))
                                     .font(.system(size: 15, weight: .medium, design: .rounded))
                             }
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
                             .foregroundColor(.white.opacity(0.7))
                         }
+                        .buttonStyle(.plain)
                         .disabled(storeKitService.isLoading || isRestoring)
                         .padding(.top, 8)
-                        .padding(.bottom, 16)
+                        
+                        // Cancel subscription (opens Apple subscription management) — only for subscribers
+                        if currentPlan != "free" {
+                            Button(action: openSubscriptionManagement) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "xmark.circle")
+                                        .font(.system(size: 14, weight: .medium))
+                                    Text(AppL10n.t("settings.cancel_subscription"))
+                                        .font(.system(size: 15, weight: .medium, design: .rounded))
+                                }
+                                .frame(maxWidth: .infinity)
+                                .contentShape(Rectangle())
+                                .foregroundColor(.white.opacity(0.6))
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.top, 4)
+                        }
+                        
+                        Text(AppL10n.t("plans.cancel_subscription_hint"))
+                            .font(.system(size: 12, weight: .regular, design: .rounded))
+                            .foregroundColor(.white.opacity(0.45))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 24)
+                            .padding(.top, 4)
+                            .padding(.bottom, 16)
                         
                         // Error message
                         if let error = storeKitService.errorMessage {
@@ -239,6 +266,12 @@ struct UpgradeView: View {
         await MainActor.run {
             isRestoring = false
         }
+    }
+    
+    /// Opens Apple's subscription management page so the user can cancel or manage their subscription anytime.
+    private func openSubscriptionManagement() {
+        guard let url = URL(string: "https://apps.apple.com/account/subscriptions") else { return }
+        UIApplication.shared.open(url)
     }
 }
 
@@ -347,8 +380,10 @@ struct FreePlanCard: View {
                     .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .frame(maxWidth: .infinity)
                     .frame(height: 54)
+                    .contentShape(Rectangle())
                     .foregroundColor(.white.opacity(0.5))
             }
+            .buttonStyle(.plain)
             .liquidGlass(cornerRadius: 14)
             .disabled(true)
         }
@@ -600,10 +635,10 @@ struct SubscriptionPlanCard: View {
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 56)
+                    .contentShape(Rectangle())
                     .foregroundColor(.white)
                 }
                 .buttonStyle(.plain)
-                .contentShape(Rectangle())
                 .allowsHitTesting(!isCreatingCheckout)
                 .background(
                     LinearGradient(
@@ -641,6 +676,7 @@ struct SubscriptionPlanCard: View {
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
                         .frame(maxWidth: .infinity)
                         .frame(height: 54)
+                        .contentShape(Rectangle())
                         .foregroundColor(.white.opacity(0.5))
                 }
                 .buttonStyle(PlainButtonStyle())

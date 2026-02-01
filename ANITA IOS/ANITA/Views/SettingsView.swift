@@ -27,26 +27,9 @@ struct SettingsView: View {
     
     // Preferences
     @State private var selectedCurrency: String = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
-    @State private var dateFormat: String = UserDefaults.standard.string(forKey: "anita_date_format") ?? "MM/DD/YYYY"
-    @State private var numberFormat: String = {
-        let currency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
-        switch currency {
-        case "EUR":
-            return "1.234,56"
-        case "USD", "GBP", "CAD", "AUD", "NZD", "SGD", "HKD":
-            return "1,234.56"
-        default:
-            return "1,234.56"
-        }
-    }()
     @State private var emailNotifications: Bool = UserDefaults.standard.bool(forKey: "anita_email_notifications")
     @State private var currentLanguageCode: String = AppL10n.currentLanguageCode()
     @State private var languageRefreshTrigger = UUID()
-    
-    // Backend URL
-    @State private var backendURL: String = UserDefaults.standard.string(forKey: "backendURL") ?? Config.backendURL
-    @State private var showBackendURLAlert = false
-    @State private var backendURLError: String?
     
     // Subscription
     @State private var subscriptionPlan: String? = nil
@@ -57,26 +40,11 @@ struct SettingsView: View {
     @State private var showExportSuccess = false
     @State private var showImportPicker = false
     @State private var showClearDataConfirm = false
-    @State private var showTestOnboardingConfirm = false
-    @State private var showTestOnboardingRequiresAuth = false
-    
-    // Notification preview
-    @State private var showNotificationPreview = false
     
     private let networkService = NetworkService.shared
     private let supabaseService = SupabaseService.shared
     
     let currencies = ["USD", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF", "CNY", "INR", "BRL", "MXN", "SGD", "HKD", "NZD", "ZAR"]
-    let dateFormats = [
-        ("MM/DD/YYYY", "MM/DD/YYYY (US)"),
-        ("DD/MM/YYYY", "DD/MM/YYYY (UK/EU)"),
-        ("YYYY-MM-DD", "YYYY-MM-DD (ISO)")
-    ]
-    let numberFormats = [
-        ("1,234.56", "1,234.56 (US/UK)"),
-        ("1.234,56", "1.234,56 (EU)"),
-        ("1 234,56", "1 234,56 (FR/CA)")
-    ]
     
     var body: some View {
         ZStack {
@@ -258,8 +226,6 @@ struct SettingsView: View {
                         loadProfile()
                         loadSubscription()
                         loadPreferences()
-                        // Load backend URL
-                        backendURL = UserDefaults.standard.string(forKey: "backendURL") ?? Config.backendURL
                     }
                     
                     // Preferences Section
@@ -346,96 +312,6 @@ struct SettingsView: View {
                                 ) {}
                             }
                             
-                            PremiumDivider()
-                                .padding(.leading, 76)
-                            
-                            // Date Format
-                            Menu {
-                                ForEach(dateFormats, id: \.0) { format, label in
-                                    Button(action: {
-                                        saveDateFormat(format)
-                                    }) {
-                                        HStack {
-                                            Text(label)
-                                            if dateFormat == format {
-                                                Image(systemName: "checkmark")
-                                            }
-                                        }
-                                    }
-                                }
-                            } label: {
-                                SettingsRowWithIcon(
-                                    icon: "calendar.badge.clock",
-                                    iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                    title: AppL10n.t("settings.date_format"),
-                                    value: dateFormats.first(where: { $0.0 == dateFormat })?.1 ?? dateFormat,
-                                    showChevron: true
-                                ) {}
-                            }
-                            .buttonStyle(PremiumSettingsButtonStyle())
-                            
-                            PremiumDivider()
-                                .padding(.leading, 76)
-                            
-                            // Number Format (read-only, automatically set based on currency)
-                            SettingsRowWithIcon(
-                                icon: "number",
-                                iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                title: AppL10n.t("settings.number_format"),
-                                value: numberFormats.first(where: { $0.0 == numberFormat })?.1 ?? numberFormat,
-                                showChevron: false
-                            ) {}
-                        }
-                    }
-                    
-                    // Development Section
-                    SettingsCategorySection(title: AppL10n.t("settings.development"), icon: "wrench.and.screwdriver.fill") {
-                        VStack(spacing: 0) {
-                            Button(action: {
-                                showBackendURLAlert = true
-                            }) {
-                                SettingsRowWithIcon(
-                                    icon: "server.rack",
-                                    iconColor: Color.orange.opacity(0.8),
-                                    title: AppL10n.t("settings.backend_url"),
-                                    value: backendURL,
-                                    showChevron: true
-                                ) {}
-                            }
-                            .buttonStyle(PremiumSettingsButtonStyle())
-                            
-                            PremiumDivider()
-                                .padding(.leading, 76)
-
-                            Button(action: {
-                                if userManager.isAuthenticated {
-                                    showTestOnboardingConfirm = true
-                                } else {
-                                    showTestOnboardingRequiresAuth = true
-                                }
-                            }) {
-                                SettingsRowWithIcon(
-                                    icon: "sparkles",
-                                    iconColor: Color.orange.opacity(0.8),
-                                    title: AppL10n.t("settings.test_onboarding"),
-                                    value: nil,
-                                    showChevron: true
-                                ) {}
-                            }
-                            .buttonStyle(PremiumSettingsButtonStyle())
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(AppL10n.t("settings.backend_url_hint"))
-                                    .font(.system(size: 11, weight: .regular, design: .rounded))
-                                    .foregroundColor(.white.opacity(0.4))
-                                    .padding(.horizontal, 20)
-                                    .padding(.top, 8)
-                                Text(AppL10n.t("settings.backend_url_example"))
-                                    .font(.system(size: 11, weight: .regular, design: .rounded))
-                                    .foregroundColor(.white.opacity(0.4))
-                                    .padding(.horizontal, 20)
-                                    .padding(.bottom, 8)
-                            }
                         }
                     }
                     
@@ -450,6 +326,20 @@ struct SettingsView: View {
                                     iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
                                     title: AppL10n.t("settings.manage_subscription"),
                                     value: subscriptionPlan?.capitalized ?? AppL10n.t("plans.free"),
+                                    showChevron: true
+                                ) {}
+                            }
+                            .buttonStyle(PremiumSettingsButtonStyle())
+                            
+                            PremiumDivider()
+                                .padding(.leading, 76)
+                            
+                            Button(action: openSubscriptionManagement) {
+                                SettingsRowWithIcon(
+                                    icon: "xmark.circle.fill",
+                                    iconColor: .red.opacity(0.8),
+                                    title: AppL10n.t("settings.cancel_subscription"),
+                                    value: nil,
                                     showChevron: true
                                 ) {}
                             }
@@ -512,23 +402,6 @@ struct SettingsView: View {
                                     icon: "bell.badge",
                                     iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
                                     title: AppL10n.t("settings.test_notification"),
-                                    value: nil,
-                                    showChevron: true
-                                ) {}
-                            }
-                            .buttonStyle(PremiumSettingsButtonStyle())
-                            
-                            Divider()
-                                .background(Color.white.opacity(0.1))
-                                .padding(.leading, 60)
-                            
-                            Button(action: {
-                                showNotificationPreview = true
-                            }) {
-                                SettingsRowWithIcon(
-                                    icon: "eye.fill",
-                                    iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                    title: AppL10n.t("settings.view_all_notifications"),
                                     value: nil,
                                     showChevron: true
                                 ) {}
@@ -658,9 +531,6 @@ struct SettingsView: View {
         .sheet(isPresented: $showUpgradeView) {
             UpgradeView()
         }
-        .sheet(isPresented: $showNotificationPreview) {
-            NotificationPreviewView()
-        }
         .sheet(isPresented: $showAuthSheet) {
             AuthSheet(
                 email: $authEmail,
@@ -745,33 +615,6 @@ struct SettingsView: View {
         } message: {
             Text(AppL10n.t("settings.clear_data_message"))
         }
-        .alert(AppL10n.t("settings.backend_url_title"), isPresented: $showBackendURLAlert) {
-            TextField(AppL10n.t("settings.backend_url_title"), text: $backendURL)
-                .autocapitalization(.none)
-                .autocorrectionDisabled()
-            Button(AppL10n.t("common.cancel"), role: .cancel) {
-                // Reset to saved value
-                backendURL = UserDefaults.standard.string(forKey: "backendURL") ?? Config.backendURL
-            }
-            Button(AppL10n.t("settings.save")) {
-                saveBackendURL()
-            }
-        } message: {
-            Text(AppL10n.t("settings.backend_url_message"))
-        }
-        .alert(AppL10n.t("settings.test_onboarding_title"), isPresented: $showTestOnboardingConfirm) {
-            Button(AppL10n.t("common.cancel"), role: .cancel) {}
-            Button(AppL10n.t("settings.start")) {
-                userManager.resetOnboardingForTesting()
-            }
-        } message: {
-            Text(AppL10n.t("settings.test_onboarding_message"))
-        }
-        .alert(AppL10n.t("settings.sign_in_required"), isPresented: $showTestOnboardingRequiresAuth) {
-            Button(AppL10n.t("plans.ok"), role: .cancel) {}
-        } message: {
-            Text(AppL10n.t("settings.sign_in_required_message"))
-        }
         .alert(AppL10n.t("settings.export_successful"), isPresented: $showExportSuccess) {
             Button(AppL10n.t("plans.ok"), role: .cancel) {}
         } message: {
@@ -825,10 +668,14 @@ struct SettingsView: View {
         }
     }
     
+    /// Opens Apple's subscription management page so the user can cancel or manage their subscription anytime.
+    func openSubscriptionManagement() {
+        guard let url = URL(string: "https://apps.apple.com/account/subscriptions") else { return }
+        UIApplication.shared.open(url)
+    }
+    
     func loadPreferences() {
         selectedCurrency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
-        dateFormat = UserDefaults.standard.string(forKey: "anita_date_format") ?? "MM/DD/YYYY"
-        numberFormat = UserDefaults.standard.string(forKey: "anita_number_format") ?? getNumberFormatForCurrency(selectedCurrency)
         emailNotifications = UserDefaults.standard.bool(forKey: "anita_email_notifications")
         
         // Sync from Supabase if authenticated
@@ -870,21 +717,18 @@ struct SettingsView: View {
                         self.selectedCurrency = currencyCode
                         UserDefaults.standard.set(currencyCode, forKey: "anita_user_currency")
                         let newNumberFormat = getNumberFormatForCurrency(currencyCode)
-                        self.numberFormat = newNumberFormat
                         UserDefaults.standard.set(newNumberFormat, forKey: "anita_number_format")
                     }
                 }
                 
                 if let dateFormat = profile["date_format"] as? String, !dateFormat.isEmpty {
                     await MainActor.run {
-                        self.dateFormat = dateFormat
                         UserDefaults.standard.set(dateFormat, forKey: "anita_date_format")
                     }
                 }
                 
                 if let numberFormat = profile["number_format"] as? String, !numberFormat.isEmpty {
                     await MainActor.run {
-                        self.numberFormat = numberFormat
                         UserDefaults.standard.set(numberFormat, forKey: "anita_number_format")
                     }
                 }
@@ -906,47 +750,15 @@ struct SettingsView: View {
         UserDefaults.standard.set(currency, forKey: "anita_user_currency")
         
         let newNumberFormat = getNumberFormatForCurrency(currency)
-        numberFormat = newNumberFormat
         UserDefaults.standard.set(newNumberFormat, forKey: "anita_number_format")
         
         savePreferencesToSupabase(currency: currency, numberFormat: newNumberFormat)
-    }
-    
-    func saveDateFormat(_ format: String) {
-        dateFormat = format
-        UserDefaults.standard.set(format, forKey: "anita_date_format")
-        savePreferencesToSupabase(dateFormat: format)
-    }
-    
-    func saveNumberFormat(_ format: String) {
-        numberFormat = format
-        UserDefaults.standard.set(format, forKey: "anita_number_format")
-        savePreferencesToSupabase(numberFormat: format)
     }
     
     func saveEmailNotifications(_ enabled: Bool) {
         emailNotifications = enabled
         UserDefaults.standard.set(enabled, forKey: "anita_email_notifications")
         savePreferencesToSupabase(emailNotifications: enabled)
-    }
-    
-    func saveBackendURL() {
-        // Validate URL format
-        guard let url = URL(string: backendURL),
-              let scheme = url.scheme,
-              (scheme == "http" || scheme == "https"),
-              url.host != nil else {
-            backendURLError = "Invalid URL format. Use http:// or https://"
-            return
-        }
-        
-        // Save to UserDefaults
-        UserDefaults.standard.set(backendURL, forKey: "backendURL")
-        
-        // Update NetworkService
-        networkService.updateBaseURL(backendURL)
-        
-        print("[SettingsView] Backend URL saved: \(backendURL)")
     }
     
     func savePreferencesToSupabase(currency: String? = nil, dateFormat: String? = nil, numberFormat: String? = nil, emailNotifications: Bool? = nil) {
@@ -1043,8 +855,8 @@ struct SettingsView: View {
         
         // Reset preferences to defaults
         selectedCurrency = "USD"
-        dateFormat = "MM/DD/YYYY"
-        numberFormat = "1,234.56"
+        UserDefaults.standard.set("MM/DD/YYYY", forKey: "anita_date_format")
+        UserDefaults.standard.set("1,234.56", forKey: "anita_number_format")
         emailNotifications = true
         
         // Clear from Supabase if authenticated
@@ -1061,6 +873,8 @@ struct SettingsView: View {
         var exportData: [String: Any] = [:]
         
         // User preferences
+        let dateFormat = UserDefaults.standard.string(forKey: "anita_date_format") ?? "MM/DD/YYYY"
+        let numberFormat = UserDefaults.standard.string(forKey: "anita_number_format") ?? getNumberFormatForCurrency(selectedCurrency)
         exportData["preferences"] = [
             "currency": selectedCurrency,
             "dateFormat": dateFormat,
@@ -1108,10 +922,12 @@ struct SettingsView: View {
                         saveCurrency(currency)
                     }
                     if let dateFormat = prefs["dateFormat"] as? String {
-                        saveDateFormat(dateFormat)
+                        UserDefaults.standard.set(dateFormat, forKey: "anita_date_format")
+                        savePreferencesToSupabase(dateFormat: dateFormat)
                     }
                     if let numberFormat = prefs["numberFormat"] as? String {
-                        saveNumberFormat(numberFormat)
+                        UserDefaults.standard.set(numberFormat, forKey: "anita_number_format")
+                        savePreferencesToSupabase(numberFormat: numberFormat)
                     }
                     if let emailNotifications = prefs["emailNotifications"] as? Bool {
                         saveEmailNotifications(emailNotifications)
@@ -1282,6 +1098,8 @@ struct SettingsRowWithIcon<Content: View>: View {
             
             content
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
         .background(Color.clear)

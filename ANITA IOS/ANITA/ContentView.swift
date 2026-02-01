@@ -103,9 +103,9 @@ struct ContentView: View {
                     .foregroundColor: UIColor(red: 0.4, green: 0.49, blue: 0.92, alpha: 1.0)
                 ]
                 
-                // Schedule monthly summary notifications
+                // Schedule daily transaction reminder (refreshes message when app opens)
                 Task { @MainActor in
-                    NotificationService.shared.scheduleMonthlySummary()
+                    NotificationService.shared.scheduleDailyTransactionReminder()
                 }
                 
                 // Normal item styling with slight transparency

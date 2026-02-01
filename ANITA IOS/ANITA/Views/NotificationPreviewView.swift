@@ -173,29 +173,35 @@ struct NotificationPreviewView: View {
                             ]
                         )
                         
-                        // Transaction Reminders
+                        // Daily Transaction Reminders (funny messages)
                         NotificationCategorySection(
-                            title: "Transaction Reminders",
+                            title: "Daily Transaction Reminders",
                             icon: "plus.circle.fill",
                             color: .yellow,
                             notifications: [
                                 NotificationPreview(
-                                    title: "Let's Get Started!",
-                                    body: "👋 Hey! It's been a day since you started. Want to add your first transaction? Your budget is waiting...",
-                                    type: "Transaction Reminder (First)",
-                                    time: "1 day with no transactions"
+                                    title: "Log transactions 💸",
+                                    body: "Transaction check-in. What did you spend?",
+                                    type: "Daily Reminder",
+                                    time: "Every day, 8:00 PM"
                                 ),
                                 NotificationPreview(
-                                    title: "Transaction Reminder",
-                                    body: "👀 It's been 3 days since your last transaction. Everything okay? Your budget misses you.",
-                                    type: "Transaction Reminder (Gentle)",
-                                    time: "3-6 days without transactions"
+                                    title: "Log transactions 💸",
+                                    body: "Add a transaction. One is enough.",
+                                    type: "Daily Reminder",
+                                    time: "Every day, 8:00 PM"
                                 ),
                                 NotificationPreview(
-                                    title: "Transaction Alert!",
-                                    body: "🚨 ALERT: It's been 7 days since your last transaction! Your budget is having an existential crisis.",
-                                    type: "Transaction Reminder (Urgent)",
-                                    time: "7+ days without transactions"
+                                    title: "Log transactions 💸",
+                                    body: "Log it. Your budget is waiting.",
+                                    type: "Daily Reminder",
+                                    time: "Every day, 8:00 PM"
+                                ),
+                                NotificationPreview(
+                                    title: "Log transactions 💸",
+                                    body: "Transaction time. You know the drill.",
+                                    type: "Daily Reminder",
+                                    time: "Every day, 8:00 PM"
                                 )
                             ]
                         )

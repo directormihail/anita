@@ -110,34 +110,6 @@ class FinanceViewModel: ObservableObject {
                     self.loadHistoricalData()
                     
                     self.isLoading = false
-                    
-                    // Check for notifications after data is loaded
-                    Task { @MainActor in
-                        let notificationService = NotificationService.shared
-                        
-                        // Check budget limits
-                        notificationService.checkBudgetLimits(
-                            goals: self.goals,
-                            transactions: self.transactions,
-                            selectedMonth: self.selectedMonth
-                        )
-                        
-                        // Check goal milestones
-                        notificationService.checkGoalMilestones(goals: self.goals)
-                        
-                        // Check unusual spending patterns
-                        notificationService.checkUnusualSpending(
-                            transactions: self.transactions,
-                            selectedMonth: self.selectedMonth
-                        )
-                        
-                        // Check transaction reminders (only if no auto banking)
-                        // TODO: Check if user has auto banking connection
-                        notificationService.checkTransactionReminders(
-                            transactions: self.transactions,
-                            hasAutoBanking: false // Will be updated when auto banking is implemented
-                        )
-                    }
                 }
             } catch {
                 await MainActor.run {
@@ -172,11 +144,6 @@ class FinanceViewModel: ObservableObject {
             await MainActor.run {
                 self.targets = targetsResponse.targets
                 self.goals = targetsResponse.goals ?? []
-                
-                // Check for goal milestone notifications when targets are updated
-                Task { @MainActor in
-                    NotificationService.shared.checkGoalMilestones(goals: self.goals)
-                }
             }
         } catch {
             print("[FinanceViewModel] Error loading targets: \(error.localizedDescription)")
@@ -288,30 +255,7 @@ class FinanceViewModel: ObservableObject {
         
         await MainActor.run {
             self.transactions.append(newTransaction)
-            
-            // Record transaction added for reminder tracking
-            NotificationService.shared.recordTransactionAdded()
-            
-            // Recalculate metrics
             refresh()
-            
-            // Check for notifications after adding transaction
-            Task { @MainActor in
-                let notificationService = NotificationService.shared
-                
-                // Check budget limits
-                notificationService.checkBudgetLimits(
-                    goals: self.goals,
-                    transactions: self.transactions,
-                    selectedMonth: self.selectedMonth
-                )
-                
-                // Check unusual spending patterns
-                notificationService.checkUnusualSpending(
-                    transactions: self.transactions,
-                    selectedMonth: self.selectedMonth
-                )
-            }
         }
     }
     

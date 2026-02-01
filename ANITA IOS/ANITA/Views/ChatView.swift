@@ -24,8 +24,23 @@ struct ChatView: View {
             Color.black
                 .ignoresSafeArea()
             
-            // Main content
+            // Main content with edge-swipe to open sidebar (thin strip so hamburger button stays tappable)
             mainContentView
+                .overlay(alignment: .leading) {
+                    Color.clear
+                        .frame(width: 12)
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 20)
+                                .onEnded { value in
+                                    if value.translation.width > 50 {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                            isSidebarPresented = true
+                                        }
+                                    }
+                                }
+                        )
+                }
                 .blur(radius: isSidebarPresented ? 8 : 0)
                 .scaleEffect(isSidebarPresented ? 0.95 : 1.0)
                 .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isSidebarPresented)
@@ -277,6 +292,19 @@ struct ChatView: View {
                             .padding(.vertical, 20)
                         }
                     }
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 25)
+                            .onEnded { value in
+                                let startX = value.startLocation.x
+                                let horizontal = value.translation.width
+                                let vertical = abs(value.translation.height)
+                                if startX < 100, horizontal > 60, horizontal > vertical {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        isSidebarPresented = true
+                                    }
+                                }
+                            }
+                    )
                     .onChange(of: viewModel.messages.count) { oldValue, newValue in
                         if !showWelcomeScreen, let lastMessage = viewModel.messages.last {
                             withAnimation {
