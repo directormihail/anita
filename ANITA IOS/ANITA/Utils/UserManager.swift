@@ -151,6 +151,7 @@ class UserManager: ObservableObject {
         AppL10n.setLanguageCode(survey.languageCode)
         UserDefaults.standard.set(survey.currencyCode, forKey: "anita_user_currency")
         UserDefaults.standard.set(numberFormatForCurrency(survey.currencyCode), forKey: "anita_number_format")
+        UserDefaults.standard.set(survey.userName, forKey: "anita_profile_name")
         
         // Mark onboarding completed
         hasCompletedOnboarding = true
@@ -171,6 +172,7 @@ class UserManager: ObservableObject {
         AppL10n.setLanguageCode(survey.languageCode)
         UserDefaults.standard.set(survey.currencyCode, forKey: "anita_user_currency")
         UserDefaults.standard.set(numberFormatForCurrency(survey.currencyCode), forKey: "anita_number_format")
+        UserDefaults.standard.set(survey.userName, forKey: "anita_profile_name")
         hasCompletedOnboarding = true
         UserDefaults.standard.set(true, forKey: onboardingCompletedKey)
         UserDefaults.standard.set(false, forKey: onboardingSyncedKey)
@@ -187,6 +189,7 @@ class UserManager: ObservableObject {
                 try await supabaseService.updateUserMetadata(data: [
                     "preferred_language": survey.languageCode,
                     "preferred_currency": survey.currencyCode,
+                    "user_name": survey.userName,
                     "onboarding_answers": survey.answers,
                     "onboarding_completed_at": ISO8601DateFormatter().string(from: survey.completedAt)
                 ])
@@ -200,7 +203,7 @@ class UserManager: ObservableObject {
         
         if !UserDefaults.standard.bool(forKey: preferencesSyncedKey) {
             do {
-                try await savePreferencesToSupabase(currency: survey.currencyCode)
+                try await savePreferencesToSupabase(currency: survey.currencyCode, displayName: survey.userName)
                 UserDefaults.standard.set(true, forKey: preferencesSyncedKey)
                 print("[UserManager] ✅ Synced preferences to profiles")
             } catch {
@@ -209,7 +212,7 @@ class UserManager: ObservableObject {
         }
     }
     
-    private func savePreferencesToSupabase(currency: String) async throws {
+    private func savePreferencesToSupabase(currency: String, displayName: String? = nil) async throws {
         guard supabaseService.isAuthenticated else { return }
         let userId = userId
         
@@ -227,12 +230,15 @@ class UserManager: ObservableObject {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         
-        let updateData: [String: Any] = [
+        var updateData: [String: Any] = [
             "currency_code": currency,
             "currency_symbol": currencySymbol(currency),
             "number_format": numberFormatForCurrency(currency),
             "updated_at": ISO8601DateFormatter().string(from: Date())
         ]
+        if let name = displayName, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            updateData["display_name"] = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         
         request.httpBody = try JSONSerialization.data(withJSONObject: updateData)
         
@@ -244,24 +250,14 @@ class UserManager: ObservableObject {
     }
     
     private func numberFormatForCurrency(_ currency: String) -> String {
-        switch currency {
-        case "EUR", "PLN":
-            return "1.234,56"
-        default:
-            return "1,234.56"
-        }
+        (currency == "CHF" || currency == "EUR") ? "1.234,56" : "1.234,56"
     }
     
     private func currencySymbol(_ currency: String) -> String {
         switch currency {
-        case "USD": return "$"
         case "EUR": return "€"
-        case "GBP": return "£"
         case "CHF": return "CHF"
-        case "PLN": return "zł"
-        case "TRY": return "₺"
-        case "CAD": return "C$"
-        default: return currency
+        default: return "€"
         }
     }
 

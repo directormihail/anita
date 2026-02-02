@@ -9,13 +9,14 @@ import Foundation
 
 struct OnboardingSurveyResponse: Codable {
     let languageCode: String // e.g. "en", "de", "fr", "es", "it", "pl", "tr", "ru", "uk"
+    let userName: String // Display name from onboarding
     let currencyCode: String // e.g. "USD", "EUR", "GBP"
     let answers: [String: String] // questionId -> optionId
     let completedAt: Date
     
-    // Backward-compatible decode: older builds may have saved surveys without currencyCode.
-    init(languageCode: String, currencyCode: String, answers: [String: String], completedAt: Date) {
+    init(languageCode: String, userName: String, currencyCode: String, answers: [String: String], completedAt: Date) {
         self.languageCode = languageCode
+        self.userName = userName
         self.currencyCode = currencyCode
         self.answers = answers
         self.completedAt = completedAt
@@ -23,6 +24,7 @@ struct OnboardingSurveyResponse: Codable {
     
     private enum CodingKeys: String, CodingKey {
         case languageCode
+        case userName
         case currencyCode
         case answers
         case completedAt
@@ -31,6 +33,7 @@ struct OnboardingSurveyResponse: Codable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         languageCode = try container.decode(String.self, forKey: .languageCode)
+        userName = try container.decodeIfPresent(String.self, forKey: .userName) ?? ""
         currencyCode = try container.decodeIfPresent(String.self, forKey: .currencyCode) ?? "USD"
         answers = try container.decode([String: String].self, forKey: .answers)
         completedAt = try container.decode(Date.self, forKey: .completedAt)

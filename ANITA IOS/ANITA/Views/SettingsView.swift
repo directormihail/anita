@@ -26,7 +26,7 @@ struct SettingsView: View {
     @State private var isSavingName = false
     
     // Preferences
-    @State private var selectedCurrency: String = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+    @State private var selectedCurrency: String = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "EUR"
     @State private var emailNotifications: Bool = UserDefaults.standard.bool(forKey: "anita_email_notifications")
     @State private var currentLanguageCode: String = AppL10n.currentLanguageCode()
     @State private var languageRefreshTrigger = UUID()
@@ -41,10 +41,14 @@ struct SettingsView: View {
     @State private var showImportPicker = false
     @State private var showClearDataConfirm = false
     
+    // Test onboarding
+    @State private var showTestOnboardingConfirm = false
+    @State private var showTestOnboardingSignInRequired = false
+    
     private let networkService = NetworkService.shared
     private let supabaseService = SupabaseService.shared
     
-    let currencies = ["USD", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF", "CNY", "INR", "BRL", "MXN", "SGD", "HKD", "NZD", "ZAR"]
+    let currencies = ["EUR", "CHF"]
     
     var body: some View {
         ZStack {
@@ -235,14 +239,7 @@ struct SettingsView: View {
                             Menu {
                                 let languages: [(code: String, name: String)] = [
                                     ("en", "English"),
-                                    ("de", "Deutsch"),
-                                    ("fr", "Français"),
-                                    ("es", "Español"),
-                                    ("it", "Italiano"),
-                                    ("pl", "Polski"),
-                                    ("tr", "Türkçe"),
-                                    ("ru", "Русский"),
-                                    ("uk", "Українська")
+                                    ("de", "Deutsch")
                                 ]
                                 
                                 ForEach(languages, id: \.code) { lang in
@@ -269,14 +266,7 @@ struct SettingsView: View {
                                     value: {
                                         let languages: [String: String] = [
                                             "en": "English",
-                                            "de": "Deutsch",
-                                            "fr": "Français",
-                                            "es": "Español",
-                                            "it": "Italiano",
-                                            "pl": "Polski",
-                                            "tr": "Türkçe",
-                                            "ru": "Русский",
-                                            "uk": "Українська"
+                                            "de": "Deutsch"
                                         ]
                                         return languages[currentLanguageCode] ?? currentLanguageCode.uppercased()
                                     }(),
@@ -295,7 +285,7 @@ struct SettingsView: View {
                                         saveCurrency(currency)
                                     }) {
                                         HStack {
-                                            Text(currency)
+                                            Text(currency == "EUR" ? "€ Euro" : "CHF Swiss Franc")
                                             if selectedCurrency == currency {
                                                 Image(systemName: "checkmark")
                                             }
@@ -307,7 +297,7 @@ struct SettingsView: View {
                                     icon: "dollarsign.circle.fill",
                                     iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
                                     title: AppL10n.t("settings.currency"),
-                                    value: selectedCurrency,
+                                    value: selectedCurrency == "EUR" ? "€ Euro" : "CHF Swiss Franc",
                                     showChevron: true
                                 ) {}
                             }
@@ -488,6 +478,26 @@ struct SettingsView: View {
                                 ) {}
                             }
                             .buttonStyle(PremiumSettingsButtonStyle())
+                            
+                            PremiumDivider()
+                                .padding(.leading, 76)
+                            
+                            Button(action: {
+                                if userManager.isAuthenticated {
+                                    showTestOnboardingConfirm = true
+                                } else {
+                                    showTestOnboardingSignInRequired = true
+                                }
+                            }) {
+                                SettingsRowWithIcon(
+                                    icon: "arrow.counterclockwise.circle.fill",
+                                    iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
+                                    title: AppL10n.t("settings.test_onboarding"),
+                                    value: nil,
+                                    showChevron: true
+                                ) {}
+                            }
+                            .buttonStyle(PremiumSettingsButtonStyle())
                         }
                     }
                     
@@ -620,6 +630,19 @@ struct SettingsView: View {
         } message: {
             Text(AppL10n.t("settings.export_success_message"))
         }
+        .alert(AppL10n.t("settings.test_onboarding_title"), isPresented: $showTestOnboardingConfirm) {
+            Button(AppL10n.t("common.cancel"), role: .cancel) {}
+            Button(AppL10n.t("settings.test_onboarding")) {
+                userManager.resetOnboardingForTesting()
+            }
+        } message: {
+            Text(AppL10n.t("settings.test_onboarding_message"))
+        }
+        .alert(AppL10n.t("settings.test_onboarding_title"), isPresented: $showTestOnboardingSignInRequired) {
+            Button(AppL10n.t("plans.ok"), role: .cancel) {}
+        } message: {
+            Text(AppL10n.t("settings.sign_in_required_message"))
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LanguageChanged"))) { _ in
             // Refresh the view when language changes
             currentLanguageCode = AppL10n.currentLanguageCode()
@@ -634,7 +657,10 @@ struct SettingsView: View {
     
     func loadProfile() {
         guard userManager.currentUser != nil else { return }
-        profileName = UserDefaults.standard.string(forKey: "anita_profile_name") ?? ""
+        // Prefer name from onboarding (saved to anita_profile_name on completion), else stored profile name
+        let fromOnboarding = OnboardingSurveyResponse.loadFromUserDefaults()?.userName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fromPrefs = UserDefaults.standard.string(forKey: "anita_profile_name")?.trimmingCharacters(in: .whitespacesAndNewlines)
+        profileName = (fromOnboarding?.isEmpty == false ? fromOnboarding : nil) ?? fromPrefs ?? ""
     }
     
     func saveNameDebounced(_ name: String) {
@@ -675,7 +701,8 @@ struct SettingsView: View {
     }
     
     func loadPreferences() {
-        selectedCurrency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+        let saved = UserDefaults.standard.string(forKey: "anita_user_currency")
+        selectedCurrency = (saved == "CHF" || saved == "EUR") ? saved! : "EUR"
         emailNotifications = UserDefaults.standard.bool(forKey: "anita_email_notifications")
         
         // Sync from Supabase if authenticated
@@ -712,12 +739,11 @@ struct SettingsView: View {
             if let json = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
                let profile = json.first {
                 
-                if let currencyCode = profile["currency_code"] as? String, !currencyCode.isEmpty {
+                if let currencyCode = profile["currency_code"] as? String, (currencyCode == "EUR" || currencyCode == "CHF") {
                     await MainActor.run {
                         self.selectedCurrency = currencyCode
                         UserDefaults.standard.set(currencyCode, forKey: "anita_user_currency")
-                        let newNumberFormat = getNumberFormatForCurrency(currencyCode)
-                        UserDefaults.standard.set(newNumberFormat, forKey: "anita_number_format")
+                        UserDefaults.standard.set("1.234,56", forKey: "anita_number_format")
                     }
                 }
                 
@@ -814,34 +840,14 @@ struct SettingsView: View {
     }
     
     func getNumberFormatForCurrency(_ currency: String) -> String {
-        switch currency {
-        case "EUR":
-            return "1.234,56"
-        case "USD", "GBP", "CAD", "AUD", "NZD", "SGD", "HKD":
-            return "1,234.56"
-        default:
-            return "1,234.56"
-        }
+        (currency == "CHF" || currency == "EUR") ? "1.234,56" : "1.234,56"
     }
     
     func getCurrencySymbol(_ currency: String) -> String {
         switch currency {
-        case "USD": return "$"
         case "EUR": return "€"
-        case "GBP": return "£"
-        case "JPY": return "¥"
-        case "CAD": return "C$"
-        case "AUD": return "A$"
         case "CHF": return "CHF"
-        case "CNY": return "¥"
-        case "INR": return "₹"
-        case "BRL": return "R$"
-        case "MXN": return "MX$"
-        case "SGD": return "S$"
-        case "HKD": return "HK$"
-        case "NZD": return "NZ$"
-        case "ZAR": return "R"
-        default: return "$"
+        default: return "€"
         }
     }
     
@@ -854,9 +860,10 @@ struct SettingsView: View {
         UserDefaults.standard.removeObject(forKey: "anita_email_notifications")
         
         // Reset preferences to defaults
-        selectedCurrency = "USD"
+        selectedCurrency = "EUR"
+        UserDefaults.standard.set("EUR", forKey: "anita_user_currency")
         UserDefaults.standard.set("MM/DD/YYYY", forKey: "anita_date_format")
-        UserDefaults.standard.set("1,234.56", forKey: "anita_number_format")
+        UserDefaults.standard.set("1.234,56", forKey: "anita_number_format")
         emailNotifications = true
         
         // Clear from Supabase if authenticated

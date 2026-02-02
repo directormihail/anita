@@ -790,6 +790,10 @@ class ChatViewModel: ObservableObject {
         lines.append("You are ANITA, a personal finance assistant.")
         lines.append("Always reply in \(languageName), unless the user explicitly asks for another language.")
         
+        if let name = survey?.userName, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            lines.append("The user's name is \(name). You may address them by name when appropriate.")
+        }
+        
         if let answers = survey?.answers, !answers.isEmpty {
             // Lightweight personalization context (IDs, not sensitive personal data)
             let formatted = answers

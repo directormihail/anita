@@ -25,22 +25,15 @@ struct OnboardingView: View {
     
     @State private var pageIndex: Int = 0
     @State private var selectedLanguage: LanguageOption? = nil
+    @State private var userName: String = ""
     @State private var answers: [String: String] = [:]
-    @State private var selectedCurrency: String = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+    @State private var selectedCurrency: String = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "EUR"
     
     let onComplete: (OnboardingSurveyResponse) -> Void
     
     private let languages: [LanguageOption] = [
-        // Keep high-ROI markets near the top for faster selection.
         .init(id: "en", title: "English", subtitle: ""),
-        .init(id: "de", title: "Deutsch", subtitle: ""),
-        .init(id: "fr", title: "Français", subtitle: ""),
-        .init(id: "es", title: "Español", subtitle: ""),
-        .init(id: "it", title: "Italiano", subtitle: ""),
-        .init(id: "pl", title: "Polski", subtitle: ""),
-        .init(id: "tr", title: "Türkçe", subtitle: ""),
-        .init(id: "ru", title: "Русский", subtitle: ""),
-        .init(id: "uk", title: "Українська", subtitle: "")
+        .init(id: "de", title: "Deutsch", subtitle: "")
     ]
     
     private let questions: [Question] = [
@@ -108,23 +101,21 @@ struct OnboardingView: View {
     }
     
     private let currencyOptions: [CurrencyOption] = [
-        .init(id: "USD", symbol: "$", name: "US Dollar"),
         .init(id: "EUR", symbol: "€", name: "Euro"),
-        .init(id: "GBP", symbol: "£", name: "British Pound"),
-        .init(id: "CHF", symbol: "CHF", name: "Swiss Franc"),
-        .init(id: "PLN", symbol: "zł", name: "Polish Złoty"),
-        .init(id: "TRY", symbol: "₺", name: "Turkish Lira"),
-        .init(id: "CAD", symbol: "C$", name: "Canadian Dollar")
+        .init(id: "CHF", symbol: "CHF", name: "Swiss Franc")
     ]
     
-    // Pages: language + currency + questions
-    private var totalPages: Int { 2 + questions.count }
+    // Pages: language + name + currency + questions
+    private var totalPages: Int { 3 + questions.count }
     
     private var isLastPage: Bool { pageIndex == totalPages - 1 }
     private var isFirstPage: Bool { pageIndex == 0 }
     
+    private var trimmedUserName: String { userName.trimmingCharacters(in: .whitespacesAndNewlines) }
+    
     private var hasAnsweredAllQuestions: Bool {
         guard selectedLanguage != nil else { return false }
+        guard !trimmedUserName.isEmpty else { return false }
         guard !selectedCurrency.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
         return questions.allSatisfy { answers[$0.id] != nil }
     }
@@ -139,10 +130,13 @@ struct OnboardingView: View {
             return selectedLanguage != nil
         }
         if pageIndex == 1 {
+            return !trimmedUserName.isEmpty
+        }
+        if pageIndex == 2 {
             return !selectedCurrency.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
-        if pageIndex >= 2 && pageIndex <= questions.count + 1 {
-            let question = questions[pageIndex - 2]
+        if pageIndex >= 3 && pageIndex <= questions.count + 2 {
+            let question = questions[pageIndex - 3]
             return answers[question.id] != nil
         }
         return hasAnsweredAllQuestions
@@ -185,11 +179,13 @@ struct OnboardingView: View {
                 TabView(selection: $pageIndex) {
                     languagePage.tag(0)
                     
-                    currencyPage.tag(1)
+                    namePage.tag(1)
+                    
+                    currencyPage.tag(2)
                     
                     ForEach(0..<questions.count, id: \.self) { idx in
                         questionPage(questions[idx])
-                            .tag(idx + 2)
+                            .tag(idx + 3)
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
@@ -251,6 +247,39 @@ struct OnboardingView: View {
         }
     }
     
+    private var namePage: some View {
+        VStack(spacing: 0) {
+            Spacer()
+            
+            VStack(spacing: 16) {
+                Text(AppL10n.t("onboarding.name.title", languageCode: languageCode))
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+                
+                Text("👋")
+                    .font(.system(size: 44))
+            }
+            .padding(.horizontal, 28)
+            .padding(.bottom, 28)
+            
+            TextField(AppL10n.t("onboarding.name.placeholder", languageCode: languageCode), text: $userName)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundColor(.white)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 16)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(Color.white.opacity(0.08))
+                )
+                .autocapitalization(.words)
+                .disableAutocorrection(true)
+                .padding(.horizontal, 24)
+            
+            Spacer()
+        }
+    }
+    
     private func questionPage(_ question: Question) -> some View {
         VStack(spacing: 0) {
             Spacer()
@@ -294,24 +323,26 @@ struct OnboardingView: View {
         VStack(spacing: 0) {
             Spacer()
             
-            VStack(spacing: 14) {
+            VStack(spacing: 12) {
                 Text(AppL10n.t("onboarding.currency.title", languageCode: languageCode))
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
                     .multilineTextAlignment(.center)
                 
                 Text(AppL10n.t("onboarding.currency.subtitle", languageCode: languageCode))
-                    .font(.system(size: 16, weight: .regular))
-                    .foregroundColor(.white.opacity(0.75))
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundColor(.white.opacity(0.7))
                     .multilineTextAlignment(.center)
             }
             .padding(.horizontal, 28)
-            .padding(.bottom, 24)
+            .padding(.bottom, 28)
             
-            VStack(spacing: 10) {
+            VStack(spacing: 14) {
                 ForEach(currencyOptions) { option in
-                    SelectableRow(
-                        title: "\(option.symbol)  \(option.id)  •  \(option.name)",
+                    CurrencyOptionCard(
+                        symbol: option.symbol,
+                        code: option.id,
+                        name: option.name,
                         isSelected: selectedCurrency == option.id
                     ) {
                         let impact = UIImpactFeedbackGenerator(style: .light)
@@ -326,10 +357,9 @@ struct OnboardingView: View {
             Spacer()
         }
         .onAppear {
-            // Ensure a valid default is selected.
-            if currencyOptions.contains(where: { $0.id == selectedCurrency }) == false {
-                selectedCurrency = "USD"
-                persistCurrencySelection("USD")
+            if !currencyOptions.contains(where: { $0.id == selectedCurrency }) {
+                selectedCurrency = "EUR"
+                persistCurrencySelection("EUR")
             }
         }
     }
@@ -341,12 +371,7 @@ struct OnboardingView: View {
     }
     
     private func numberFormatForCurrency(_ currency: String) -> String {
-        switch currency {
-        case "EUR", "PLN":
-            return "1.234,56"
-        default:
-            return "1,234.56"
-        }
+        (currency == "CHF" || currency == "EUR") ? "1.234,56" : "1.234,56"
     }
 
     // MARK: - Onboarding questions localization (with context-appropriate smiles)
@@ -935,6 +960,7 @@ struct OnboardingView: View {
                 let language = selectedLanguage?.id ?? "en"
                 let survey = OnboardingSurveyResponse(
                     languageCode: language,
+                    userName: trimmedUserName,
                     currencyCode: selectedCurrency,
                     answers: answers,
                     completedAt: Date()
@@ -1060,6 +1086,61 @@ private struct SelectableCard: View {
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)
                             .stroke(isSelected ? Color.white.opacity(0.25) : Color.white.opacity(0.12), lineWidth: isSelected ? 1.5 : 1)
+                    )
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct CurrencyOptionCard: View {
+    let symbol: String
+    let code: String
+    let name: String
+    let isSelected: Bool
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 16) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(isSelected ? Color.white.opacity(0.18) : Color.white.opacity(0.08))
+                        .frame(width: 56, height: 56)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(isSelected ? Color.white.opacity(0.35) : Color.white.opacity(0.12), lineWidth: 1)
+                        )
+                    Text(symbol)
+                        .font(.system(size: code == "CHF" ? 16 : 28, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.95))
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(name)
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white.opacity(0.95))
+                    Text(code)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white.opacity(0.6))
+                }
+                
+                Spacer()
+                
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundStyle(Color.white.opacity(0.9))
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
+            .background {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color(white: 0.12).opacity(isSelected ? 0.5 : 0.25))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.white.opacity(isSelected ? 0.25 : 0.1), lineWidth: 1)
                     )
             }
         }
