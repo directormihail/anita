@@ -19,8 +19,7 @@ class StoreKitService: ObservableObject {
     
     // Product IDs - these should match your App Store Connect product IDs
     private let productIDs = [
-        "com.anita.pro.monthly",      // Pro Plan - $4.99/month
-        "com.anita.ultimate.monthly"  // Ultimate Plan - $9.99/month
+        "com.anita.pro.monthly"  // Pro Plan - €4.99/month
     ]
     
     private init() {
@@ -87,8 +86,7 @@ class StoreKitService: ObservableObject {
             return
         }
         
-        // Verify subscription with backend
-        await verifySubscriptionWithBackend(
+                await verifySubscriptionWithBackend(
             userId: userId,
             transactionId: String(transaction.id),
             productId: product.id

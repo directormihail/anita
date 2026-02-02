@@ -45,31 +45,6 @@
           "referenceName" : "Pro Monthly",
           "subscriptionGroupID" : "ANITA-Premium",
           "type" : "RecurringSubscription"
-        },
-        {
-          "adHocOffers" : [
-
-          ],
-          "codeOffers" : [
-
-          ],
-          "displayPrice" : "9.99",
-          "familyShareable" : false,
-          "groupNumber" : 2,
-          "internalID" : "ULTIMATE-MONTHLY",
-          "introductoryOffer" : null,
-          "localizations" : [
-            {
-              "description" : "Ultimate plan - unlimited replies, advanced analytics, priority support",
-              "displayName" : "Ultimate Monthly",
-              "locale" : "en_US"
-            }
-          ],
-          "productID" : "com.anita.ultimate.monthly",
-          "recurringSubscriptionPeriod" : "P1M",
-          "referenceName" : "Ultimate Monthly",
-          "subscriptionGroupID" : "ANITA-Premium",
-          "type" : "RecurringSubscription"
         }
       ]
     }

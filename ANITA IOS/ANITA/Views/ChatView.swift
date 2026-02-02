@@ -122,7 +122,7 @@ struct ChatView: View {
                     
                     // Plan information - centered
                     HStack(spacing: 8) {
-                        Text(AppL10n.t("plans.ultimate"))
+                        Text(AppL10n.t("plans.premium"))
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.white)
                         

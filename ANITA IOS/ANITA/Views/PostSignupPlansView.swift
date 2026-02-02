@@ -19,9 +19,7 @@ struct PostSignupPlansView: View {
         if let subscription = databaseSubscription, subscription.status == "active" {
             return subscription.plan
         }
-        if storeKitService.isPurchased("com.anita.ultimate.monthly") {
-            return "ultimate"
-        } else if storeKitService.isPurchased("com.anita.pro.monthly") {
+        if storeKitService.isPurchased("com.anita.pro.monthly") {
             return "pro"
         }
         return "free"
@@ -82,16 +80,8 @@ struct PostSignupPlansView: View {
                                 planType: .pro,
                                 isCurrentPlan: currentPlan == "pro",
                                 isCreatingCheckout: storeKitService.isLoading,
-                                price: storeKitService.getProduct("com.anita.pro.monthly")?.displayPrice ?? "$4.99",
+                                price: storeKitService.getProduct("com.anita.pro.monthly")?.displayPrice ?? "€4.99",
                                 onCheckout: { Task { await purchasePlan(productId: "com.anita.pro.monthly") } }
-                            )
-                            
-                            SubscriptionPlanCard(
-                                planType: .ultimate,
-                                isCurrentPlan: currentPlan == "ultimate",
-                                isCreatingCheckout: storeKitService.isLoading,
-                                price: storeKitService.getProduct("com.anita.ultimate.monthly")?.displayPrice ?? "$9.99",
-                                onCheckout: { Task { await purchasePlan(productId: "com.anita.ultimate.monthly") } }
                             )
                         }
                         .padding(.horizontal, 20)
