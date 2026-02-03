@@ -161,7 +161,6 @@ struct FinanceView: View {
     @State private var isCategoryAnalysisExpanded = false
     @State private var isAssetsExpanded = false
     @State private var isTransactionsExpanded = false
-    @State private var isAnitaInsightsExpanded = false
     @State private var isTrendsAndComparisonsExpanded = false
     @State private var selectedCategory: String? = nil
     @State private var showAddAssetSheet = false
@@ -1818,231 +1817,6 @@ struct FinanceView: View {
         }
     }
     
-    private var anitaInsightsView: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Button(action: {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.75, blendDuration: 0.25)) {
-                    isAnitaInsightsExpanded.toggle()
-                }
-            }) {
-                HStack(spacing: 16) {
-                    ZStack {
-                        // Premium glass circle background with gradient
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color(white: 0.2).opacity(0.3),
-                                        Color(white: 0.15).opacity(0.2)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 44, height: 44)
-                            .overlay {
-                                Circle()
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [
-                                                Color.white.opacity(0.2),
-                                                Color.white.opacity(0.1)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 1
-                                    )
-                            }
-                        
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [
-                                        Color(red: 0.9, green: 0.6, blue: 0.2).opacity(0.95),
-                                        Color(red: 0.9, green: 0.6, blue: 0.2).opacity(0.8)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                    }
-                    
-                    Text(AppL10n.t("finance.anita_insights"))
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white.opacity(0.95))
-                    
-                    Spacer()
-                    
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.4))
-                        .rotationEffect(.degrees(isAnitaInsightsExpanded ? 90 : 0))
-                        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isAnitaInsightsExpanded)
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 18)
-                .liquidGlass(cornerRadius: 20)
-                .padding(.horizontal, 20)
-            }
-            .buttonStyle(PremiumSettingsButtonStyle())
-            
-            if isAnitaInsightsExpanded {
-                VStack(spacing: 20) {
-                    // AI Recommendations Section
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text(AppL10n.t("finance.ai_recommendations"))
-                                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                                .foregroundColor(.white.opacity(0.6))
-                                .tracking(0.8)
-                            
-                            Spacer()
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 16)
-                        
-                        // Get recommendations from transactions and goals
-                        let recommendations = getAIRecommendations()
-                        
-                        if recommendations.isEmpty {
-                            VStack(spacing: 8) {
-                                Image(systemName: "lightbulb")
-                                    .font(.system(size: 32, weight: .light))
-                                    .foregroundColor(.white.opacity(0.3))
-                                Text(AppL10n.t("finance.no_recommendations"))
-                                    .font(.system(size: 14, weight: .medium, design: .rounded))
-                                    .foregroundColor(.white.opacity(0.5))
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 24)
-                        } else {
-                            ScrollView {
-                                VStack(spacing: 0) {
-                                    ForEach(Array(recommendations.enumerated()), id: \.offset) { index, recommendation in
-                                        RecommendationRow(recommendation: recommendation)
-                                            .opacity(isAnitaInsightsExpanded ? 1 : 0)
-                                            .animation(
-                                                .spring(response: 0.4, dampingFraction: 0.8)
-                                                    .delay(Double(index) * 0.025),
-                                                value: isAnitaInsightsExpanded
-                                            )
-                                        
-                                        if index < recommendations.count - 1 {
-                                            PremiumDivider()
-                                                .padding(.leading, 76)
-                                                .opacity(isAnitaInsightsExpanded ? 1 : 0)
-                                                .animation(
-                                                    .spring(response: 0.4, dampingFraction: 0.8)
-                                                        .delay(Double(index) * 0.025 + 0.01),
-                                                    value: isAnitaInsightsExpanded
-                                                )
-                                        }
-                                    }
-                                }
-                            }
-                            .frame(maxHeight: 200)
-                        }
-                    }
-                }
-                .liquidGlass(cornerRadius: 18)
-                .padding(.horizontal, 20)
-                .transition(.expandSection)
-            }
-        }
-    }
-    
-    // MARK: - Helper Functions for Anita Insights
-    
-    private func getAIRecommendations() -> [AIRecommendation] {
-        var recommendations: [AIRecommendation] = []
-        
-        // Analyze spending patterns and create recommendations
-        let calendar = Calendar.current
-        let month = calendar.component(.month, from: viewModel.selectedMonth)
-        let year = calendar.component(.year, from: viewModel.selectedMonth)
-        
-        // Get current month expenses
-        let currentMonthExpenses = viewModel.transactions
-            .filter { $0.type == "expense" }
-            .reduce(0.0) { $0 + $1.amount }
-        
-        // Get income
-        let currentMonthIncome = viewModel.monthlyIncome
-        
-        // Recommendation 1: Savings rate
-        if currentMonthIncome > 0 {
-            let savingsRate = ((currentMonthIncome - currentMonthExpenses) / currentMonthIncome) * 100
-            if savingsRate < 20 && savingsRate >= 0 {
-                let savingsRateStr = String(format: "%.1f", savingsRate)
-                let descriptionTemplate = AppL10n.t("ai_recommendation.savings_rate_description")
-                let description = descriptionTemplate.replacingOccurrences(of: "%@", with: savingsRateStr)
-                recommendations.append(AIRecommendation(
-                    title: AppL10n.t("ai_recommendation.increase_savings_rate"),
-                    description: description,
-                    priority: savingsRate < 10 ? "high" : "medium",
-                    category: AppL10n.t("category.savings")
-                ))
-            }
-        }
-        
-        // Recommendation 2: Category spending
-        let categorySpending = Dictionary(grouping: viewModel.transactions.filter { $0.type == "expense" }, by: { $0.category ?? "Uncategorized" })
-        for (category, transactions) in categorySpending {
-            let total = transactions.reduce(0.0) { $0 + $1.amount }
-            if total > currentMonthIncome * 0.3 && category != "Uncategorized" {
-                let translatedCategory = CategoryDefinitions.shared.getTranslatedCategoryName(category)
-                let titleTemplate = AppL10n.t("ai_recommendation.review_category_spending")
-                let title = titleTemplate.replacingOccurrences(of: "%@", with: translatedCategory)
-                let descriptionTemplate = AppL10n.t("ai_recommendation.category_spending_description")
-                var description = descriptionTemplate.replacingOccurrences(of: "%@", with: formatCurrency(total), options: [], range: nil)
-                // Replace second occurrence
-                if let range = description.range(of: "%@") {
-                    description.replaceSubrange(range, with: translatedCategory)
-                }
-                recommendations.append(AIRecommendation(
-                    title: title,
-                    description: description,
-                    priority: "medium",
-                    category: category
-                ))
-            }
-        }
-        
-        // Recommendation 3: Goals progress
-        for goal in viewModel.targets {
-            if goal.targetAmount > 0 {
-                let progress = (goal.currentAmount / goal.targetAmount) * 100
-                if progress < 50, let targetDateString = goal.targetDate {
-                    // Parse the date string
-                    let formatter = ISO8601DateFormatter()
-                    formatter.formatOptions = [.withFullDate, .withTime, .withDashSeparatorInDate, .withColonSeparatorInTime]
-                    if let targetDate = formatter.date(from: targetDateString) ?? ISO8601DateFormatter().date(from: targetDateString) {
-                        let daysRemaining = Calendar.current.dateComponents([.day], from: Date(), to: targetDate).day ?? 0
-                        if daysRemaining > 0 && daysRemaining < 90 {
-                            let progressStr = String(format: "%.0f", progress)
-                            let titleTemplate = AppL10n.t("ai_recommendation.accelerate_goal")
-                            let title = titleTemplate.replacingOccurrences(of: "%@", with: goal.title)
-                            let descriptionTemplate = AppL10n.t("ai_recommendation.goal_progress_description")
-                            var description = descriptionTemplate.replacingOccurrences(of: "%@", with: progressStr)
-                            // Replace %d with daysRemaining
-                            description = description.replacingOccurrences(of: "%d", with: String(daysRemaining))
-                            recommendations.append(AIRecommendation(
-                                title: title,
-                                description: description,
-                                priority: "medium",
-                                category: AppL10n.t("finance.saving_goals")
-                            ))
-                        }
-                    }
-                }
-            }
-        }
-        
-        return recommendations
-    }
-    
     private var xpLevelWidgetView: some View {
         Group {
             if let xpStats = viewModel.xpStats {
@@ -2053,11 +1827,6 @@ struct FinanceView: View {
     
     private var transactionsView: some View {
         VStack(alignment: .leading, spacing: 14) {
-            // Add ID for scrolling
-            Color.clear
-                .frame(height: 0)
-                .id("transactions-section")
-            
             Button(action: {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.75, blendDuration: 0.25)) {
                     isTransactionsExpanded.toggle()
@@ -2125,6 +1894,7 @@ struct FinanceView: View {
                 .padding(.horizontal, 20)
             }
             .buttonStyle(PremiumSettingsButtonStyle())
+            .id("transactions-section")
             
             if isTransactionsExpanded {
                 if viewModel.isLoading {
@@ -2316,13 +2086,11 @@ struct FinanceView: View {
                                     balanceCardView
                                     trendsAndComparisonsView
                                     categoryAnalysisView
+                                    transactionsView
                                     spendingLimitsView
                                     savingGoalsView
                                     assetsView
-                                    anitaInsightsView
                                     xpLevelWidgetView
-                                    
-                                    transactionsView
                                     
                                     Spacer(minLength: 40)
                                 }
@@ -8161,57 +7929,6 @@ struct DeleteTransactionSheet: View {
                 }
             }
         }
-    }
-}
-
-// MARK: - Anita Insights Data Structures
-
-struct AIRecommendation: Identifiable {
-    let id = UUID()
-    let title: String
-    let description: String
-    let priority: String // "low", "medium", "high"
-    let category: String
-}
-
-// MARK: - Recommendation Row
-
-struct RecommendationRow: View {
-    let recommendation: AIRecommendation
-    
-    private var priorityColor: Color {
-        switch recommendation.priority {
-        case "high":
-            return Color.red.opacity(0.8)
-        case "medium":
-            return Color.orange.opacity(0.8)
-        default:
-            return Color.blue.opacity(0.8)
-        }
-    }
-    
-    var body: some View {
-        HStack(spacing: 16) {
-            // Priority indicator
-            Circle()
-                .fill(priorityColor)
-                .frame(width: 8, height: 8)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(recommendation.title)
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundColor(.white.opacity(0.95))
-                
-                Text(recommendation.description)
-                    .font(.system(size: 13, weight: .regular, design: .rounded))
-                    .foregroundColor(.white.opacity(0.6))
-                    .lineLimit(2)
-            }
-            
-            Spacer()
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
     }
 }
 

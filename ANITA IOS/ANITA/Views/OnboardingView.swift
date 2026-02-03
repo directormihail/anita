@@ -949,6 +949,8 @@ struct OnboardingView: View {
     
     private var nextButton: some View {
         Button {
+            // Dismiss keyboard when advancing (e.g. from name step)
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
             let impact = UIImpactFeedbackGenerator(style: .medium)
             impact.impactOccurred()
             

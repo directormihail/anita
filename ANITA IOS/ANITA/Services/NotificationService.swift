@@ -74,8 +74,13 @@ class NotificationService: NSObject, ObservableObject {
     
     // MARK: - Daily Transaction Reminder
     
+    private static let dailyReminderIdentifier = "daily_transaction_reminder"
     private static let dailyReminderTitleCount = 5
     private static let dailyReminderBodyCount = 28
+    
+    /// UserDefaults keys for storing the single daily reminder time (one notification per day, same time every day).
+    private static let dailyReminderHourKey = "anita_daily_reminder_hour"
+    private static let dailyReminderMinuteKey = "anita_daily_reminder_minute"
     
     private static func randomDailyReminderTitle() -> String {
         let index = Int.random(in: 1...Self.dailyReminderTitleCount)
@@ -87,61 +92,65 @@ class NotificationService: NSObject, ObservableObject {
         return AppL10n.t("notif.daily.body.\(index)")
     }
     
-    /// Schedules daily transaction reminders for the next 14 days, each at a random time between 6 PM and 8 PM in the user's local timezone.
+    /// Picks and persists a random time between 6 PM and 8 PM (local). Used so we schedule only one time per day, once.
+    private static func getOrCreateDailyReminderTime() -> (hour: Int, minute: Int) {
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: dailyReminderHourKey) != nil,
+           defaults.object(forKey: dailyReminderMinuteKey) != nil {
+            let h = defaults.integer(forKey: dailyReminderHourKey)
+            let m = defaults.integer(forKey: dailyReminderMinuteKey)
+            if (18...20).contains(h), (0...59).contains(m) {
+                return (h, m)
+            }
+        }
+        let hour: Int
+        let minute: Int
+        switch Int.random(in: 0...2) {
+        case 0:
+            hour = 18
+            minute = Int.random(in: 0...59)
+        case 1:
+            hour = 19
+            minute = Int.random(in: 0...59)
+        default:
+            hour = 20
+            minute = 0
+        }
+        defaults.set(hour, forKey: dailyReminderHourKey)
+        defaults.set(minute, forKey: dailyReminderMinuteKey)
+        return (hour, minute)
+    }
+    
+    /// Schedules a single daily transaction reminder: one notification per day at a random time between 6 PM and 8 PM (local), using one repeating trigger.
     func scheduleDailyTransactionReminder() {
         guard pushNotificationsEnabled && isAuthorized else { return }
         
-        let calendar = Calendar.current
         let timeZone = TimeZone.current
-        var identifiersToRemove: [String] = []
-        for dayOffset in 0..<14 {
-            identifiersToRemove.append("daily_transaction_reminder_\(dayOffset)")
-        }
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiersToRemove)
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [Self.dailyReminderIdentifier])
         
-        for dayOffset in 0..<14 {
-            guard let date = calendar.date(byAdding: .day, value: dayOffset, to: Date()) else { continue }
-            let components = calendar.dateComponents([.year, .month, .day], from: date)
-            var dateComponents = DateComponents(timeZone: timeZone, year: components.year, month: components.month, day: components.day)
-            // Random time between 6 PM (18:00) and 8 PM (20:00) in user's timezone
-            let hour: Int
-            let minute: Int
-            switch Int.random(in: 0...2) {
-            case 0:
-                hour = 18
-                minute = Int.random(in: 0...59)
-            case 1:
-                hour = 19
-                minute = Int.random(in: 0...59)
-            default:
-                hour = 20
-                minute = 0
-            }
-            dateComponents.hour = hour
-            dateComponents.minute = minute
-            
-            let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
-            
-            let content = UNMutableNotificationContent()
-            content.title = Self.randomDailyReminderTitle()
-            content.body = Self.randomDailyReminderBody()
-            content.sound = .default
-            content.categoryIdentifier = "DAILY_TRANSACTION_REMINDER"
-            content.userInfo = ["type": "daily_transaction_reminder"]
-            
-            let request = UNNotificationRequest(
-                identifier: "daily_transaction_reminder_\(dayOffset)",
-                content: content,
-                trigger: trigger
-            )
-            
-            UNUserNotificationCenter.current().add(request) { error in
-                if let error = error {
-                    print("[NotificationService] Error scheduling daily reminder day \(dayOffset): \(error.localizedDescription)")
-                }
+        let (hour, minute) = Self.getOrCreateDailyReminderTime()
+        var dateComponents = DateComponents(timeZone: timeZone, hour: hour, minute: minute)
+        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
+        
+        let content = UNMutableNotificationContent()
+        content.title = Self.randomDailyReminderTitle()
+        content.body = Self.randomDailyReminderBody()
+        content.sound = .default
+        content.categoryIdentifier = "DAILY_TRANSACTION_REMINDER"
+        content.userInfo = ["type": "daily_transaction_reminder"]
+        
+        let request = UNNotificationRequest(
+            identifier: Self.dailyReminderIdentifier,
+            content: content,
+            trigger: trigger
+        )
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("[NotificationService] Error scheduling daily reminder: \(error.localizedDescription)")
             }
         }
-        print("[NotificationService] Daily transaction reminders scheduled (6–8 PM local, next 14 days), timezone: \(timeZone.identifier)")
+        print("[NotificationService] Daily transaction reminder scheduled once per day at \(hour):\(String(format: "%02d", minute)) local, timezone: \(timeZone.identifier)")
     }
     
     // MARK: - Test Notification
