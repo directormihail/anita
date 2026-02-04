@@ -76,11 +76,30 @@ export function detectCategoryFromDescription(
 
   // Housing
   if (lowercased.includes('rent') || lowercased.includes('apartment') || 
-      lowercased.includes('lease') || lowercased.includes('landlord')) {
+      lowercased.includes('landlord')) {
+    return 'Rent';
+  }
+  // Leasing (vehicle/equipment) - check before generic "lease" which maps to Rent
+  if (lowercased.includes('leasing') || lowercased.includes('car lease') || 
+      lowercased.includes('vehicle lease') || lowercased.includes('equipment lease')) {
+    return 'Leasing';
+  }
+  if (lowercased.includes('lease')) {
     return 'Rent';
   }
   if (lowercased.includes('mortgage') || lowercased.includes('home loan')) {
     return 'Mortgage';
+  }
+
+  // Loans, debts
+  if (lowercased.includes('loan payment') || lowercased.includes('loan installment') || 
+      lowercased.includes('student loan') || lowercased.includes('personal loan') || 
+      (lowercased.includes('loan') && (lowercased.includes('repayment') || lowercased.includes('payment')))) {
+    return 'Loan Payments';
+  }
+  if (lowercased.includes('debt') || lowercased.includes('credit card payment') || 
+      lowercased.includes('paying off') || lowercased.includes('payoff')) {
+    return 'Debts';
   }
 
   // Utilities

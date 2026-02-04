@@ -188,6 +188,29 @@ class CategoryDefinitions {
             exampleDescriptions: ["tuition", "course", "education", "certification", "learning", "school fee"]
         ),
         
+        // LOANS, DEBTS & LEASING
+        CategoryDefinition(
+            id: "Debts_LoanPayments",
+            name: "Loan Payments",
+            definition: "Repayments on personal loans, student loans, and other loan installments",
+            keywords: ["loan", "loan payment", "installment", "repayment", "student loan", "personal loan", "bank loan"],
+            exampleDescriptions: ["loan payment", "loan installment", "student loan", "personal loan", "repayment"]
+        ),
+        CategoryDefinition(
+            id: "Debts_Debt",
+            name: "Debts",
+            definition: "Credit card payments, debt repayments, and other debt obligations",
+            keywords: ["debt", "credit card", "payoff", "debt payment", "credit card payment", "overdue", "paying off"],
+            exampleDescriptions: ["debt", "credit card payment", "debt repayment", "paying off debt"]
+        ),
+        CategoryDefinition(
+            id: "Debts_Leasing",
+            name: "Leasing",
+            definition: "Vehicle leasing, equipment leasing, and other lease payments",
+            keywords: ["leasing", "lease", "car lease", "vehicle lease", "equipment lease", "lease payment"],
+            exampleDescriptions: ["leasing", "lease payment", "car lease", "vehicle lease", "equipment lease"]
+        ),
+        
         // INCOME
         CategoryDefinition(
             id: "Income_Salary",
@@ -312,6 +335,9 @@ class CategoryDefinitions {
             "Fitness & Gym": "category.fitness_gym",
             "Personal Care": "category.personal_care",
             "Education": "category.education",
+            "Loan Payments": "category.loan_payments",
+            "Debts": "category.debts",
+            "Leasing": "category.leasing",
             "Salary": "category.salary",
             "Freelance & Side Income": "category.freelance_side_income",
             "Other": "category.other"

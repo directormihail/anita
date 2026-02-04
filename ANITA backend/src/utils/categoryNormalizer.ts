@@ -147,6 +147,20 @@ const STANDARD_CATEGORIES: { [key: string]: string } = {
   'course': 'Education',
   'school': 'Education',
   
+  // Loans, debts & leasing
+  'loan payments': 'Loan Payments',
+  'loan': 'Loan Payments',
+  'loan payment': 'Loan Payments',
+  'debts': 'Debts',
+  'debt': 'Debts',
+  'credit card': 'Debts',
+  'credit card payment': 'Debts',
+  'leasing': 'Leasing',
+  'lease payment': 'Leasing',
+  'car lease': 'Leasing',
+  'vehicle lease': 'Leasing',
+  'equipment lease': 'Leasing',
+  
   // Income
   'salary': 'Salary',
   'income': 'Salary',

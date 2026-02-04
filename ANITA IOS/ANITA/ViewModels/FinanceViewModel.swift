@@ -34,7 +34,7 @@ class FinanceViewModel: ObservableObject {
     @Published var monthlyBalanceHistory: [MonthlyBalance] = []
     @Published var monthlyIncomeExpenseHistory: [MonthlyIncomeExpense] = []
     @Published var monthlyNetWorthHistory: [MonthlyNetWorth] = []
-    @Published var comparisonPeriod: ComparisonPeriod = .threeMonths
+    @Published var comparisonPeriod: ComparisonPeriod = .oneMonth
     @Published var comparisonData: [ComparisonPeriodData] = []
     @Published var isHistoricalDataLoading = false
     

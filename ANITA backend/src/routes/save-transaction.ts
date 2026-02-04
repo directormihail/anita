@@ -106,35 +106,7 @@ export async function handleSaveTransaction(req: Request, res: Response): Promis
       return;
     }
 
-    // Check for duplicate transactions (same amount, type, and description within 5 minutes)
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-    const { data: existingTransactions } = await supabase
-      .from('anita_data')
-      .select('id, message_id, transaction_amount, transaction_type, transaction_description, created_at')
-      .eq('account_id', userId)
-      .eq('data_type', 'transaction')
-      .eq('transaction_type', type)
-      .eq('transaction_amount', amount)
-      .gte('created_at', fiveMinutesAgo);
-
-    if (existingTransactions && existingTransactions.length > 0) {
-      // Check if description is similar (basic duplicate check)
-      const isDuplicate = existingTransactions.some((t: any) => {
-        const existingDesc = t.transaction_description || '';
-        return existingDesc.toLowerCase().trim() === description.toLowerCase().trim();
-      });
-
-      if (isDuplicate) {
-        logger.warn('Duplicate transaction detected', { requestId, userId, type, amount });
-        res.status(200).json({
-          success: true,
-          message: 'Duplicate transaction - already exists',
-          duplicate: true,
-          requestId
-        });
-        return;
-      }
-    }
+    // Allow multiple transactions with the same amount/description (e.g. two lunches, two coffees)
 
     // Detect category from description if category is missing or "Other"
     let detectedCategory = category;

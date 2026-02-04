@@ -832,37 +832,18 @@ struct FinanceView: View {
                         .padding(.horizontal, 20)
                         .transition(.expandSection)
                     
-                // Income vs Expenses Bar Chart
+                // Income vs Expenses Bar Chart (always show chart; empty state with "no data available" when no data)
                 VStack(alignment: .leading, spacing: 16) {
                     let chartData = viewModel.getComparisonData(for: viewModel.comparisonPeriod)
-                    
-                    // Always show existing data immediately (even during refresh),
-                    // and only show an empty state when we truly have no data yet.
-                    if !chartData.isEmpty {
-                        EnhancedIncomeExpenseBarChart(
-                            data: chartData,
-                            currency: userCurrency,
-                            isExpanded: isTrendsAndComparisonsExpanded
-                        )
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 20)
-                        .liquidGlass(cornerRadius: 20)
-                        .padding(.horizontal, 20)
-                    } else {
-                        VStack(spacing: 8) {
-                            Text(AppL10n.t("finance.no_chart_data"))
-                                .font(.system(size: 15, weight: .medium, design: .rounded))
-                                .foregroundColor(.white.opacity(0.55))
-                            
-                            if viewModel.isLoading || viewModel.isHistoricalDataLoading {
-                                Text(AppL10n.t("finance.updating"))
-                                    .font(.system(size: 13, weight: .regular, design: .rounded))
-                                    .foregroundColor(.white.opacity(0.4))
-                            }
-                        }
-                        .frame(height: 300)
-                        .frame(maxWidth: .infinity)
-                    }
+                    EnhancedIncomeExpenseBarChart(
+                        data: chartData,
+                        currency: userCurrency,
+                        isExpanded: isTrendsAndComparisonsExpanded
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 20)
+                    .liquidGlass(cornerRadius: 20)
+                    .padding(.horizontal, 20)
                 }
                 .transition(.expandSection)
                 
@@ -968,9 +949,16 @@ struct FinanceView: View {
                                     DonutChartView3D(categories: data.categories, selectedCategory: selectedCategory)
                                         .drawingGroup() // Ensures smooth rendering
                                     
-                                    // Center text - shows selected category, largest category, or total count
+                                    // Center text - shows selected category, largest category, total count, or "No data available"
                                     VStack(spacing: 6) {
-                                        if let selectedCategory = selectedCategory,
+                                        if data.categories.isEmpty {
+                                            Text(AppL10n.t("finance.no_data_available"))
+                                                .font(.system(size: min(18, innerCircleDiameter * 0.2), weight: .medium, design: .rounded))
+                                                .foregroundColor(.white.opacity(0.6))
+                                                .multilineTextAlignment(.center)
+                                                .lineLimit(2)
+                                                .minimumScaleFactor(0.6)
+                                        } else if let selectedCategory = selectedCategory,
                                            let category = data.categories.first(where: { $0.name == selectedCategory }) {
                                             Text(String(format: "%.1f%%", category.percentage))
                                                 .font(.system(size: min(42, innerCircleDiameter * 0.35), weight: .bold, design: .rounded))
@@ -1187,10 +1175,58 @@ struct FinanceView: View {
             
             if isSpendingLimitsExpanded {
                 if viewModel.goals.isEmpty {
-                    VStack(spacing: 8) {
+                    VStack(spacing: 20) {
+                        Image(systemName: "arrow.down.right")
+                            .font(.system(size: 48, weight: .light))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.4),
+                                        Color.white.opacity(0.3)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                        
                         Text(AppL10n.t("finance.no_spending_limits"))
                             .font(.system(size: 15, weight: .medium, design: .rounded))
                             .foregroundColor(.white.opacity(0.5))
+                        
+                        Text(AppL10n.t("finance.add_first_limit"))
+                            .font(.system(size: 13, weight: .regular, design: .rounded))
+                            .foregroundColor(.white.opacity(0.4))
+                            .multilineTextAlignment(.center)
+                        
+                        Button(action: {
+                            let impact = UIImpactFeedbackGenerator(style: .light)
+                            impact.impactOccurred()
+                            showAddSpendingLimitSheet = true
+                        }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.system(size: 16, weight: .semibold))
+                                Text(AppL10n.t("finance.add_spending_limit"))
+                                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                Color(red: 0.4, green: 0.49, blue: 0.92),
+                                                Color(red: 0.5, green: 0.55, blue: 0.95)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                            )
+                        }
+                        .padding(.top, 8)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 36)
@@ -1202,18 +1238,20 @@ struct FinanceView: View {
                     let rowHeight: CGFloat = 85
                     let dividerHeight: CGFloat = 1
                     let maxVisibleRows: CGFloat = 3.5
-                    let itemCount = CGFloat(viewModel.goals.count)
+                    // Include "Add Spending Limit" button as first row
+                    let totalItemCount = 1 + viewModel.goals.count
+                    let itemCount = CGFloat(totalItemCount)
+                    let heightForThreePointFiveRows = 3 * rowHeight + 0.5 * rowHeight + 2 * dividerHeight
                     let calculatedHeight: CGFloat = {
                         if itemCount <= maxVisibleRows {
-                            // Show all items with dividers
+                            // Extend with every added section: height = content only (1, 2, or 3.5 rows)
                             let fullRows = floor(itemCount)
                             let partialRow = itemCount - fullRows
-                            let dividers = max(0, fullRows - 1)
+                            let dividers = max(0, Int(fullRows) - 1)
                             return fullRows * rowHeight + partialRow * rowHeight + CGFloat(dividers) * dividerHeight
                         } else {
-                            // Show exactly 3.5 rows (3 full + 0.5 partial = 297.5px + 2px dividers)
-                            // This ensures the 4th row is only partially visible
-                            return 3 * rowHeight + 0.5 * rowHeight + 2 * dividerHeight
+                            // More than 3.5 items: cap at 3.5 rows and scroll the rest
+                            return heightForThreePointFiveRows
                         }
                     }()
                     
@@ -1405,10 +1443,58 @@ struct FinanceView: View {
             
             if isSavingGoalsExpanded {
                 if viewModel.targets.isEmpty {
-                    VStack(spacing: 8) {
+                    VStack(spacing: 20) {
+                        Image(systemName: "target")
+                            .font(.system(size: 48, weight: .light))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.4),
+                                        Color.white.opacity(0.3)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                        
                         Text(AppL10n.t("finance.no_saving_goals"))
                             .font(.system(size: 15, weight: .medium, design: .rounded))
                             .foregroundColor(.white.opacity(0.5))
+                        
+                        Text(AppL10n.t("finance.add_first_goal"))
+                            .font(.system(size: 13, weight: .regular, design: .rounded))
+                            .foregroundColor(.white.opacity(0.4))
+                            .multilineTextAlignment(.center)
+                        
+                        Button(action: {
+                            let impact = UIImpactFeedbackGenerator(style: .light)
+                            impact.impactOccurred()
+                            showAddSavingGoalSheet = true
+                        }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.system(size: 16, weight: .semibold))
+                                Text(AppL10n.t("finance.add_saving_goal"))
+                                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                Color(red: 0.4, green: 0.49, blue: 0.92),
+                                                Color(red: 0.5, green: 0.55, blue: 0.95)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                            )
+                        }
+                        .padding(.top, 8)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 36)
@@ -1420,18 +1506,20 @@ struct FinanceView: View {
                     let rowHeight: CGFloat = 85
                     let dividerHeight: CGFloat = 1
                     let maxVisibleRows: CGFloat = 3.5
-                    let itemCount = CGFloat(viewModel.targets.count)
+                    // Include "Add Saving Goal" button as first row
+                    let totalItemCount = 1 + viewModel.targets.count
+                    let itemCount = CGFloat(totalItemCount)
+                    let heightForThreePointFiveRows = 3 * rowHeight + 0.5 * rowHeight + 2 * dividerHeight
                     let calculatedHeight: CGFloat = {
                         if itemCount <= maxVisibleRows {
-                            // Show all items with dividers
+                            // Extend with every added section: height = content only (1, 2, or 3.5 rows)
                             let fullRows = floor(itemCount)
                             let partialRow = itemCount - fullRows
-                            let dividers = max(0, fullRows - 1)
+                            let dividers = max(0, Int(fullRows) - 1)
                             return fullRows * rowHeight + partialRow * rowHeight + CGFloat(dividers) * dividerHeight
                         } else {
-                            // Show exactly 3.5 rows (3 full + 0.5 partial = 297.5px + 2px dividers)
-                            // This ensures the 4th row is only partially visible
-                            return 3 * rowHeight + 0.5 * rowHeight + 2 * dividerHeight
+                            // More than 3.5 items: cap at 3.5 rows and scroll the rest
+                            return heightForThreePointFiveRows
                         }
                     }()
                     
@@ -1646,39 +1734,63 @@ struct FinanceView: View {
                 }
                 
                 if comprehensiveAssets.isEmpty {
-                    // Empty state with Add Asset button
-                    Button(action: {
-                        let impact = UIImpactFeedbackGenerator(style: .light)
-                        impact.impactOccurred()
-                        showAddAssetSheet = true
-                    }) {
-                        VStack(spacing: 16) {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 48, weight: .light))
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [
-                                            Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.8),
-                                            Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.6)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
+                    // Empty state - same design as Add First Transaction / Limits / Goals
+                    VStack(spacing: 20) {
+                        Image(systemName: "wallet.pass.fill")
+                            .font(.system(size: 48, weight: .light))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.4),
+                                        Color.white.opacity(0.3)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
                                 )
-                            
-                            Text(AppL10n.t("finance.no_assets"))
-                                .font(.system(size: 15, weight: .medium, design: .rounded))
-                                .foregroundColor(.white.opacity(0.5))
-                            
-                            Text(AppL10n.t("finance.tap_to_add_asset"))
-                                .font(.system(size: 13, weight: .regular, design: .rounded))
-                                .foregroundColor(.white.opacity(0.4))
+                            )
+                        
+                        Text(AppL10n.t("finance.no_assets"))
+                            .font(.system(size: 15, weight: .medium, design: .rounded))
+                            .foregroundColor(.white.opacity(0.5))
+                        
+                        Text(AppL10n.t("finance.add_first_asset"))
+                            .font(.system(size: 13, weight: .regular, design: .rounded))
+                            .foregroundColor(.white.opacity(0.4))
+                            .multilineTextAlignment(.center)
+                        
+                        Button(action: {
+                            let impact = UIImpactFeedbackGenerator(style: .light)
+                            impact.impactOccurred()
+                            showAddAssetSheet = true
+                        }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.system(size: 16, weight: .semibold))
+                                Text(AppL10n.t("finance.add_asset"))
+                                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                Color(red: 0.4, green: 0.49, blue: 0.92),
+                                                Color(red: 0.5, green: 0.55, blue: 0.95)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                            )
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 36)
+                        .padding(.top, 8)
                     }
-                    .buttonStyle(PremiumSettingsButtonStyle())
-                    .liquidGlass(cornerRadius: 20)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 36)
+                    .liquidGlass(cornerRadius: 18)
                     .padding(.horizontal, 20)
                     .transition(.expandSection)
                 } else {
@@ -1686,18 +1798,20 @@ struct FinanceView: View {
                     let rowHeight: CGFloat = 85
                     let dividerHeight: CGFloat = 1
                     let maxVisibleRows: CGFloat = 3.5
-                    let itemCount = CGFloat(comprehensiveAssets.count)
+                    // Include "Add Asset" button as first row
+                    let totalItemCount = 1 + comprehensiveAssets.count
+                    let itemCount = CGFloat(totalItemCount)
+                    let heightForThreePointFiveRows = 3 * rowHeight + 0.5 * rowHeight + 2 * dividerHeight
                     let calculatedHeight: CGFloat = {
                         if itemCount <= maxVisibleRows {
-                            // Show all items with dividers
+                            // Extend with every added section: height = content only (1, 2, or 3.5 rows)
                             let fullRows = floor(itemCount)
                             let partialRow = itemCount - fullRows
-                            let dividers = max(0, fullRows - 1)
+                            let dividers = max(0, Int(fullRows) - 1)
                             return fullRows * rowHeight + partialRow * rowHeight + CGFloat(dividers) * dividerHeight
                         } else {
-                            // Show exactly 3.5 rows (3 full + 0.5 partial = 297.5px + 2px dividers)
-                            // This ensures the 4th row is only partially visible
-                            return 3 * rowHeight + 0.5 * rowHeight + 2 * dividerHeight
+                            // More than 3.5 items: cap at 3.5 rows and scroll the rest
+                            return heightForThreePointFiveRows
                         }
                     }()
                     
@@ -1973,18 +2087,20 @@ struct FinanceView: View {
                     let rowHeight: CGFloat = 85
                     let dividerHeight: CGFloat = 1
                     let maxVisibleRows: CGFloat = 3.5
-                    let itemCount = CGFloat(allTransactions.count)
+                    // Include "Add Transaction" button as first row
+                    let totalItemCount = 1 + allTransactions.count
+                    let itemCount = CGFloat(totalItemCount)
+                    let heightForThreePointFiveRows = 3 * rowHeight + 0.5 * rowHeight + 2 * dividerHeight
                     let calculatedHeight: CGFloat = {
                         if itemCount <= maxVisibleRows {
-                            // Show all items with dividers
+                            // Extend with every added section: height = content only (1, 2, or 3.5 rows)
                             let fullRows = floor(itemCount)
                             let partialRow = itemCount - fullRows
-                            let dividers = max(0, fullRows - 1)
+                            let dividers = max(0, Int(fullRows) - 1)
                             return fullRows * rowHeight + partialRow * rowHeight + CGFloat(dividers) * dividerHeight
                         } else {
-                            // Show exactly 3.5 rows (3 full + 0.5 partial = 297.5px + 2px dividers)
-                            // This ensures the 4th row is only partially visible
-                            return 3 * rowHeight + 0.5 * rowHeight + 2 * dividerHeight
+                            // More than 3.5 items: cap at 3.5 rows and scroll the rest
+                            return heightForThreePointFiveRows
                         }
                     }()
                     
@@ -2298,15 +2414,11 @@ struct TransactionRow: View {
                     .foregroundColor(.white.opacity(0.95))
                     .lineLimit(1)
                 
-                HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(CategoryDefinitions.shared.normalizeCategory(transaction.category)) // Display with proper case
                         .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundColor(.white.opacity(0.5))
                         .tracking(0.3)
-                    
-                    Text("•")
-                        .foregroundColor(.white.opacity(0.4))
-                        .font(.system(size: 11))
                     
                     Text(formatDate(transaction.date))
                         .font(.system(size: 11, weight: .medium, design: .rounded))
@@ -2394,6 +2506,12 @@ struct TransactionRow: View {
             return "gamecontroller.fill"
         } else if lowercased.contains("health") {
             return "heart.fill"
+        } else if lowercased.contains("loan") {
+            return "banknote"
+        } else if lowercased.contains("debt") {
+            return "creditcard.fill"
+        } else if lowercased.contains("leasing") || lowercased.contains("lease") {
+            return "doc.richtext.fill"
         } else {
             return "dollarsign.circle.fill"
         }
@@ -7482,7 +7600,7 @@ struct EditTransactionSheet: View {
     
     private var headerView: some View {
         VStack(spacing: 8) {
-                        Text(AppL10n.t("finance.edit_transaction"))
+            Text(AppL10n.t("finance.edit_transaction"))
                 .font(.system(size: 24, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
         }
@@ -7497,7 +7615,6 @@ struct EditTransactionSheet: View {
                 .foregroundColor(.white.opacity(0.6))
                 .textCase(.uppercase)
                 .tracking(0.8)
-            
             HStack(spacing: 12) {
                 ForEach(transactionTypes, id: \.self) { type in
                     Button(action: {
@@ -7514,23 +7631,27 @@ struct EditTransactionSheet: View {
                             Spacer()
                         }
                         .padding(.vertical, 12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(transactionType == type ? 
-                                      (type == "expense" ? Color.red.opacity(0.2) : Color.green.opacity(0.2)) :
-                                      Color.white.opacity(0.1))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(transactionType == type ? 
-                                        (type == "expense" ? Color.red.opacity(0.5) : Color.green.opacity(0.5)) :
-                                        Color.clear, lineWidth: 1)
-                        )
+                        .background(typeButtonBackground(for: type))
+                        .overlay(typeButtonOverlay(for: type))
                     }
                 }
             }
         }
         .padding(.horizontal, 20)
+    }
+    
+    private func typeButtonBackground(for type: String) -> some View {
+        RoundedRectangle(cornerRadius: 12)
+            .fill(transactionType == type ? 
+                  (type == "expense" ? Color.red.opacity(0.2) : Color.green.opacity(0.2)) :
+                  Color.white.opacity(0.1))
+    }
+    
+    private func typeButtonOverlay(for type: String) -> some View {
+        RoundedRectangle(cornerRadius: 12)
+            .stroke(transactionType == type ? 
+                    (type == "expense" ? Color.red.opacity(0.5) : Color.green.opacity(0.5)) :
+                    Color.clear, lineWidth: 1)
     }
     
     private var amountFieldView: some View {
@@ -7563,18 +7684,43 @@ struct EditTransactionSheet: View {
                 .textCase(.uppercase)
                 .tracking(0.8)
             
-            Picker("Category", selection: $selectedCategory) {
+            Menu {
                 ForEach(categories, id: \.self) { category in
-                    Text(CategoryDefinitions.shared.getTranslatedCategoryName(category)).tag(category)
+                    Button(action: {
+                        selectedCategory = category
+                    }) {
+                        HStack {
+                            Text(CategoryDefinitions.shared.getTranslatedCategoryName(category))
+                            if selectedCategory == category {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                HStack {
+                    Text(categories.contains(selectedCategory) ? CategoryDefinitions.shared.getTranslatedCategoryName(selectedCategory) : CategoryDefinitions.shared.getTranslatedCategoryName(categories.first ?? CategoryDefinitions.defaultCategory))
+                        .font(.system(size: 16, weight: .medium, design: .rounded))
+                        .foregroundColor(.white)
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.5))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.white.opacity(0.1))
+                )
+            }
+            .onChange(of: transactionType) { oldValue, newValue in
+                if !categories.contains(selectedCategory) {
+                    selectedCategory = categories.first ?? CategoryDefinitions.defaultCategory
                 }
             }
-            .pickerStyle(.wheel)
-            .frame(maxWidth: .infinity)
-            .colorScheme(.dark)
-            .accentColor(Color(red: 0.4, green: 0.49, blue: 0.92))
         }
         .padding(.horizontal, 20)
-        .tint(Color(red: 0.4, green: 0.49, blue: 0.92))
     }
     
     private var descriptionFieldView: some View {
@@ -7641,19 +7787,7 @@ struct EditTransactionSheet: View {
                 Spacer()
             }
             .frame(height: 56)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 0.4, green: 0.49, blue: 0.92),
-                                Color(red: 0.5, green: 0.55, blue: 0.95)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            )
+            .background(updateButtonBackground)
         }
         .disabled(isUpdating || amount.isEmpty)
         .opacity(isUpdating || amount.isEmpty ? 0.6 : 1.0)
@@ -7661,33 +7795,29 @@ struct EditTransactionSheet: View {
         .padding(.top, 8)
     }
     
+    private var updateButtonBackground: some View {
+        RoundedRectangle(cornerRadius: 16)
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.4, green: 0.49, blue: 0.92),
+                        Color(red: 0.5, green: 0.55, blue: 0.95)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+    }
+    
     private var deleteButtonView: some View {
         Button(action: {
             showDeleteSheet = true
         }) {
-            HStack {
-                Spacer()
-                Text(AppL10n.t("finance.delete_transaction"))
-                    .font(.system(size: 18, weight: .semibold, design: .rounded))
-                    .foregroundColor(.white)
-                Spacer()
-            }
-            .frame(height: 56)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.red.opacity(0.9),
-                                Color.red.opacity(0.7)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            )
+            Text(AppL10n.t("finance.delete_transaction"))
+                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .foregroundColor(.red.opacity(0.9))
         }
-        .padding(.horizontal, 20)
+        .padding(.top, 12)
         .padding(.bottom, 20)
     }
     
@@ -7720,7 +7850,8 @@ struct EditTransactionSheet: View {
             } catch {
                 await MainActor.run {
                     isUpdating = false
-                    errorMessage = "Failed to update transaction: \(error.localizedDescription)"
+                    let msg = error.localizedDescription
+                    errorMessage = msg.hasPrefix("Failed to update") ? msg : "Failed to update transaction: \(msg)"
                 }
             }
         }
@@ -8289,13 +8420,13 @@ struct MonthToMonthComparisonView: View {
 struct ComparisonPeriodSelectorView: View {
     @ObservedObject var viewModel: FinanceViewModel
     @State private var isDragging: Bool = false
-    @State private var currentSliderValue: Double = 3.0 // Track current slider position for magnification
+    @State private var currentSliderValue: Double = 1.0 // Track current slider position for magnification
     
     // Convert slider value to ComparisonPeriod
     private func valueToPeriod(_ value: Double) -> ComparisonPeriod {
         let rounded = Int(value.rounded())
         let clamped = max(1, min(12, rounded))
-        return ComparisonPeriod(rawValue: clamped) ?? .threeMonths
+        return ComparisonPeriod(rawValue: clamped) ?? .oneMonth
     }
     
     // Convert ComparisonPeriod to slider value
@@ -8435,10 +8566,10 @@ struct ComparisonPeriodSelectorView: View {
                     .onAppear {
                         // Initialize slider value
                         currentSliderValue = periodToValue(viewModel.comparisonPeriod)
-                        // Ensure default is 3 months
-                        if viewModel.comparisonPeriod != .threeMonths {
-                            viewModel.comparisonPeriod = .threeMonths
-                            currentSliderValue = periodToValue(.threeMonths)
+                        // Ensure default is 1 month
+                        if viewModel.comparisonPeriod != .oneMonth {
+                            viewModel.comparisonPeriod = .oneMonth
+                            currentSliderValue = periodToValue(.oneMonth)
                         }
                     }
                 }
@@ -9769,7 +9900,19 @@ struct EnhancedIncomeExpenseBarChart: View {
                     .padding(.horizontal, horizontalPadding)
                     .padding(.bottom, 12)
                     
-                    // Chart area with bars
+                    // Chart area: show "No data available" when no bars to display, otherwise show bars
+                    if sortedData.isEmpty {
+                        VStack(spacing: 12) {
+                            Image(systemName: "chart.bar.fill")
+                                .font(.system(size: 32, weight: .light))
+                                .foregroundColor(.white.opacity(0.3))
+                            Text(AppL10n.t("finance.no_data_available"))
+                                .font(.system(size: 13, weight: .regular, design: .rounded))
+                                .foregroundColor(.white.opacity(0.5))
+                        }
+                        .frame(height: chartHeight + monthLabelHeight)
+                        .frame(maxWidth: .infinity)
+                    } else {
                     ZStack(alignment: .bottom) {
                         // Bars - Clean and professional, perfectly centered and separated
                         let totalBarsWidth = barGroupWidth * CGFloat(sortedData.count) + barSpacing * CGFloat(max(0, sortedData.count - 1))
@@ -9934,6 +10077,7 @@ struct EnhancedIncomeExpenseBarChart: View {
                         .padding(.horizontal, horizontalPadding)
                     }
                     .frame(height: chartHeight + monthLabelHeight)
+                    }
                 }
                 .frame(width: width, height: totalHeight)
                 .clipped()

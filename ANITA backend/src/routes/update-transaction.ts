@@ -124,10 +124,8 @@ export async function handleUpdateTransaction(req: Request, res: Response): Prom
       return;
     }
 
-    // Build update object with only provided fields
-    const updateData: any = {
-      updated_at: new Date().toISOString()
-    };
+    // Build update object with only provided fields (anita_data has no updated_at column)
+    const updateData: any = {};
 
     // Use provided description or existing one
     const finalDescription = description !== undefined ? description : existingTransaction.transaction_description || existingTransaction.message_text;
@@ -230,7 +228,7 @@ export async function handleUpdateTransaction(req: Request, res: Response): Prom
       logger.error('Error updating transaction', { error: error.message, requestId, transactionId, userId });
       res.status(500).json({
         error: 'Database error',
-        message: 'Failed to update transaction',
+        message: error.message || 'Failed to update transaction',
         requestId
       });
       return;
