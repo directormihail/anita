@@ -177,34 +177,21 @@ struct FinanceView: View {
     @State private var animatedHealthScore: Double = 0
     @State private var animatedProgress: Double = 0 // Smooth progress for the bar
     @State private var healthScoreTimer: Timer?
-    @State private var healthScoreRefreshTrigger: UUID = UUID()
     @State private var animationDebounceTimer: Timer?
-    @State private var hasInitialLoadCompleted = false
-    @State private var pendingHealthScoreUpdate: Int? = nil
     
     // MARK: - Helper Functions
     
-    // Computed property for health score that updates reactively
+    /// Health score is based only on income vs expenses for the selected month.
     private var currentHealthScore: FinanceViewModel.HealthScore {
         viewModel.calculateHealthScore()
     }
     
-    // Single computed property that tracks ALL data changes affecting health score
-    // This creates one unified trigger instead of multiple onChange handlers
+    /// Tracks only the data that affects health score: income, expenses, selected month.
     private var healthScoreDataHash: String {
-        let transactionTotal = viewModel.transactions.reduce(0.0) { $0 + $1.amount }
-        let transactionCount = viewModel.transactions.count
         let income = String(format: "%.2f", viewModel.monthlyIncome)
         let expenses = String(format: "%.2f", viewModel.monthlyExpenses)
-        let balance = String(format: "%.2f", viewModel.totalBalance)
-        let prevIncome = String(format: "%.2f", viewModel.previousMonthIncome)
-        let prevExpenses = String(format: "%.2f", viewModel.previousMonthExpenses)
-        let historyCount = viewModel.monthlyIncomeExpenseHistory.count
-        let assetsCount = viewModel.assets.count
         let month = viewModel.selectedMonth.timeIntervalSince1970
-        
-        // Combine all relevant data into a single hash
-        return "\(transactionCount)-\(String(format: "%.2f", transactionTotal))-\(income)-\(expenses)-\(balance)-\(prevIncome)-\(prevExpenses)-\(historyCount)-\(assetsCount)-\(month)"
+        return "\(income)-\(expenses)-\(month)"
     }
     private var userCurrency: String {
         UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
@@ -227,36 +214,21 @@ struct FinanceView: View {
         return formatter.string(from: date)
     }
     
-    // Debounced animation trigger - prevents multiple animations from firing at once
-    private func triggerHealthScoreAnimation(forceUpdate: Bool = false) {
-        // If initial load hasn't completed and not forcing, just store the pending score
-        // This prevents multiple animations during initial data loading
-        if !hasInitialLoadCompleted && !forceUpdate {
-            let freshScore = viewModel.calculateHealthScore()
-            pendingHealthScoreUpdate = freshScore.score
-            return
-        }
-        
-        // Cancel any existing debounce timer
+    /// Debounced update when income/expenses change (e.g. after refresh or month change).
+    private func triggerHealthScoreAnimation() {
         animationDebounceTimer?.invalidate()
-        
-        // Wait a short time to collect all changes, then animate once
-        // This prevents multiple onChange handlers from triggering multiple animations
-        animationDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [self] _ in
-            // Ensure we're on the main actor for UI updates
+        animationDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: false) { [self] _ in
             Task { @MainActor in
                 let freshScore = self.viewModel.calculateHealthScore()
                 self.startHealthScoreAnimation(to: freshScore.score)
             }
         }
-        
-        // Add timer to RunLoop to ensure it works properly
         if let timer = animationDebounceTimer {
             RunLoop.main.add(timer, forMode: .common)
         }
     }
     
-    // Animate health score with counting effect
+    /// Animate health score with counting effect.
     private func startHealthScoreAnimation(to targetScore: Int) {
         // Cancel any existing animation timer
         healthScoreTimer?.invalidate()
@@ -587,61 +559,26 @@ struct FinanceView: View {
                 }
                 .frame(width: 320, height: 180)
                 .onAppear {
-                    // Reset initial load flag when view appears
-                    hasInitialLoadCompleted = false
-                    pendingHealthScoreUpdate = nil
+                    // When card appears, show score if data is already loaded (e.g. returning to tab)
+                    if !viewModel.isLoading {
+                        let freshScore = viewModel.calculateHealthScore()
+                        startHealthScoreAnimation(to: freshScore.score)
+                    }
                 }
                 .onChange(of: viewModel.isLoading) { oldValue, newValue in
-                    // When loading completes, trigger SINGLE update - this is the only initial load trigger
-                    if oldValue == true && newValue == false && !hasInitialLoadCompleted {
-                        // Data just finished loading, wait a moment for all data to settle, then animate once
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            hasInitialLoadCompleted = true
+                    // When loading finishes, update health score once (income/expenses are ready)
+                    if oldValue == true && newValue == false {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                             let freshScore = viewModel.calculateHealthScore()
                             startHealthScoreAnimation(to: freshScore.score)
                         }
                     }
                 }
                 .onChange(of: healthScoreDataHash) { oldValue, newValue in
-                    // SINGLE unified update trigger - watches ALL data that affects health score
-                    // CRITICAL: Only trigger AFTER initial load is complete to prevent multiple updates on page load
-                    if oldValue != newValue && hasInitialLoadCompleted {
-                        // Check if this is a transaction-related change
-                        let transactionCountChanged = {
-                            let oldParts = oldValue.split(separator: "-")
-                            let newParts = newValue.split(separator: "-")
-                            return oldParts.count > 0 && newParts.count > 0 && oldParts[0] != newParts[0]
-                        }()
-                        
-                        if transactionCountChanged {
-                            // Transaction was added/deleted - wait for refresh to complete
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                                let freshScore = viewModel.calculateHealthScore()
-                                startHealthScoreAnimation(to: freshScore.score)
-                            }
-                        } else {
-                            // Other data changed - use debounced update
-                            triggerHealthScoreAnimation(forceUpdate: false)
-                        }
+                    // When income, expenses, or month change (and not loading), update score
+                    if oldValue != newValue && !viewModel.isLoading {
+                        triggerHealthScoreAnimation()
                     }
-                }
-                .onChange(of: viewModel.transactions.count) { oldValue, newValue in
-                    // Explicitly watch transaction count changes to ensure updates on add/delete
-                    // Only trigger AFTER initial load is complete to prevent updates during initial data load
-                    if oldValue != newValue && hasInitialLoadCompleted {
-                        // Wait for monthlyIncome/Expenses to update from server after transaction change
-                        // This is critical for accurate health score after add/delete operations
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                            let freshScore = viewModel.calculateHealthScore()
-                            startHealthScoreAnimation(to: freshScore.score)
-                        }
-                    }
-                }
-                .onChange(of: viewModel.selectedMonth) { oldValue, newValue in
-                    // When month changes, reset initial load flag so isLoading handler can update once
-                    // This prevents double updates (once from here, once from isLoading change)
-                    hasInitialLoadCompleted = false
-                    // Health score will update automatically via onChange(of: isLoading) when new month data loads
                 }
                 .onDisappear {
                     // Clean up timers when view disappears
@@ -2395,22 +2332,13 @@ struct FinanceView: View {
         .onChange(of: showAddTransactionSheet) { oldValue, newValue in
             // When transaction sheet is dismissed, refresh data
             if oldValue == true && newValue == false {
-                // Ensure updates are enabled
-                hasInitialLoadCompleted = true
-                
-                // Sheet was dismissed - refresh data to ensure we have latest metrics
                 viewModel.refresh()
-                
-                // Health score will update automatically via onChange(of: isLoading) when refresh completes
+                // Health score updates when isLoading goes false after refresh
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("TransactionAdded"))) { _ in
-            // Listen for transaction added notifications (from chat or other sources)
-            // Ensure updates are enabled
-            hasInitialLoadCompleted = true
-            
-            // Refresh data - health score will update automatically via onChange handlers
             viewModel.refresh()
+            // Health score updates when isLoading goes false after refresh
         }
         .sheet(isPresented: $showMonthPicker) {
             MonthPickerSheet(
@@ -5977,7 +5905,7 @@ struct XPLevelWidget: View {
             // Progress bar + info (i) on same row — "how XP works" next to progress
             VStack(alignment: .leading, spacing: progressSpacing) {
                 HStack(spacing: 8) {
-                    Text("\(xpStats.xp_to_next_level) \(AppL10n.t("finance.xp_to_next_level"))")
+                    Text(xpStats.xp_to_next_level == 0 ? AppL10n.t("finance.xp_max_level") : "\(xpStats.xp_to_next_level) \(AppL10n.t("finance.xp_to_next_level"))")
                         .font(.system(size: progressLabelSize, weight: .medium, design: .rounded))
                         .foregroundColor(.white.opacity(0.5))
                         .digit3D(baseColor: .white.opacity(0.5))

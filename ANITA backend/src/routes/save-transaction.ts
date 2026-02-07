@@ -205,6 +205,48 @@ export async function handleSaveTransaction(req: Request, res: Response): Promis
       return;
     }
 
+    // Ensure XP rule exists (works even if migration not run)
+    await supabase.from('xp_rules').upsert(
+      {
+        id: 'transaction_added',
+        category: 'Engagement',
+        name: 'Add a transaction',
+        xp_amount: 10,
+        description: 'Add any income, expense, or transfer',
+        frequency: 'event',
+        extra_meta: {},
+        updated_at: new Date().toISOString()
+      },
+      { onConflict: 'id' }
+    );
+
+    // Award 10 XP for adding any transaction; stored in user_xp_events and user_xp_stats
+    const { data: xpResult, error: xpError } = await supabase.rpc('award_xp', {
+      p_user_id: userId,
+      p_rule_id: 'transaction_added',
+      p_metadata: {}
+    });
+    if (xpError) {
+      logger.warn('award_xp RPC failed, inserting XP event directly', {
+        requestId,
+        userId,
+        error: xpError.message
+      });
+      // Fallback: insert XP event so get-xp-stats sees the new XP
+      const eventId = `xp_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+      const { error: insertErr } = await supabase.from('user_xp_events').insert({
+        id: eventId,
+        user_id: userId,
+        rule_id: 'transaction_added',
+        xp_amount: 10,
+        description: 'Add any income, expense, or transfer',
+        metadata: {}
+      });
+      if (insertErr) {
+        logger.error('Failed to insert XP event fallback', { requestId, userId, error: insertErr.message });
+      }
+    }
+
     logger.info('Transaction saved successfully', { requestId, userId, type, amount, transactionId: transactionData.message_id });
 
     res.status(200).json({

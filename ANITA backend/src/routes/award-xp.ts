@@ -17,7 +17,7 @@ function getSupabaseClient() {
   return null;
 }
 
-const ALLOWED_RULE_IDS = ['daily_chat_message', 'goal_completed', 'week_streak_7'];
+const ALLOWED_RULE_IDS = ['transaction_added', 'daily_chat_message', 'goal_completed', 'week_streak_7'];
 
 export async function handleAwardXP(req: Request, res: Response): Promise<void> {
   applySecurityHeaders(res);

@@ -642,27 +642,27 @@ class ChatViewModel: ObservableObject {
                             )
                         print("[ChatViewModel] Transaction saved successfully: \(savedTransaction.id)")
                         
-                        // Notify FinanceViewModel to refresh
                         NotificationCenter.default.post(name: NSNotification.Name("TransactionAdded"), object: nil)
-                            
-                            // Clear pending transaction
-                            pendingTransactionType = nil
-                            
-                            // Send confirmation with correct currency
-                            await sendAIResponse("Got it! I've noted your \(formatCurrency(amount, currencyCode: currencyToUse)) \(pendingType == "income" ? "income" : "expense").")
-                            return
-                        } catch {
-                            print("[ChatViewModel] Error saving transaction: \(error.localizedDescription)")
-                            pendingTransactionType = nil
-                            await sendAIResponse("I encountered an error saving that transaction. Could you try again?")
-                            return
-                        }
-                    } else {
-                        // Amount not found - ask again
-                        await sendAIResponse("I couldn't find an amount in your message. Please enter the amount (e.g., $100 or 100).")
+                        try? await Task.sleep(nanoseconds: 250_000_000)
+                        await XPStore.shared.refresh()
+                        try? await Task.sleep(nanoseconds: 350_000_000)
+                        await XPStore.shared.refresh()
+                        NotificationCenter.default.post(name: NSNotification.Name("XPStatsDidUpdate"), object: nil)
+                        pendingTransactionType = nil
+                        await sendAIResponse("Got it! I've noted your \(formatCurrency(amount, currencyCode: currencyToUse)) \(pendingType == "income" ? "income" : "expense").")
+                        return
+                    } catch {
+                        print("[ChatViewModel] Error saving transaction: \(error.localizedDescription)")
+                        pendingTransactionType = nil
+                        await sendAIResponse("I encountered an error saving that transaction. Could you try again?")
                         return
                     }
+                } else {
+                    // Amount not found - ask again
+                    await sendAIResponse("I couldn't find an amount in your message. Please enter the amount (e.g., $100 or 100).")
+                    return
                 }
+            }
                 
                 // Try to parse transaction from user message (only if not in pending state)
                 if let transaction = parseTransaction(from: messageText) {
@@ -698,8 +698,12 @@ class ChatViewModel: ObservableObject {
                         )
                         print("[ChatViewModel] Transaction saved successfully: \(savedTransaction.id)")
                         
-                        // Notify FinanceViewModel to refresh
                         NotificationCenter.default.post(name: NSNotification.Name("TransactionAdded"), object: nil)
+                        try? await Task.sleep(nanoseconds: 250_000_000)
+                        await XPStore.shared.refresh()
+                        try? await Task.sleep(nanoseconds: 350_000_000)
+                        await XPStore.shared.refresh()
+                        NotificationCenter.default.post(name: NSNotification.Name("XPStatsDidUpdate"), object: nil)
                         
                         // Send confirmation with correct currency
                         let confirmationMessage = "Got it! I've noted your \(formatCurrency(transaction.amount, currencyCode: currencyToUse)) \(transaction.type)."

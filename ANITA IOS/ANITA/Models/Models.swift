@@ -262,6 +262,7 @@ struct GetFinancialMetricsResponse: Codable {
 }
 
 // MARK: - XP Stats Models
+// Display uses iOS rules: 100 XP per level, 10 levels, level 10 endless. Only total_xp from API is used.
 
 struct XPStats: Codable {
     let total_xp: Int
@@ -281,6 +282,57 @@ struct XPStats: Codable {
         case level_description
         case level_emoji
     }
+    
+    /// Builds display stats from total XP using app rules: 100 XP per level, 10 levels, level 10 endless.
+    static func from(totalXP: Int) -> XPStats {
+        let xpPerLevel = 100
+        let maxLevel = 10
+        let total = max(0, totalXP)
+        let currentLevel: Int
+        let xpToNextLevel: Int
+        let levelProgressPercentage: Int
+        let levelIndex: Int
+        if total >= (maxLevel - 1) * xpPerLevel {
+            levelIndex = maxLevel - 1
+            currentLevel = maxLevel
+            xpToNextLevel = 0
+            levelProgressPercentage = 100
+        } else {
+            levelIndex = total / xpPerLevel
+            currentLevel = levelIndex + 1
+            let thresholdCurrent = levelIndex * xpPerLevel
+            let thresholdNext = (levelIndex + 1) * xpPerLevel
+            xpToNextLevel = thresholdNext - total
+            let range = thresholdNext - thresholdCurrent
+            levelProgressPercentage = range > 0 ? Int(round(Double(total - thresholdCurrent) / Double(range) * 100)) : 0
+        }
+        let clampedProgress = min(100, max(0, levelProgressPercentage))
+        let config = XPLevelConfig.levels[levelIndex]
+        return XPStats(
+            total_xp: total,
+            current_level: currentLevel,
+            xp_to_next_level: xpToNextLevel,
+            level_progress_percentage: clampedProgress,
+            level_title: config.title,
+            level_description: config.description,
+            level_emoji: config.emoji
+        )
+    }
+}
+
+private enum XPLevelConfig {
+    static let levels: [(title: String, description: String, emoji: String)] = [
+        ("Newcomer", "Just getting started.", "🌱"),
+        ("Explorer", "Learning to track spending.", "🧭"),
+        ("Budget Apprentice", "Building healthy money habits.", "💡"),
+        ("Smart Planner", "Improving control and goals.", "📈"),
+        ("Saver", "Consistent tracking.", "💰"),
+        ("Analyzer", "Reviewing and optimizing.", "🔍"),
+        ("Strategist", "Using data to guide behavior.", "⚙️"),
+        ("Financial Thinker", "Adapting goals and cutting waste.", "🧠"),
+        ("Optimizer", "Balancing saving and lifestyle.", "🧩"),
+        ("Money Master", "Master of your finances. Keep growing!", "🚀")
+    ]
 }
 
 struct GetXPStatsResponse: Codable {

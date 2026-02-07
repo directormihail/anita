@@ -149,8 +149,9 @@ class SidebarViewModel: ObservableObject {
                     self.income = displayIncome.isNaN ? 0.0 : displayIncome
                     self.expense = displayExpense.isNaN ? 0.0 : displayExpense
                     
-                    // Update XP stats (full object for 1:1 card with finance page)
-                    let stats = xpStats.xpStats
+                    // Update XP stats (full object for 1:1 card with finance page). Use display rules: 100 XP/level, 10 levels, L10 endless.
+                    let raw = xpStats.xpStats
+                    let stats = XPStats.from(totalXP: raw.total_xp)
                     self.xpStats = stats
                     XPStore.shared.update(with: stats)
                     self.xp = stats.total_xp
@@ -183,12 +184,13 @@ class SidebarViewModel: ObservableObject {
                 if let openResponse = try? await networkService.appOpen(userId: currentUserId), openResponse.awardedStreak == true {
                     if let newStats = try? await networkService.getXPStats(userId: currentUserId) {
                         await MainActor.run {
-                            self.xpStats = newStats.xpStats
-                            self.xp = newStats.xpStats.total_xp
-                            self.xpToNextLevel = newStats.xpStats.xp_to_next_level
-                            self.level = newStats.xpStats.current_level
-                            self.levelTitle = newStats.xpStats.level_title.uppercased()
-                            XPStore.shared.update(with: newStats.xpStats)
+                            let stats = XPStats.from(totalXP: newStats.xpStats.total_xp)
+                            self.xpStats = stats
+                            self.xp = stats.total_xp
+                            self.xpToNextLevel = stats.xp_to_next_level
+                            self.level = stats.current_level
+                            self.levelTitle = stats.level_title.uppercased()
+                            XPStore.shared.update(with: stats)
                         }
                     }
                 }

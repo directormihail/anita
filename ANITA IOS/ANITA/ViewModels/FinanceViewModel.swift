@@ -119,7 +119,7 @@ class FinanceViewModel: ObservableObject {
                     self.targets = targetsResponse.targets
                     self.goals = targetsResponse.goals ?? []
                     self.assets = assetsResponse.assets
-                    self.xpStats = xpStatsResponse.xpStats
+                    self.xpStats = XPStats.from(totalXP: xpStatsResponse.xpStats.total_xp)
                     
                     // Set historical comparison data
                     self.previousMonthIncome = previousMonthMetrics?.metrics.monthlyIncome ?? 0.0
@@ -164,7 +164,7 @@ class FinanceViewModel: ObservableObject {
         Task { @MainActor in
             do {
                 let response = try await networkService.getXPStats(userId: currentUserId)
-                self.xpStats = response.xpStats
+                self.xpStats = XPStats.from(totalXP: response.xpStats.total_xp)
             } catch {
                 print("[FinanceViewModel] refreshXPStats failed: \(error.localizedDescription)")
             }
@@ -290,6 +290,16 @@ class FinanceViewModel: ObservableObject {
             self.transactions.append(newTransaction)
             refresh()
         }
+        
+        // Backend awards 10 XP and stores in DB; refresh XP so the level card updates
+        try? await Task.sleep(nanoseconds: 250_000_000) // 0.25s so DB commit is visible
+        await XPStore.shared.refresh()
+        try? await Task.sleep(nanoseconds: 350_000_000) // second fetch in case of replication
+        await XPStore.shared.refresh()
+        await MainActor.run {
+            self.xpStats = XPStore.shared.xpStats
+        }
+        NotificationCenter.default.post(name: NSNotification.Name("XPStatsDidUpdate"), object: nil)
     }
     
     func updateTransaction(transactionId: String, type: String? = nil, amount: Double? = nil, category: String? = nil, description: String? = nil, date: Date? = nil) async throws {
@@ -688,8 +698,10 @@ class FinanceViewModel: ObservableObject {
         return (change, percentage)
     }
     
-    // MARK: - Health Score Calculation
+    // MARK: - Health Score Calculation (Income vs Expenses only)
     
+    /// Health score is based only on this month's income and expenses.
+    /// Simple rule: higher savings rate = higher score. No balance history or available funds.
     struct HealthScore {
         let score: Int
         let explanation: String
@@ -698,155 +710,51 @@ class FinanceViewModel: ObservableObject {
     func calculateHealthScore() -> HealthScore {
         let income = monthlyIncome
         let expenses = monthlyExpenses
-        let currentBalance = monthlyIncome - monthlyExpenses // Current month's balance
         
-        // STEP 1: Basic check
-        if income <= 0 {
+        guard income > 0 else {
             return HealthScore(
                 score: 0,
                 explanation: "Add income transactions to get your health score."
             )
         }
         
-        // STEP 2: Income vs Expense Score (60% weight)
-        // Calculate savings rate: (income - expenses) / income
+        // Savings rate: (income - expenses) / income. Negative when spending more than income.
         let savingsRate = (income - expenses) / income
-        let incomeExpenseScore: Double
         
-        if expenses > income {
-            // Expenses exceed income - critical situation
-            // Score decreases based on how much expenses exceed income
-            let overspendRate = (expenses - income) / income
-            if overspendRate >= 0.50 {
-                // Spending 50%+ more than income - very bad
-                incomeExpenseScore = 0
-            } else if overspendRate >= 0.25 {
-                // Spending 25-50% more than income
-                incomeExpenseScore = 10
-            } else {
-                // Spending up to 25% more than income
-                incomeExpenseScore = 20
-            }
-        } else if expenses == income {
-            // Break even - neutral score
-            incomeExpenseScore = 50
-        } else {
-            // Positive savings - scale from 50 to 100
-            // 0% savings = 50 points, 20%+ savings = 100 points
-            if savingsRate >= 0.20 {
-                incomeExpenseScore = 100
-            } else {
-                // Linear scaling: 0% -> 50 points, 20% -> 100 points
-                incomeExpenseScore = 50 + (savingsRate / 0.20) * 50
-            }
-        }
-        
-        // STEP 3: Balance Change Score (40% weight)
-        // Compare current month balance to previous month balance
-        let calendar = Calendar.current
-        let previousMonthDate = calendar.date(byAdding: .month, value: -1, to: selectedMonth) ?? selectedMonth
-        let previousMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: previousMonthDate)) ?? previousMonthDate
-        
-        // Get previous month balance from history
-        let sortedBalanceHistory = monthlyBalanceHistory.sorted { $0.month < $1.month }
-        let previousMonthBalance: Double
-        
-        if let previousMonthData = sortedBalanceHistory.first(where: { data in
-            calendar.isDate(data.month, equalTo: previousMonthStart, toGranularity: .month)
-        }) {
-            previousMonthBalance = previousMonthData.balance
-        } else {
-            // No previous month data - use neutral score
-            previousMonthBalance = currentBalance // Assume no change for first month
-        }
-        
-        let balanceChangeScore: Double
-        
-        if previousMonthBalance == 0 && currentBalance == 0 {
-            // Both months have zero balance - neutral
-            balanceChangeScore = 50
-        } else if previousMonthBalance == 0 {
-            // First month with balance - positive if balance is positive
-            balanceChangeScore = currentBalance > 0 ? 80 : 30
-        } else {
-            // Calculate percentage change in balance
-            let balanceChange = currentBalance - previousMonthBalance
-            let balanceChangePercent = balanceChange / abs(previousMonthBalance)
-            
-            if balanceChange > 0 {
-                // Balance increased - good
-                if balanceChangePercent >= 0.20 {
-                    // 20%+ increase - excellent
-                    balanceChangeScore = 100
-                } else if balanceChangePercent >= 0.10 {
-                    // 10-20% increase - very good
-                    balanceChangeScore = 85
-                } else if balanceChangePercent >= 0.05 {
-                    // 5-10% increase - good
-                    balanceChangeScore = 70
-                } else {
-                    // Small increase - decent
-                    balanceChangeScore = 60
-                }
-            } else if balanceChange == 0 {
-                // Balance stayed the same - neutral
-                balanceChangeScore = 50
-            } else {
-                // Balance decreased - bad
-                let decreasePercent = abs(balanceChangePercent)
-                if decreasePercent >= 0.50 {
-                    // 50%+ decrease - very bad
-                    balanceChangeScore = 0
-                } else if decreasePercent >= 0.25 {
-                    // 25-50% decrease - bad
-                    balanceChangeScore = 20
-                } else if decreasePercent >= 0.10 {
-                    // 10-25% decrease - poor
-                    balanceChangeScore = 35
-                } else {
-                    // Small decrease - below average
-                    balanceChangeScore = 45
-                }
-            }
-        }
-        
-        // STEP 4: Final Health Score
-        // Weighted combination: 60% income/expense, 40% balance change
-        let finalScore = (incomeExpenseScore * 0.60) + (balanceChangeScore * 0.40)
-        let clampedScore = max(0, min(100, Int(finalScore.rounded())))
-        
-        // STEP 5: Generate explanation
+        let score: Int
         let explanation: String
         
         if expenses > income {
-            explanation = "Your expenses exceed your income this month. Reducing spending is essential to improve your financial health."
-        } else if savingsRate >= 0.20 {
-            if balanceChangeScore >= 80 {
-                explanation = "Excellent financial health! You're saving well and your balance is growing."
+            // Spending more than income
+            let overspendRate = (expenses - income) / income
+            if overspendRate >= 0.50 {
+                score = 0
+                explanation = "You're spending 50%+ more than you earn. Reduce expenses or add income to improve your score."
+            } else if overspendRate >= 0.25 {
+                score = 15
+                explanation = "Expenses are 25–50% above income. Try to cut spending or increase income."
             } else {
-                explanation = "Great savings rate! Keep maintaining this level to improve your score further."
+                score = 30
+                explanation = "Expenses exceed income this month. Reduce spending to get into the green."
             }
-        } else if savingsRate >= 0.10 {
-            if balanceChangeScore >= 70 {
-                explanation = "Good progress! You're saving money and your balance is increasing."
-            } else {
-                explanation = "You're saving money, but try to increase your savings rate to 20% or more."
-            }
-        } else if savingsRate > 0 {
-            if balanceChangeScore < 50 {
-                explanation = "You're saving, but your balance decreased. Focus on increasing your savings rate."
-            } else {
-                explanation = "You're saving some money. Aim to save at least 20% of your income for better financial health."
-            }
+        } else if expenses == income {
+            score = 50
+            explanation = "Income and expenses are even. Saving even a small amount will raise your score."
         } else {
-            // Break even or negative
-            if balanceChangeScore < 50 {
-                explanation = "Your expenses match or exceed your income, and your balance is decreasing. Reduce spending to improve your score."
+            // Saving money: 0% savings → 50, 20%+ savings → 100
+            if savingsRate >= 0.20 {
+                score = 100
+                explanation = "You're saving 20% or more of your income. Great financial health."
+            } else if savingsRate >= 0.10 {
+                score = 75
+                explanation = "You're saving 10–20%. Aim for 20%+ to reach the top score."
             } else {
-                explanation = "Your expenses are too close to your income. Aim to save at least 20% to improve your score."
+                score = Int(50 + (savingsRate / 0.20) * 50)
+                explanation = "You're saving a bit. Saving 20% of income gives the best score."
             }
         }
         
+        let clampedScore = max(0, min(100, score))
         return HealthScore(score: clampedScore, explanation: explanation)
     }
     
