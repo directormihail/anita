@@ -55,6 +55,9 @@ extension View {
     }
 }
 
+// Custom tap recognizer so we can detect our gesture (UIGestureRecognizer has no .tag in Swift)
+private final class KeyboardDismissTapRecognizer: UITapGestureRecognizer {}
+
 // UIViewRepresentable to handle tap gesture for keyboard dismissal
 struct KeyboardDismissingBackground: UIViewRepresentable {
     func makeUIView(context: Context) -> UIView {
@@ -62,16 +65,20 @@ struct KeyboardDismissingBackground: UIViewRepresentable {
         view.backgroundColor = .clear
         view.isUserInteractionEnabled = false
         
-        // Add tap gesture to the window after view appears
+        // Add tap gesture to the key window after view appears (async so window is ready on first screen)
         DispatchQueue.main.async {
-            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-               let window = windowScene.windows.first {
-                let tapGesture = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.dismissKeyboard))
-                tapGesture.cancelsTouchesInView = false
-                tapGesture.delegate = context.coordinator
-                window.addGestureRecognizer(tapGesture)
-                context.coordinator.gestureRecognizer = tapGesture
-            }
+            guard let window = Self.keyWindow else { return }
+            // Avoid duplicate recognizers when modifier is used in multiple places (e.g. root + sheet)
+            let recognizers: [UIGestureRecognizer] = window.gestureRecognizers ?? []
+            let alreadyHasOurs = recognizers.contains(where: { $0 is KeyboardDismissTapRecognizer })
+            if alreadyHasOurs { return }
+            
+            let tapGesture = KeyboardDismissTapRecognizer(target: context.coordinator, action: #selector(Coordinator.dismissKeyboard))
+            tapGesture.cancelsTouchesInView = false
+            tapGesture.delegate = context.coordinator
+            window.addGestureRecognizer(tapGesture)
+            context.coordinator.gestureRecognizer = tapGesture
+            context.coordinator.ownedWindow = window
         }
         
         return view
@@ -84,34 +91,41 @@ struct KeyboardDismissingBackground: UIViewRepresentable {
     }
     
     static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
-        // Remove gesture recognizer when view is dismantled
-        if let gesture = coordinator.gestureRecognizer,
-           let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let window = windowScene.windows.first {
+        if let gesture = coordinator.gestureRecognizer, let window = coordinator.ownedWindow {
             window.removeGestureRecognizer(gesture)
+            coordinator.gestureRecognizer = nil
+            coordinator.ownedWindow = nil
         }
+    }
+    
+    /// Prefer key window so tap-to-dismiss works on first screen and when multiple windows exist.
+    private static var keyWindow: UIWindow? {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first { $0.isKeyWindow }
+            ?? UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .flatMap { $0.windows }
+                .first
     }
     
     class Coordinator: NSObject, UIGestureRecognizerDelegate {
         var gestureRecognizer: UITapGestureRecognizer?
+        weak var ownedWindow: UIWindow?
         
         @objc func dismissKeyboard() {
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
         
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-            // Don't intercept taps on text fields, text views, or buttons
-            let view = touch.view
-            if view is UITextField || view is UITextView {
-                return false
-            }
-            // Check if the view or any of its superviews is a button
+            guard let view = touch.view else { return true }
             var currentView: UIView? = view
-            while currentView != nil {
-                if currentView is UIButton {
+            while let v = currentView {
+                if v is UITextField || v is UITextView || v is UIButton {
                     return false
                 }
-                currentView = currentView?.superview
+                currentView = v.superview
             }
             return true
         }

@@ -120,4 +120,3 @@ export async function handleGetSubscription(req: Request, res: Response): Promis
     });
   }
 }
-

@@ -244,4 +244,3 @@ export async function handleVerifyIOSSubscription(req: Request, res: Response): 
     });
   }
 }
-

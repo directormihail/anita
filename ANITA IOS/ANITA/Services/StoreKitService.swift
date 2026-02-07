@@ -53,11 +53,11 @@ class StoreKitService: ObservableObject {
         case .success(let verification):
             let transaction = try checkVerified(verification)
             
-            // Update UI immediately so the screen doesn’t freeze
+            // Update UI immediately so the screen doesn't freeze
             await updatePurchasedProducts()
             await transaction.finish()
             
-            // Verify with backend in the background (don’t block the main thread)
+            // Verify with backend in the background (don't block the main thread)
             let userId = UserManager.shared.userId
             if !userId.isEmpty {
                 Task {
@@ -77,16 +77,13 @@ class StoreKitService: ObservableObject {
     
     /// Verify transaction with backend and update subscription status
     private func verifyAndUpdateSubscription(transaction: StoreKit.Transaction, product: Product) async {
-        // Get user ID
         let userId = UserManager.shared.userId
-        
-        // Check if user is authenticated
         guard !userId.isEmpty else {
             print("[StoreKit] User not authenticated, skipping subscription update")
             return
         }
         
-                await verifySubscriptionWithBackend(
+        await verifySubscriptionWithBackend(
             userId: userId,
             transactionId: String(transaction.id),
             productId: product.id
@@ -205,4 +202,3 @@ enum StoreKitError: LocalizedError {
         }
     }
 }
-
