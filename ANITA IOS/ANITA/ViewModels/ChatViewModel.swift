@@ -194,6 +194,23 @@ class ChatViewModel: ObservableObject {
                 sender: sender
             )
             print("[ChatViewModel] Message saved successfully")
+            // 5 XP for sending at least one chat message today (once per day)
+            if message.role == "user" {
+                do {
+                    let xpResponse = try await networkService.awardXP(userId: currentUserId, ruleId: "daily_chat_message")
+                    if xpResponse.success && xpResponse.xpAwarded > 0 {
+                        print("[ChatViewModel] XP awarded: +\(xpResponse.xpAwarded) XP")
+                    } else if !xpResponse.success {
+                        print("[ChatViewModel] XP not awarded (e.g. already awarded today): \(xpResponse.message ?? "")")
+                    }
+                    // Update shared XP store so Finance tab and Sidebar show new total immediately
+                    if xpResponse.success {
+                        await XPStore.shared.refresh()
+                    }
+                } catch {
+                    print("[ChatViewModel] XP award failed: \(error.localizedDescription)")
+                }
+            }
         } catch {
             print("[ChatViewModel] Error saving message: \(error.localizedDescription)")
             // Don't throw - message is already displayed, saving is secondary

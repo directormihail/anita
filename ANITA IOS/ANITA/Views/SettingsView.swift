@@ -182,19 +182,6 @@ struct SettingsView: View {
                                     showChevron: false
                                 ) {}
                                 
-                                if let createdAt = user.createdAt {
-                                    PremiumDivider()
-                                        .padding(.leading, 92)
-                                    
-                                    SettingsRowWithIcon(
-                                        icon: "calendar",
-                                        iconColor: .white.opacity(0.6),
-                                        title: AppL10n.t("settings.member_since"),
-                                        value: formatJoinDate(createdAt),
-                                        showChevron: false
-                                    ) {}
-                                }
-                                
                                 PremiumDivider()
                                     .padding(.leading, 92)
                                 
@@ -316,20 +303,6 @@ struct SettingsView: View {
                                     iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
                                     title: AppL10n.t("settings.manage_subscription"),
                                     value: subscriptionPlan?.capitalized ?? AppL10n.t("plans.free"),
-                                    showChevron: true
-                                ) {}
-                            }
-                            .buttonStyle(PremiumSettingsButtonStyle())
-                            
-                            PremiumDivider()
-                                .padding(.leading, 76)
-                            
-                            Button(action: openSubscriptionManagement) {
-                                SettingsRowWithIcon(
-                                    icon: "xmark.circle.fill",
-                                    iconColor: .red.opacity(0.8),
-                                    title: AppL10n.t("settings.cancel_subscription"),
-                                    value: nil,
                                     showChevron: true
                                 ) {}
                             }
@@ -666,17 +639,6 @@ struct SettingsView: View {
     func saveNameDebounced(_ name: String) {
         UserDefaults.standard.set(name, forKey: "anita_profile_name")
         // TODO: Save to Supabase profile table
-    }
-    
-    func formatJoinDate(_ dateString: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        if let date = formatter.date(from: dateString) {
-            let displayFormatter = DateFormatter()
-            displayFormatter.locale = Locale(identifier: AppL10n.localeIdentifier(for: AppL10n.currentLanguageCode()))
-            displayFormatter.dateFormat = "MMMM yyyy"
-            return displayFormatter.string(from: date)
-        }
-        return AppL10n.t("settings.recently")
     }
     
     func loadSubscription() {

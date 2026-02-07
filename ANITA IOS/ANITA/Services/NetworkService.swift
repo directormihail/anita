@@ -584,6 +584,49 @@ class NetworkService: ObservableObject {
         }
     }
     
+    func awardXP(userId: String, ruleId: String, metadata: [String: String]? = nil) async throws -> AwardXPResponse {
+        let url = URL(string: "\(baseURL)/api/v1/xp-award")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 10.0
+        let body: [String: Any] = [
+            "userId": userId,
+            "ruleId": ruleId,
+            "metadata": metadata ?? [:]
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else { throw NetworkError.invalidResponse }
+        if httpResponse.statusCode == 200 {
+            let decoder = JSONDecoder()
+            return try decoder.decode(AwardXPResponse.self, from: data)
+        }
+        if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
+            throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)
+        }
+        throw NetworkError.httpError(httpResponse.statusCode)
+    }
+    
+    func appOpen(userId: String) async throws -> AppOpenResponse {
+        let url = URL(string: "\(baseURL)/api/v1/app-open")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 10.0
+        request.httpBody = try JSONEncoder().encode(AppOpenRequest(userId: userId))
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else { throw NetworkError.invalidResponse }
+        if httpResponse.statusCode == 200 {
+            let decoder = JSONDecoder()
+            return try decoder.decode(AppOpenResponse.self, from: data)
+        }
+        if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
+            throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)
+        }
+        throw NetworkError.httpError(httpResponse.statusCode)
+    }
+    
     // MARK: - Targets
     
     func getTargets(userId: String) async throws -> GetTargetsResponse {

@@ -107,6 +107,8 @@ struct ContentView: View {
                 Task { @MainActor in
                     NotificationService.shared.scheduleDailyTransactionReminder()
                 }
+                // Preload XP so Finance tab and sidebar show Level card immediately
+                Task { await XPStore.shared.refresh() }
                 
                 // Normal item styling with slight transparency
                 appearance.stackedLayoutAppearance.normal.iconColor = UIColor(white: 0.8, alpha: 0.8)

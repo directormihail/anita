@@ -24,6 +24,11 @@ class SidebarViewModel: ObservableObject {
     
     private let networkService = NetworkService.shared
     private let userManager = UserManager.shared
+
+    // Must retain observer tokens or they are deallocated and notifications never fire
+    private var userDidSignInObserver: NSObjectProtocol?
+    private var conversationCreatedObserver: NSObjectProtocol?
+    private var xpStatsDidUpdateObserver: NSObjectProtocol?
     
     init(userId: String? = nil) {
         // Note: We don't store userId as a property anymore
@@ -32,7 +37,7 @@ class SidebarViewModel: ObservableObject {
         print("[SidebarViewModel] Initialized")
         
         // Observe authentication changes to refresh data
-        NotificationCenter.default.addObserver(
+        userDidSignInObserver = NotificationCenter.default.addObserver(
             forName: NSNotification.Name("UserDidSignIn"),
             object: nil,
             queue: .main
@@ -43,7 +48,7 @@ class SidebarViewModel: ObservableObject {
         }
         
         // Observe conversation creation to refresh conversation list
-        NotificationCenter.default.addObserver(
+        conversationCreatedObserver = NotificationCenter.default.addObserver(
             forName: NSNotification.Name("ConversationCreated"),
             object: nil,
             queue: .main
@@ -53,6 +58,23 @@ class SidebarViewModel: ObservableObject {
                 self?.loadData()
             }
         }
+
+        // Observe XP updates (e.g. after sending a chat message) to refresh stats
+        xpStatsDidUpdateObserver = NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("XPStatsDidUpdate"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.loadData()
+            }
+        }
+    }
+
+    deinit {
+        if let o = userDidSignInObserver { NotificationCenter.default.removeObserver(o) }
+        if let o = conversationCreatedObserver { NotificationCenter.default.removeObserver(o) }
+        if let o = xpStatsDidUpdateObserver { NotificationCenter.default.removeObserver(o) }
     }
     
     func loadData() {
@@ -130,11 +152,12 @@ class SidebarViewModel: ObservableObject {
                     // Update XP stats (full object for 1:1 card with finance page)
                     let stats = xpStats.xpStats
                     self.xpStats = stats
+                    XPStore.shared.update(with: stats)
                     self.xp = stats.total_xp
                     self.xpToNextLevel = stats.xp_to_next_level
                     self.level = stats.current_level
                     self.levelTitle = stats.level_title.uppercased()
-                    
+
                     // Convert conversations to ConversationItem format
                     self.conversations = conversationsResponse.conversations.map { conv in
                         let dateFormatter = ISO8601DateFormatter()
@@ -154,6 +177,20 @@ class SidebarViewModel: ObservableObject {
                     
                     self.isLoading = false
                     self.errorMessage = nil // Clear any previous errors
+                }
+
+                // Record app open; may award 100 XP (week_streak_7) if user opened 7 days this week
+                if let openResponse = try? await networkService.appOpen(userId: currentUserId), openResponse.awardedStreak == true {
+                    if let newStats = try? await networkService.getXPStats(userId: currentUserId) {
+                        await MainActor.run {
+                            self.xpStats = newStats.xpStats
+                            self.xp = newStats.xpStats.total_xp
+                            self.xpToNextLevel = newStats.xpStats.xp_to_next_level
+                            self.level = newStats.xpStats.current_level
+                            self.levelTitle = newStats.xpStats.level_title.uppercased()
+                            XPStore.shared.update(with: newStats.xpStats)
+                        }
+                    }
                 }
             } catch {
                 await MainActor.run {

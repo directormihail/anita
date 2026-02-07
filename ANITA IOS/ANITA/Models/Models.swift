@@ -289,6 +289,30 @@ struct GetXPStatsResponse: Codable {
     let requestId: String?
 }
 
+struct AwardXPRequest: Codable {
+    let userId: String
+    let ruleId: String
+    let metadata: [String: String]?
+}
+
+struct AwardXPResponse: Codable {
+    let success: Bool
+    let xpAwarded: Int
+    let message: String?
+    let requestId: String?
+}
+
+struct AppOpenRequest: Codable {
+    let userId: String
+}
+
+struct AppOpenResponse: Codable {
+    let success: Bool
+    let awardedStreak: Bool?
+    let daysThisWeek: Int?
+    let requestId: String?
+}
+
 // MARK: - Historical Data Models
 
 struct MonthlyBalance: Identifiable {

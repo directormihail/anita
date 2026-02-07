@@ -113,47 +113,58 @@ export async function handleGetFinancialMetrics(req: Request, res: Response): Pr
       return;
     }
 
-    // Calculate ALL-TIME metrics (total balance)
-    const allTransactions = (allTransactionsData || []).map((item: any) => ({
+    // Helper: map raw rows to { type, amount }
+    const mapTx = (item: any) => ({
       type: item.transaction_type || 'expense',
+      category: (item.transaction_category || '').toLowerCase(),
       amount: Number(item.transaction_amount) || 0,
       date: item.transaction_date || item.created_at
-    }));
+    });
+
+    // Calculate ALL-TIME metrics (income and expense only; transfers affect balance but not income/expense)
+    const allTransactions = (allTransactionsData || []).map(mapTx);
 
     const totalIncome = allTransactions
       .filter(t => t.type === 'income')
       .reduce((sum, t) => sum + t.amount, 0);
-    
+
     const totalExpenses = allTransactions
       .filter(t => t.type === 'expense')
       .reduce((sum, t) => sum + t.amount, 0);
-    
+
+    // Funds Total (all-time): income minus expenses only. Transfers affect only each month's Available Funds.
     const totalBalance = totalIncome - totalExpenses;
 
     // Calculate MONTHLY metrics (for selected month)
-    const monthlyTransactions = (monthlyTransactionsData || []).map((item: any) => ({
-      type: item.transaction_type || 'expense',
-      amount: Number(item.transaction_amount) || 0,
-      date: item.transaction_date || item.created_at
-    }));
+    const monthlyTransactions = (monthlyTransactionsData || []).map(mapTx);
 
     const monthlyIncome = monthlyTransactions
       .filter(t => t.type === 'income')
       .reduce((sum, t) => sum + t.amount, 0);
-    
+
     const monthlyExpenses = monthlyTransactions
       .filter(t => t.type === 'expense')
       .reduce((sum, t) => sum + t.amount, 0);
 
+    const monthlyTransfersToGoal = monthlyTransactions
+      .filter(t => t.type === 'transfer' && t.category.includes('to goal'))
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const monthlyTransfersFromGoal = monthlyTransactions
+      .filter(t => t.type === 'transfer' && t.category.includes('from goal'))
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const monthlyBalance = monthlyIncome - monthlyExpenses - monthlyTransfersToGoal + monthlyTransfersFromGoal;
+
     res.status(200).json({
       success: true,
       metrics: {
-        totalBalance, // All-time balance
-        totalIncome, // All-time income
-        totalExpenses, // All-time expenses
-        monthlyIncome, // Income for selected month
-        monthlyExpenses, // Expenses for selected month
-        monthlyBalance: monthlyIncome - monthlyExpenses // Balance for selected month
+        totalBalance,
+        totalIncome,
+        totalExpenses,
+        monthlyIncome,
+        monthlyExpenses,
+        monthlyBalance
       },
       requestId
     });

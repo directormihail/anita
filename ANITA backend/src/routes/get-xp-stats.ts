@@ -59,42 +59,7 @@ export async function handleGetXPStats(req: Request, res: Response): Promise<voi
       return;
     }
 
-    // Try to get cached stats first
-    const { data: statsData, error: statsError } = await supabase
-      .from('user_xp_stats')
-      .select('*')
-      .eq('user_id', userId)
-      .single();
-
-    if (statsError && statsError.code !== 'PGRST116') { // PGRST116 = not found
-      logger.error('Error fetching XP stats', { error: statsError.message, requestId, userId });
-    }
-
-    // If we have cached stats, get level details
-    if (statsData) {
-      const { data: levelData } = await supabase
-        .from('xp_levels')
-        .select('*')
-        .eq('level', statsData.current_level)
-        .single();
-
-      res.status(200).json({
-        success: true,
-        xpStats: {
-          total_xp: statsData.total_xp || 0,
-          current_level: statsData.current_level || 1,
-          xp_to_next_level: statsData.xp_to_next_level || 100,
-          level_progress_percentage: statsData.level_progress_percentage || 0,
-          level_title: levelData?.title || 'Newcomer',
-          level_description: levelData?.description || 'Just getting started',
-          level_emoji: levelData?.emoji || '🌱'
-        },
-        requestId
-      });
-      return;
-    }
-
-    // If no cached stats, calculate from events
+    // Always use user_xp_events as source of truth: compute stats, then persist to user_xp_stats
     const { data: events, error: eventsError } = await supabase
       .from('user_xp_events')
       .select('xp_amount')
@@ -145,11 +110,35 @@ export async function handleGetXPStats(req: Request, res: Response): Promise<voi
       }
     }
 
-    const levelProgressPercentage = xpToNextLevel > 0 && levels && levels.length > 0
-      ? Math.round(((totalXP - (levels.find(l => l.level === currentLevel)?.total_xp_needed || 0)) / 
-                    (levels.find(l => l.level === currentLevel + 1)?.total_xp_needed || totalXP + 1) - 
-                    (levels.find(l => l.level === currentLevel)?.total_xp_needed || 0)) * 100)
-      : 0;
+    const currentLevelData = levels?.find(l => l.level === currentLevel);
+    const nextLevelData = levels?.find(l => l.level === currentLevel + 1);
+    const currentThreshold = currentLevelData?.total_xp_needed ?? 0;
+    const nextThreshold = nextLevelData?.total_xp_needed ?? currentThreshold + 1;
+    const range = nextThreshold - currentThreshold;
+    const levelProgressPercentage = xpToNextLevel > 0 && range > 0
+      ? Math.round(((totalXP - currentThreshold) / range) * 100)
+      : xpToNextLevel === 0 ? 100 : 0;
+    const clampedLevelProgress = Math.max(0, Math.min(100, levelProgressPercentage));
+
+    // Persist computed stats to Supabase so they are always saved (source of truth is events)
+    const { error: upsertError } = await supabase
+      .from('user_xp_stats')
+      .upsert(
+        {
+          user_id: userId,
+          total_xp: totalXP,
+          current_level: currentLevel,
+          xp_to_next_level: xpToNextLevel,
+          level_progress_percentage: clampedLevelProgress,
+          last_updated: new Date().toISOString()
+        },
+        { onConflict: 'user_id' }
+      );
+
+    if (upsertError) {
+      logger.error('Error upserting XP stats to Supabase', { error: upsertError.message, requestId, userId });
+      // Still return the computed stats; persistence will be retried on next fetch
+    }
 
     res.status(200).json({
       success: true,
@@ -157,7 +146,7 @@ export async function handleGetXPStats(req: Request, res: Response): Promise<voi
         total_xp: totalXP,
         current_level: currentLevel,
         xp_to_next_level: xpToNextLevel,
-        level_progress_percentage: levelProgressPercentage,
+        level_progress_percentage: clampedLevelProgress,
         level_title: levelTitle,
         level_description: levelDescription,
         level_emoji: levelEmoji

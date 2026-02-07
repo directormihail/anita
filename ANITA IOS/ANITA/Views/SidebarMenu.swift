@@ -10,6 +10,7 @@ import SwiftUI
 struct SidebarMenu: View {
     @Binding var isPresented: Bool
     @StateObject private var viewModel = SidebarViewModel()
+    @ObservedObject private var xpStore = XPStore.shared
     @State private var showXPInfoSheet = false
     
     var body: some View {
@@ -39,9 +40,9 @@ struct SidebarMenu: View {
                 .padding(.top, 16)
                 .padding(.bottom, 12)
                 
-                // XP / Level card — compact variant; info (i) inside card next to XP
+                // XP / Level card — compact variant; info (i) inside card next to XP (from shared store)
                 Group {
-                    if let xpStats = viewModel.xpStats {
+                    if let xpStats = xpStore.xpStats {
                         XPLevelWidget(xpStats: xpStats, compact: true, onInfoTap: { showXPInfoSheet = true })
                     } else {
                         // Loading placeholder: compact card shape

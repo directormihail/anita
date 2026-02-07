@@ -155,6 +155,7 @@ extension View {
 struct FinanceView: View {
     @StateObject private var viewModel = FinanceViewModel()
     @StateObject private var categoryViewModel = CategoryAnalyticsViewModel()
+    @ObservedObject private var xpStore = XPStore.shared
     @State private var languageRefreshTrigger = UUID()
     @State private var isSpendingLimitsExpanded = false
     @State private var isSavingGoalsExpanded = false
@@ -455,7 +456,8 @@ struct FinanceView: View {
     private var balanceCardView: some View {
         // Use computed property that updates reactively
         let healthScore = currentHealthScore
-        let monthlyBalance = viewModel.monthlyIncome - viewModel.monthlyExpenses
+        // Available Funds = monthlyBalance from API (income - expenses - transfers to goal + transfers from goal)
+        let availableFunds = viewModel.monthlyBalance
         
         // Use animated score for display (integer for counting effect)
         let displayScore = Int(animatedHealthScore)
@@ -472,7 +474,7 @@ struct FinanceView: View {
             scoreColor = .red
         }
         
-        let balanceColor: Color = monthlyBalance >= 0 ? .green : .red
+        let balanceColor: Color = availableFunds >= 0 ? .green : .red
         
         // Determine health score status based on actual score (not animated)
         let statusText: String
@@ -711,7 +713,7 @@ struct FinanceView: View {
                             .foregroundColor(.white)
                             .tracking(0.8)
                         
-                        Text(formatCurrency(monthlyBalance))
+                        Text(formatCurrency(availableFunds))
                             .font(.system(size: 22, weight: .bold, design: .rounded))
                             .foregroundColor(balanceColor)
                             .digit3D(baseColor: balanceColor)
@@ -1442,6 +1444,29 @@ struct FinanceView: View {
             .buttonStyle(PremiumSettingsButtonStyle())
             
             if isSavingGoalsExpanded {
+                // Goals total reserve summary (same design as Total Assets)
+                if !viewModel.targets.isEmpty {
+                    let goalsTotalReserve = viewModel.targets.reduce(0.0) { $0 + $1.currentAmount }
+                    HStack {
+                        Text(AppL10n.t("finance.goals_total_reserve"))
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white.opacity(0.4))
+                            .tracking(0.8)
+                        
+                        Spacer()
+                        
+                        Text(formatCurrency(goalsTotalReserve))
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundColor(.green)
+                            .digit3D(baseColor: .green)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 18)
+                    .liquidGlass(cornerRadius: 20)
+                    .padding(.horizontal, 20)
+                    .transition(.expandSection)
+                }
+                
                 if viewModel.targets.isEmpty {
                     VStack(spacing: 20) {
                         Image(systemName: "target")
@@ -1933,7 +1958,7 @@ struct FinanceView: View {
     
     private var xpLevelWidgetView: some View {
         Group {
-            if let xpStats = viewModel.xpStats {
+            if let xpStats = xpStore.xpStats {
                 XPLevelWidget(xpStats: xpStats)
             }
         }
@@ -2262,8 +2287,9 @@ struct FinanceView: View {
         }
         .onAppear {
             viewModel.loadData()
+            // Refresh shared XP store so Level card is up to date (single source of truth)
+            Task { await XPStore.shared.refresh() }
             // Health score will update automatically when isLoading changes to false
-            // No need for manual trigger here
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LanguageChanged"))) { _ in
             languageRefreshTrigger = UUID()
@@ -2394,12 +2420,16 @@ struct TransactionRow: View {
                     .foregroundStyle(
                         LinearGradient(
                             colors: [
-                                (transaction.type == "income" 
-                                    ? Color.green.opacity(0.95)
-                                    : Color.red.opacity(0.95)),
-                                (transaction.type == "income" 
-                                    ? Color.green.opacity(0.8)
-                                    : Color.red.opacity(0.8))
+                                (transaction.type == "transfer"
+                                    ? Color.orange.opacity(0.95)
+                                    : (transaction.type == "income"
+                                        ? Color.green.opacity(0.95)
+                                        : Color.red.opacity(0.95))),
+                                (transaction.type == "transfer"
+                                    ? Color.orange.opacity(0.8)
+                                    : (transaction.type == "income"
+                                        ? Color.green.opacity(0.8)
+                                        : Color.red.opacity(0.8)))
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -2428,61 +2458,63 @@ struct TransactionRow: View {
             
             Spacer()
             
-            // Amount
+            // Amount (transfer: orange, amount only; income/expense: green/red with sign)
             Text(formatAmount(transaction.amount))
                 .font(.system(size: 17, weight: .semibold, design: .rounded))
-                .foregroundColor(transaction.type == "income" ? .green : .red)
-                .digit3D(baseColor: transaction.type == "income" ? .green : .red)
+                .foregroundColor(transaction.type == "transfer" ? .orange : (transaction.type == "income" ? .green : .red))
+                .digit3D(baseColor: transaction.type == "transfer" ? .orange : (transaction.type == "income" ? .green : .red))
             
-            // Edit button
-            Button(action: {
-                let impact = UIImpactFeedbackGenerator(style: .light)
-                impact.impactOccurred()
-                showEditTransactionSheet = true
-            }) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color(white: 0.2).opacity(0.3),
-                                    Color(white: 0.15).opacity(0.2)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 36, height: 36)
-                        .overlay {
-                            Circle()
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white.opacity(0.2),
-                                            Color.white.opacity(0.1)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 1
+            // Edit button (hidden for transfers — they are not editable as income/expense)
+            if transaction.type != "transfer" {
+                Button(action: {
+                    let impact = UIImpactFeedbackGenerator(style: .light)
+                    impact.impactOccurred()
+                    showEditTransactionSheet = true
+                }) {
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(white: 0.2).opacity(0.3),
+                                        Color(white: 0.15).opacity(0.2)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
                                 )
-                        }
-                    
-                    Image(systemName: "pencil")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [
-                                    Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.95),
-                                    Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.8)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
                             )
-                        )
+                            .frame(width: 36, height: 36)
+                            .overlay {
+                                Circle()
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.white.opacity(0.2),
+                                                Color.white.opacity(0.1)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 1
+                                    )
+                            }
+                        
+                        Image(systemName: "pencil")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.95),
+                                        Color(red: 0.4, green: 0.49, blue: 0.92).opacity(0.8)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    }
                 }
+                .buttonStyle(PremiumSettingsButtonStyle())
             }
-            .buttonStyle(PremiumSettingsButtonStyle())
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
@@ -2494,7 +2526,9 @@ struct TransactionRow: View {
     
     private func categoryIcon(_ category: String) -> String {
         let lowercased = category.lowercased()
-        if lowercased.contains("food") || lowercased.contains("restaurant") {
+        if lowercased.contains("transfer") {
+            return "arrow.left.arrow.right"
+        } else if lowercased.contains("food") || lowercased.contains("restaurant") {
             return "fork.knife"
         } else if lowercased.contains("transport") || lowercased.contains("car") {
             return "car.fill"
@@ -2525,6 +2559,9 @@ struct TransactionRow: View {
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
         let formatted = formatter.string(from: NSNumber(value: abs(amount))) ?? "$0.00"
+        if transaction.type == "transfer" {
+            return formatted
+        }
         let sign = transaction.type == "income" ? "+" : "-"
         return "\(sign)\(formatted)"
     }
@@ -3078,6 +3115,15 @@ struct AddMoneyToGoalSheet: View {
         return formatter.string(from: NSNumber(value: 0)) ?? "0"
     }
     
+    private var selectedMonthDateString: String? {
+        let calendar = Calendar.current
+        let comps = calendar.dateComponents([.year, .month], from: viewModel.selectedMonth)
+        guard let firstOfMonth = calendar.date(from: comps) else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.string(from: firstOfMonth)
+    }
+    
     private func addMoneyToGoal() {
         guard let amountValue = Double(amount), amountValue > 0 else {
             errorMessage = "Please enter a valid amount"
@@ -3092,25 +3138,29 @@ struct AddMoneyToGoalSheet: View {
                 let userId = viewModel.userId
                 let newCurrentAmount = target.currentAmount + amountValue
                 
-                print("[AddMoneyToGoalSheet] Adding \(amountValue) to goal \(target.id). New amount: \(newCurrentAmount)")
+                // Record transfer to goal (reduces Available Funds; not income/expense)
+                _ = try await NetworkService.shared.createTransaction(
+                    userId: userId,
+                    type: "transfer",
+                    amount: amountValue,
+                    category: "Transfer to goal",
+                    description: "To goal: \(target.title)",
+                    date: selectedMonthDateString
+                )
                 
-                // Update target's currentAmount
-                let updatedTarget = try await NetworkService.shared.updateTarget(
+                _ = try await NetworkService.shared.updateTarget(
                     userId: userId,
                     targetId: target.id,
                     currentAmount: newCurrentAmount
                 )
                 
-                print("[AddMoneyToGoalSheet] Successfully updated goal. New current amount: \(updatedTarget.target.currentAmount)")
-                
                 await MainActor.run {
                     isAdding = false
                     dismiss()
-                    // Refresh the goals list
                     viewModel.refresh()
                 }
             } catch {
-                print("[AddMoneyToGoalSheet] Error updating goal: \(error.localizedDescription)")
+                print("[AddMoneyToGoalSheet] Error: \(error.localizedDescription)")
                 await MainActor.run {
                     isAdding = false
                     let errorDesc = error.localizedDescription
@@ -4276,30 +4326,43 @@ struct TakeMoneyFromGoalSheet: View {
         isProcessing = true
         errorMessage = nil
         
+        let selectedMonthDateString: String? = {
+            let calendar = Calendar.current
+            let comps = calendar.dateComponents([.year, .month], from: viewModel.selectedMonth)
+            guard let firstOfMonth = calendar.date(from: comps) else { return nil }
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime]
+            return formatter.string(from: firstOfMonth)
+        }()
+        
         Task {
             do {
                 let userId = viewModel.userId
                 let newCurrentAmount = target.currentAmount - amountValue
                 
-                print("[TakeMoneyFromGoalSheet] Taking \(amountValue) from goal \(target.id). New amount: \(newCurrentAmount)")
+                // Record transfer from goal (increases Available Funds; not income/expense)
+                _ = try await NetworkService.shared.createTransaction(
+                    userId: userId,
+                    type: "transfer",
+                    amount: amountValue,
+                    category: "Transfer from goal",
+                    description: "From goal: \(target.title)",
+                    date: selectedMonthDateString
+                )
                 
-                // Update target's currentAmount
-                let updatedTarget = try await NetworkService.shared.updateTarget(
+                _ = try await NetworkService.shared.updateTarget(
                     userId: userId,
                     targetId: target.id,
                     currentAmount: newCurrentAmount
                 )
                 
-                print("[TakeMoneyFromGoalSheet] Successfully updated goal. New current amount: \(updatedTarget.target.currentAmount)")
-                
                 await MainActor.run {
                     isProcessing = false
                     dismiss()
-                    // Refresh the goals list
                     viewModel.refresh()
                 }
             } catch {
-                print("[TakeMoneyFromGoalSheet] Error updating goal: \(error.localizedDescription)")
+                print("[TakeMoneyFromGoalSheet] Error: \(error.localizedDescription)")
                 await MainActor.run {
                     isProcessing = false
                     let errorDesc = error.localizedDescription
@@ -5935,11 +5998,11 @@ struct FinanceCategoryRow: View {
     }
     
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 12) {
             // Colored circle indicator - progressive design
             Circle()
                 .fill(category.color)
-                .frame(width: 48, height: 48)
+                .frame(width: 28, height: 28)
                 .overlay {
                     Circle()
                         .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
@@ -5992,8 +6055,8 @@ struct FinanceCategoryRow: View {
                 .font(.system(size: 16, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
         .background(
             ZStack {
                 // Base gradient background
@@ -7921,8 +7984,8 @@ struct DeleteTransactionSheet: View {
                             Spacer()
                             Text(formatCurrency(transaction.amount))
                                 .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                .foregroundColor(transaction.type == "income" ? .green : .red)
-                                .digit3D(baseColor: transaction.type == "income" ? .green : .red)
+                                .foregroundColor(transaction.type == "transfer" ? .orange : (transaction.type == "income" ? .green : .red))
+                                .digit3D(baseColor: transaction.type == "transfer" ? .orange : (transaction.type == "income" ? .green : .red))
                         }
                         
                         HStack {

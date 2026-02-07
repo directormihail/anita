@@ -13,6 +13,8 @@ class FinanceViewModel: ObservableObject {
     @Published var totalBalance: Double = 0.0
     @Published var monthlyIncome: Double = 0.0
     @Published var monthlyExpenses: Double = 0.0
+    /// Selected month's available funds (income - expenses - transfers to goal + transfers from goal). Used for Available Funds display.
+    @Published var monthlyBalance: Double = 0.0
     @Published var transactions: [TransactionItem] = []
     @Published var targets: [Target] = []
     @Published var goals: [Target] = []
@@ -40,12 +42,16 @@ class FinanceViewModel: ObservableObject {
     
     private let networkService = NetworkService.shared
     let userId: String
+
+    // Must retain observer tokens or they are deallocated and notifications never fire
+    private var transactionAddedObserver: NSObjectProtocol?
+    private var xpStatsDidUpdateObserver: NSObjectProtocol?
     
     init(userId: String? = nil) {
         self.userId = userId ?? UserManager.shared.userId
         
         // Listen for transaction added notifications
-        NotificationCenter.default.addObserver(
+        transactionAddedObserver = NotificationCenter.default.addObserver(
             forName: NSNotification.Name("TransactionAdded"),
             object: nil,
             queue: .main
@@ -54,10 +60,22 @@ class FinanceViewModel: ObservableObject {
                 self?.refresh()
             }
         }
+
+        // Listen for XP updates (e.g. after chat message or app open) so Finance tab XP card updates
+        xpStatsDidUpdateObserver = NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("XPStatsDidUpdate"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshXPStats()
+            }
+        }
     }
     
     deinit {
-        NotificationCenter.default.removeObserver(self)
+        if let o = transactionAddedObserver { NotificationCenter.default.removeObserver(o) }
+        if let o = xpStatsDidUpdateObserver { NotificationCenter.default.removeObserver(o) }
     }
     
     func loadData() {
@@ -96,6 +114,7 @@ class FinanceViewModel: ObservableObject {
                     self.totalBalance = metrics.metrics.totalBalance
                     self.monthlyIncome = metrics.metrics.monthlyIncome
                     self.monthlyExpenses = metrics.metrics.monthlyExpenses
+                    self.monthlyBalance = metrics.metrics.monthlyBalance
                     self.transactions = transactionsResponse.transactions
                     self.targets = targetsResponse.targets
                     self.goals = targetsResponse.goals ?? []
@@ -137,7 +156,21 @@ class FinanceViewModel: ObservableObject {
     func refresh() {
         loadData()
     }
-    
+
+    /// Refreshes only XP stats (e.g. after earning XP in chat). Keeps Finance tab XP card in sync.
+    func refreshXPStats() {
+        let currentUserId = UserManager.shared.userId
+        guard !currentUserId.isEmpty else { return }
+        Task { @MainActor in
+            do {
+                let response = try await networkService.getXPStats(userId: currentUserId)
+                self.xpStats = response.xpStats
+            } catch {
+                print("[FinanceViewModel] refreshXPStats failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
     func loadTargets() async {
         do {
             let targetsResponse = try await networkService.getTargets(userId: userId)
@@ -417,14 +450,15 @@ class FinanceViewModel: ObservableObject {
                         let metrics = try await networkService.getFinancialMetrics(userId: userId, month: month, year: year)
                         let monthStart = calendar.date(from: DateComponents(year: year, month: month, day: 1)) ?? monthDate
                         
-                        let balance = metrics.metrics.monthlyBalance
                         let income = metrics.metrics.monthlyIncome
                         let expenses = metrics.metrics.monthlyExpenses
+                        // Funds Total = sum of (income - expenses) per month; do not include transfers
+                        let balanceForTotal = income - expenses
                         
                         history.append(MonthlyBalance(
                             id: "\(year)-\(month)",
                             month: monthStart,
-                            balance: balance
+                            balance: balanceForTotal
                         ))
                         
                         incomeExpenseHistory.append(MonthlyIncomeExpense(
@@ -439,7 +473,7 @@ class FinanceViewModel: ObservableObject {
                             month: monthStart,
                             income: income,
                             expenses: expenses,
-                            balance: balance,
+                            balance: balanceForTotal,
                             incomeChange: 0.0, // Will calculate after sorting
                             expensesChange: 0.0,
                             balanceChange: 0.0
