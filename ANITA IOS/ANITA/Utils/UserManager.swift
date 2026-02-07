@@ -59,6 +59,7 @@ class UserManager: ObservableObject {
             self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: onboardingCompletedKey)
         }
         await syncSavedOnboardingToSupabaseIfNeeded()
+        Task { @MainActor in await SubscriptionManager.shared.refresh() }
     }
     
     func signUp(email: String, password: String) async throws {
@@ -77,6 +78,7 @@ class UserManager: ObservableObject {
             self.shouldShowPostSignupPlans = true
         }
         await syncSavedOnboardingToSupabaseIfNeeded()
+        Task { @MainActor in await SubscriptionManager.shared.refresh() }
     }
     
     func signInWithGoogle() async throws {
@@ -92,6 +94,7 @@ class UserManager: ObservableObject {
             }
         }
         await syncSavedOnboardingToSupabaseIfNeeded()
+        Task { @MainActor in await SubscriptionManager.shared.refresh() }
     }
     
     func signInWithApple(idToken: String, nonce: String? = nil) async throws {
@@ -107,6 +110,7 @@ class UserManager: ObservableObject {
             }
         }
         await syncSavedOnboardingToSupabaseIfNeeded()
+        Task { @MainActor in await SubscriptionManager.shared.refresh() }
     }
     
     func signOut() {
@@ -115,6 +119,7 @@ class UserManager: ObservableObject {
             self.currentUser = nil
             self.isAuthenticated = false
             self.shouldShowPostSignupPlans = UserDefaults.standard.bool(forKey: postSignupPlansPendingKey)
+            await SubscriptionManager.shared.refresh()
         }
     }
     
@@ -138,6 +143,7 @@ class UserManager: ObservableObject {
                 self.isAuthenticated = false
             }
         }
+        Task { @MainActor in await SubscriptionManager.shared.refresh() }
     }
     
     func completeOnboarding() {

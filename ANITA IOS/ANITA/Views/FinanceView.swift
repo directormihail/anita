@@ -155,8 +155,10 @@ extension View {
 struct FinanceView: View {
     @StateObject private var viewModel = FinanceViewModel()
     @StateObject private var categoryViewModel = CategoryAnalyticsViewModel()
+    @StateObject private var subscriptionManager = SubscriptionManager.shared
     @ObservedObject private var xpStore = XPStore.shared
     @State private var languageRefreshTrigger = UUID()
+    @State private var showUpgradeSheet = false
     @State private var isSpendingLimitsExpanded = false
     @State private var isSavingGoalsExpanded = false
     @State private var isCategoryAnalysisExpanded = false
@@ -828,29 +830,34 @@ struct FinanceView: View {
             }
             
             if isTrendsAndComparisonsExpanded {
-                VStack(spacing: 20) {
-                    // Period Selector
-                    ComparisonPeriodSelectorView(viewModel: viewModel)
-                        .padding(.horizontal, 20)
+                if subscriptionManager.isPremium {
+                    VStack(spacing: 20) {
+                        // Period Selector
+                        ComparisonPeriodSelectorView(viewModel: viewModel)
+                            .padding(.horizontal, 20)
+                            .transition(.expandSection)
+                        
+                        // Income vs Expenses Bar Chart
+                        VStack(alignment: .leading, spacing: 16) {
+                            let chartData = viewModel.getComparisonData(for: viewModel.comparisonPeriod)
+                            EnhancedIncomeExpenseBarChart(
+                                data: chartData,
+                                currency: userCurrency,
+                                isExpanded: isTrendsAndComparisonsExpanded
+                            )
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 20)
+                            .liquidGlass(cornerRadius: 20)
+                            .padding(.horizontal, 20)
+                        }
                         .transition(.expandSection)
-                    
-                // Income vs Expenses Bar Chart (always show chart; empty state with "no data available" when no data)
-                VStack(alignment: .leading, spacing: 16) {
-                    let chartData = viewModel.getComparisonData(for: viewModel.comparisonPeriod)
-                    EnhancedIncomeExpenseBarChart(
-                        data: chartData,
-                        currency: userCurrency,
-                        isExpanded: isTrendsAndComparisonsExpanded
-                    )
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 20)
-                    .liquidGlass(cornerRadius: 20)
-                    .padding(.horizontal, 20)
+                    }
+                    .padding(.top, 8)
+                } else {
+                    PremiumGateView(onUpgrade: { showUpgradeSheet = true })
+                        .padding(.top, 8)
+                        .transition(.expandSection)
                 }
-                .transition(.expandSection)
-                
-                }
-                .padding(.top, 8)
             }
         }
     }
@@ -933,6 +940,11 @@ struct FinanceView: View {
             .buttonStyle(PremiumSettingsButtonStyle())
             
             if isCategoryAnalysisExpanded {
+                if !subscriptionManager.isPremium {
+                    PremiumGateView(onUpgrade: { showUpgradeSheet = true })
+                        .padding(.top, 8)
+                        .transition(.expandSection)
+                } else {
                 // Single section container (like webapp's insight-card)
                 VStack(spacing: 0) {
                     // Always show existing data immediately (even during refresh).
@@ -975,7 +987,7 @@ struct FinanceView: View {
                                                 .tracking(0.5)
                                                 .lineLimit(1)
                                                 .minimumScaleFactor(0.6)
-                                        } else if let largestCategory = data.categories.first {
+                                        } else if data.categories.first != nil {
                                             // Show largest category by default (first is sorted by percentage descending)
                                             Text("\(data.categories.count)")
                                                 .font(.system(size: min(42, innerCircleDiameter * 0.35), weight: .bold, design: .rounded))
@@ -1101,6 +1113,7 @@ struct FinanceView: View {
                 )
                 .padding(.horizontal, 20)
                 .transition(.expandSection)
+                }
             }
         }
     }
@@ -1176,7 +1189,11 @@ struct FinanceView: View {
             .buttonStyle(PremiumSettingsButtonStyle())
             
             if isSpendingLimitsExpanded {
-                if viewModel.goals.isEmpty {
+                if !subscriptionManager.isPremium {
+                    PremiumGateView(onUpgrade: { showUpgradeSheet = true })
+                        .padding(.top, 8)
+                        .transition(.expandSection)
+                } else if viewModel.goals.isEmpty {
                     VStack(spacing: 20) {
                         Image(systemName: "arrow.down.right")
                             .font(.system(size: 48, weight: .light))
@@ -1203,7 +1220,11 @@ struct FinanceView: View {
                         Button(action: {
                             let impact = UIImpactFeedbackGenerator(style: .light)
                             impact.impactOccurred()
-                            showAddSpendingLimitSheet = true
+                            if subscriptionManager.isPremium {
+                                showAddSpendingLimitSheet = true
+                            } else {
+                                showUpgradeSheet = true
+                            }
                         }) {
                             HStack(spacing: 8) {
                                 Image(systemName: "plus.circle.fill")
@@ -1263,7 +1284,11 @@ struct FinanceView: View {
                             Button(action: {
                                 let impact = UIImpactFeedbackGenerator(style: .light)
                                 impact.impactOccurred()
-                                showAddSpendingLimitSheet = true
+                                if subscriptionManager.isPremium {
+                                    showAddSpendingLimitSheet = true
+                                } else {
+                                    showUpgradeSheet = true
+                                }
                             }) {
                                 HStack(spacing: 16) {
                                     // Limit icon with premium glass effect (matching GoalRow)
@@ -1444,6 +1469,11 @@ struct FinanceView: View {
             .buttonStyle(PremiumSettingsButtonStyle())
             
             if isSavingGoalsExpanded {
+                if !subscriptionManager.isPremium {
+                    PremiumGateView(onUpgrade: { showUpgradeSheet = true })
+                        .padding(.top, 8)
+                        .transition(.expandSection)
+                } else {
                 // Goals total reserve summary (same design as Total Assets)
                 if !viewModel.targets.isEmpty {
                     let goalsTotalReserve = viewModel.targets.reduce(0.0) { $0 + $1.currentAmount }
@@ -1494,7 +1524,11 @@ struct FinanceView: View {
                         Button(action: {
                             let impact = UIImpactFeedbackGenerator(style: .light)
                             impact.impactOccurred()
-                            showAddSavingGoalSheet = true
+                            if subscriptionManager.isPremium {
+                                showAddSavingGoalSheet = true
+                            } else {
+                                showUpgradeSheet = true
+                            }
                         }) {
                             HStack(spacing: 8) {
                                 Image(systemName: "plus.circle.fill")
@@ -1554,7 +1588,11 @@ struct FinanceView: View {
                             Button(action: {
                                 let impact = UIImpactFeedbackGenerator(style: .light)
                                 impact.impactOccurred()
-                                showAddSavingGoalSheet = true
+                                if subscriptionManager.isPremium {
+                                    showAddSavingGoalSheet = true
+                                } else {
+                                    showUpgradeSheet = true
+                                }
                             }) {
                                 HStack(spacing: 16) {
                                     // Target icon with premium glass effect (matching TargetRow)
@@ -1661,6 +1699,7 @@ struct FinanceView: View {
                     .padding(.horizontal, 20)
                     .transition(.expandSection)
                 }
+                }
             }
         }
     }
@@ -1736,6 +1775,11 @@ struct FinanceView: View {
             .buttonStyle(PremiumSettingsButtonStyle())
             
             if isAssetsExpanded {
+                if !subscriptionManager.isPremium {
+                    PremiumGateView(onUpgrade: { showUpgradeSheet = true })
+                        .padding(.top, 8)
+                        .transition(.expandSection)
+                } else {
                 // Total Assets Summary (shown when expanded)
                 if !comprehensiveAssets.isEmpty {
                     HStack {
@@ -1786,7 +1830,11 @@ struct FinanceView: View {
                         Button(action: {
                             let impact = UIImpactFeedbackGenerator(style: .light)
                             impact.impactOccurred()
-                            showAddAssetSheet = true
+                            if subscriptionManager.isPremium {
+                                showAddAssetSheet = true
+                            } else {
+                                showUpgradeSheet = true
+                            }
                         }) {
                             HStack(spacing: 8) {
                                 Image(systemName: "plus.circle.fill")
@@ -1846,7 +1894,11 @@ struct FinanceView: View {
                             Button(action: {
                                 let impact = UIImpactFeedbackGenerator(style: .light)
                                 impact.impactOccurred()
-                                showAddAssetSheet = true
+                                if subscriptionManager.isPremium {
+                                    showAddAssetSheet = true
+                                } else {
+                                    showUpgradeSheet = true
+                                }
                             }) {
                                 HStack(spacing: 16) {
                                     // Asset icon with premium glass effect (matching AssetRow)
@@ -1951,6 +2003,7 @@ struct FinanceView: View {
                     .liquidGlass(cornerRadius: 18)
                     .padding(.horizontal, 20)
                     .transition(.expandSection)
+                }
                 }
             }
         }
@@ -2330,6 +2383,14 @@ struct FinanceView: View {
         }
         .sheet(isPresented: $showAddTransactionSheet) {
             AddTransactionSheet(viewModel: viewModel)
+        }
+        .sheet(isPresented: $showUpgradeSheet) {
+            UpgradeView()
+        }
+        .onChange(of: showUpgradeSheet) { oldValue, newValue in
+            if oldValue == true && newValue == false {
+                Task { await subscriptionManager.refresh() }
+            }
         }
         .onChange(of: showAddTransactionSheet) { oldValue, newValue in
             // When transaction sheet is dismissed, refresh data
@@ -2958,9 +3019,9 @@ struct AddMoneyToGoalSheet: View {
                             CalculatorButton(number: "9", action: { appendDigit("9") })
                         }
                         
-                        // Row 4: ., 0, ⌫
+                        // Row 4: decimal (,. or .), 0, ⌫
                         HStack(spacing: 16) {
-                            CalculatorButton(number: ".", action: { appendDecimal() })
+                            CalculatorButton(number: Locale.current.decimalSeparator ?? ".", action: { appendDecimal() })
                             CalculatorButton(number: "0", action: { appendDigit("0") })
                             CalculatorButton(number: "⌫", action: { deleteLastDigit() })
                         }
@@ -3033,11 +3094,10 @@ struct AddMoneyToGoalSheet: View {
     }
     
     private func appendDecimal() {
-        // Check if decimal separator already exists
-        // Store internally as "." for Double parsing, but display will use correct separator
+        // Check if decimal separator already exists; use locale separator (comma or dot)
+        let sep = Locale.current.decimalSeparator ?? "."
         if !amount.contains(".") && !amount.contains(",") {
-            // Always use "." internally for parsing, formatter will display correctly
-            amount += "."
+            amount += sep
         }
     }
     
@@ -3091,8 +3151,8 @@ struct AddMoneyToGoalSheet: View {
             return formatter.string(from: NSNumber(value: 0)) ?? "0"
         }
         
-        // Parse the amount value
-        if let value = Double(amount) {
+        // Parse the amount value (accepts both comma and dot as decimal separator)
+        if let value = amount.parseAmount() {
             // Check if user has entered decimal part
             let hasDecimal = amount.contains(".") || amount.contains(",")
             
@@ -3125,7 +3185,7 @@ struct AddMoneyToGoalSheet: View {
     }
     
     private func addMoneyToGoal() {
-        guard let amountValue = Double(amount), amountValue > 0 else {
+        guard let amountValue = amount.parseAmount(), amountValue > 0 else {
             errorMessage = "Please enter a valid amount"
             return
         }
@@ -3272,9 +3332,9 @@ struct ChangeAmountSheet: View {
                             CalculatorButton(number: "9", action: { appendDigit("9") })
                         }
                         
-                        // Row 4: ., 0, ⌫
+                        // Row 4: decimal (,. or .), 0, ⌫
                         HStack(spacing: 16) {
-                            CalculatorButton(number: ".", action: { appendDecimal() })
+                            CalculatorButton(number: Locale.current.decimalSeparator ?? ".", action: { appendDecimal() })
                             CalculatorButton(number: "0", action: { appendDigit("0") })
                             CalculatorButton(number: "⌫", action: { deleteLastDigit() })
                         }
@@ -3347,10 +3407,9 @@ struct ChangeAmountSheet: View {
     }
     
     private func appendDecimal() {
-        // Check if decimal separator already exists
+        let sep = Locale.current.decimalSeparator ?? "."
         if !amount.contains(".") && !amount.contains(",") {
-            // Always use "." internally for parsing, formatter will display correctly
-            amount += "."
+            amount += sep
         }
     }
     
@@ -3404,8 +3463,8 @@ struct ChangeAmountSheet: View {
             return formatter.string(from: NSNumber(value: 0)) ?? "0"
         }
         
-        // Parse the amount value
-        if let value = Double(amount) {
+        // Parse the amount value (accepts both comma and dot as decimal separator)
+        if let value = amount.parseAmount() {
             // Check if user has entered decimal part
             let hasDecimal = amount.contains(".") || amount.contains(",")
             
@@ -3429,7 +3488,7 @@ struct ChangeAmountSheet: View {
     }
     
     private func changeAmount() {
-        guard let amountValue = Double(amount), amountValue > 0 else {
+        guard let amountValue = amount.parseAmount(), amountValue > 0 else {
             errorMessage = "Please enter a valid amount"
             return
         }
@@ -4169,7 +4228,7 @@ struct TakeMoneyFromGoalSheet: View {
                         }
                         
                         HStack(spacing: 16) {
-                            CalculatorButton(number: ".", action: { appendDecimal() })
+                            CalculatorButton(number: Locale.current.decimalSeparator ?? ".", action: { appendDecimal() })
                             CalculatorButton(number: "0", action: { appendDigit("0") })
                             CalculatorButton(number: "⌫", action: { deleteLastDigit() })
                         }
@@ -4243,7 +4302,7 @@ struct TakeMoneyFromGoalSheet: View {
     
     private func appendDecimal() {
         if !amount.contains(".") && !amount.contains(",") {
-            amount += "."
+            amount += (Locale.current.decimalSeparator ?? ".")
         }
     }
     
@@ -4293,7 +4352,7 @@ struct TakeMoneyFromGoalSheet: View {
             return formatter.string(from: NSNumber(value: 0)) ?? "0"
         }
         
-        if let value = Double(amount) {
+        if let value = amount.parseAmount() {
             let hasDecimal = amount.contains(".") || amount.contains(",")
             
             if hasDecimal {
@@ -4313,7 +4372,7 @@ struct TakeMoneyFromGoalSheet: View {
     }
     
     private func takeMoneyFromGoal() {
-        guard let amountValue = Double(amount), amountValue > 0 else {
+        guard let amountValue = amount.parseAmount(), amountValue > 0 else {
             errorMessage = "Please enter a valid amount"
             return
         }
@@ -4780,7 +4839,7 @@ struct AddValueToAssetSheet: View {
                         }
                         
                         HStack(spacing: 16) {
-                            CalculatorButton(number: ".", action: { appendDecimal() })
+                            CalculatorButton(number: Locale.current.decimalSeparator ?? ".", action: { appendDecimal() })
                             CalculatorButton(number: "0", action: { appendDigit("0") })
                             CalculatorButton(number: "⌫", action: { deleteLastDigit() })
                         }
@@ -4853,10 +4912,9 @@ struct AddValueToAssetSheet: View {
     }
     
     private func appendDecimal() {
-        let userCurrency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
-        let locale = getLocaleForCurrency(userCurrency)
+        let sep = Locale.current.decimalSeparator ?? "."
         if !amount.contains(".") && !amount.contains(",") {
-            amount += "."
+            amount += sep
         }
     }
     
@@ -5014,7 +5072,7 @@ struct ReduceAssetValueSheet: View {
                         }
                         
                         HStack(spacing: 16) {
-                            CalculatorButton(number: ".", action: { appendDecimal() })
+                            CalculatorButton(number: Locale.current.decimalSeparator ?? ".", action: { appendDecimal() })
                             CalculatorButton(number: "0", action: { appendDigit("0") })
                             CalculatorButton(number: "⌫", action: { deleteLastDigit() })
                         }
@@ -5087,10 +5145,9 @@ struct ReduceAssetValueSheet: View {
     }
     
     private func appendDecimal() {
-        let userCurrency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
-        let locale = getLocaleForCurrency(userCurrency)
+        let sep = Locale.current.decimalSeparator ?? "."
         if !amount.contains(".") && !amount.contains(",") {
-            amount += "."
+            amount += sep
         }
     }
     
@@ -6325,7 +6382,7 @@ struct AddAssetSheet: View {
             return
         }
         
-        guard let value = Double(currentValue), value >= 0 else {
+        guard let value = currentValue.parseAmount(), value >= 0 else {
             errorMessage = "Please enter a valid amount"
             return
         }
@@ -6550,12 +6607,12 @@ struct AddSavingGoalSheet: View {
             return
         }
         
-        guard let target = Double(targetAmount), target >= 0 else {
+        guard let target = targetAmount.parseAmount(), target >= 0 else {
             errorMessage = "Please enter a valid target amount"
             return
         }
         
-        let current = Double(currentAmount) ?? 0.0
+        let current = currentAmount.parseAmount() ?? 0.0
         
         isAdding = true
         errorMessage = nil
@@ -6781,7 +6838,7 @@ struct AddSavingLimitSheet: View {
     }
     
     private func addSavingLimit() {
-        guard let limit = Double(limitAmount), limit >= 0 else {
+        guard let limit = limitAmount.parseAmount(), limit >= 0 else {
             errorMessage = "Please enter a valid limit amount"
             return
         }
@@ -7015,7 +7072,7 @@ struct AddSpendingLimitSheet: View {
     }
     
     private func addSpendingLimit() {
-        guard let limit = Double(limitAmount), limit >= 0 else {
+        guard let limit = limitAmount.parseAmount(), limit >= 0 else {
             errorMessage = "Please enter a valid limit amount"
             return
         }
@@ -7376,7 +7433,7 @@ struct AddTransactionSheet: View {
                 .textCase(.uppercase)
                 .tracking(0.8)
             
-            TextField("0.00", text: $amount)
+            TextField("0" + (Locale.current.decimalSeparator ?? ".") + "00", text: $amount)
                 .font(.system(size: 16, weight: .medium, design: .rounded))
                 .foregroundColor(.white)
                 .keyboardType(.decimalPad)
@@ -7530,7 +7587,7 @@ struct AddTransactionSheet: View {
     }
     
     private func addTransaction() {
-        guard let amountValue = Double(amount), amountValue > 0 else {
+        guard let amountValue = amount.parseAmount(), amountValue > 0 else {
             errorMessage = "Please enter a valid amount"
             return
         }
@@ -7650,9 +7707,10 @@ struct EditTransactionSheet: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(AppL10n.t("settings.done")) {
-                        dismiss()
+                        updateTransaction()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                    .disabled(isUpdating)
                 }
             }
             .sheet(isPresented: $showDeleteSheet) {
@@ -7725,7 +7783,7 @@ struct EditTransactionSheet: View {
                 .textCase(.uppercase)
                 .tracking(0.8)
             
-            TextField("0.00", text: $amount)
+            TextField("0" + (Locale.current.decimalSeparator ?? ".") + "00", text: $amount)
                 .font(.system(size: 16, weight: .medium, design: .rounded))
                 .foregroundColor(.white)
                 .keyboardType(.decimalPad)
@@ -7885,7 +7943,7 @@ struct EditTransactionSheet: View {
     }
     
     private func updateTransaction() {
-        guard let amountValue = Double(amount), amountValue > 0 else {
+        guard let amountValue = amount.parseAmount(), amountValue > 0 else {
             errorMessage = "Please enter a valid amount"
             return
         }
@@ -8610,7 +8668,7 @@ struct ComparisonPeriodSelectorView: View {
                         )
 
                     )
-                    .onChange(of: viewModel.comparisonPeriod) { _ in
+                    .onChange(of: viewModel.comparisonPeriod) { _, _ in
                         // Update slider value when period changes externally
                         currentSliderValue = periodToValue(viewModel.comparisonPeriod)
                         // Reset dragging state when period changes externally
@@ -10146,7 +10204,7 @@ struct EnhancedIncomeExpenseBarChart: View {
                 .clipped()
             }
             .frame(height: 300)
-            .onChange(of: isExpanded) { newValue in
+            .onChange(of: isExpanded) { _, newValue in
                 if newValue {
                     // Reset first, then animate - ensures bars grow every time section opens
                     barAnimationProgress = 0

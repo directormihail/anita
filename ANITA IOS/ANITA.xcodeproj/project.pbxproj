@@ -43,6 +43,8 @@
 		A1000081 /* AppL10n.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000080 /* AppL10n.swift */; };
 		A1000083 /* PostSignupPlansView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000082 /* PostSignupPlansView.swift */; };
 		A1000091 /* XPStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000090 /* XPStore.swift */; };
+		A1000093 /* AmountParsing.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000092 /* AmountParsing.swift */; };
+		A1000095 /* SubscriptionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000094 /* SubscriptionManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -85,6 +87,8 @@
 		A1000084 /* ANITA.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ANITA.entitlements; sourceTree = "<group>"; };
 		A1000086 /* Configuration.storekit */ = {isa = PBXFileReference; lastKnownFileType = file; path = Configuration.storekit; sourceTree = "<group>"; };
 		A1000090 /* XPStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XPStore.swift; sourceTree = "<group>"; };
+		A1000092 /* AmountParsing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmountParsing.swift; sourceTree = "<group>"; };
+		A1000094 /* SubscriptionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -168,6 +172,7 @@
 				A1000011 /* NetworkService.swift */,
 				A1000050 /* SupabaseService.swift */,
 				A1000069 /* StoreKitService.swift */,
+				A1000094 /* SubscriptionManager.swift */,
 				A1000075 /* NotificationService.swift */,
 				A1000090 /* XPStore.swift */,
 			);
@@ -198,6 +203,7 @@
 		A1000042 /* Utils */ = {
 			isa = PBXGroup;
 			children = (
+				A1000092 /* AmountParsing.swift */,
 				A1000041 /* UserManager.swift */,
 				A1000080 /* AppL10n.swift */,
 				A1000048 /* LiquidGlassModifier.swift */,
@@ -317,6 +323,8 @@
 				A1000091 /* XPStore.swift in Sources */,
 				A1000074 /* NotificationService.swift in Sources */,
 				A1000076 /* NotificationPreviewView.swift in Sources */,
+				A1000093 /* AmountParsing.swift in Sources */,
+				A1000095 /* SubscriptionManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

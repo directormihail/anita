@@ -131,8 +131,11 @@ enum AppL10n {
             "plans.cancel_subscription_hint": "You can cancel your subscription anytime in your Apple ID subscription settings."
             ,
             // Plan features
-            "plans.feature.replies_20": "20 replies per month",
+            "plans.feature.replies_20": "10 messages per month",
             "plans.feature.basic_expense": "Basic expense analysis",
+            "paywall.upgrade_to_use": "Upgrade to Premium to use this feature.",
+            "paywall.upgrade_button": "Upgrade",
+            "chat.limit_reached": "You've used your 10 free messages this month. Upgrade to Premium for unlimited chat.",
             
             "plans.feature.replies_50": "50 replies per month",
             "plans.feature.full_budget": "Full budget analysis",
@@ -536,8 +539,11 @@ enum AppL10n {
             "plans.pending": "Kauf wartet auf Freigabe.",
             "plans.cancel_subscription_hint": "Du kannst dein Abo jederzeit in den Abo-Einstellungen deiner Apple-ID kündigen."
             ,
-            "plans.feature.replies_20": "20 Antworten pro Monat",
+            "plans.feature.replies_20": "10 Nachrichten pro Monat",
             "plans.feature.basic_expense": "Einfache Ausgabenanalyse",
+            "paywall.upgrade_to_use": "Upgrade auf Premium, um diese Funktion zu nutzen.",
+            "paywall.upgrade_button": "Upgrade",
+            "chat.limit_reached": "Du hast deine 10 kostenlosen Nachrichten diesen Monat verbraucht. Upgrade auf Premium für unbegrenzten Chat.",
             
             "plans.feature.replies_50": "50 Antworten pro Monat",
             "plans.feature.full_budget": "Vollständige Budgetanalyse",

@@ -90,6 +90,17 @@ struct ChatView: View {
         .sheet(isPresented: $showUpgradeView) {
             UpgradeView()
         }
+        .onChange(of: viewModel.showPaywallForLimitReached) { _, shouldShow in
+            if shouldShow {
+                showUpgradeView = true
+                viewModel.showPaywallForLimitReached = false
+            }
+        }
+        .onChange(of: showUpgradeView) { _, isShowing in
+            if !isShowing {
+                Task { await SubscriptionManager.shared.refresh() }
+            }
+        }
     }
     
     private var mainContentView: some View {

@@ -16,6 +16,11 @@ class ChatViewModel: ObservableObject {
     @Published var inputText = ""
     @Published var currentConversationId: String?
     @Published var conversations: [Conversation] = []
+    /// When true, ChatView should present UpgradeView (free user hit 10 messages/month).
+    @Published var showPaywallForLimitReached = false
+    
+    /// Free tier: max user messages per calendar month.
+    private static let freeTierMessagesPerMonth = 10
     
     // Track pending transaction input
     private var pendingTransactionType: String? = nil // "income" or "expense"
@@ -173,6 +178,47 @@ class ChatViewModel: ObservableObject {
             }
             throw error
         }
+    }
+    
+    // MARK: - Free tier message limit (10/month)
+    
+    private func freeTierMonthKey() -> String {
+        let cal = Calendar.current
+        let year = cal.component(.year, from: Date())
+        let month = cal.component(.month, from: Date())
+        return "\(year)-\(month)"
+    }
+    
+    private func freeTierCountKey() -> String {
+        "anita_free_chat_count_\(userId)"
+    }
+    
+    private func freeTierMonthStorageKey() -> String {
+        "anita_free_chat_month_\(userId)"
+    }
+    
+    /// Current number of user messages sent this month (for free tier).
+    func getFreeMonthlySentCount() -> Int {
+        let defaults = UserDefaults.standard
+        let storedMonth = defaults.string(forKey: freeTierMonthStorageKey())
+        let currentMonth = freeTierMonthKey()
+        if storedMonth != currentMonth {
+            return 0
+        }
+        return defaults.integer(forKey: freeTierCountKey())
+    }
+    
+    /// Call once per user message when we're about to save/send it (free tier only).
+    private func incrementFreeMonthlySentCount() {
+        let defaults = UserDefaults.standard
+        let currentMonth = freeTierMonthKey()
+        let storedMonth = defaults.string(forKey: freeTierMonthStorageKey())
+        if storedMonth != currentMonth {
+            defaults.set(currentMonth, forKey: freeTierMonthStorageKey())
+            defaults.set(0, forKey: freeTierCountKey())
+        }
+        let count = defaults.integer(forKey: freeTierCountKey())
+        defaults.set(count + 1, forKey: freeTierCountKey())
     }
     
     // Save a message to Supabase
@@ -499,6 +545,23 @@ class ChatViewModel: ObservableObject {
         
         Task {
             do {
+                // Free tier: 10 messages per month — block and show paywall if over
+                let subscriptionManager = await SubscriptionManager.shared
+                if !subscriptionManager.isPremium {
+                    let count = getFreeMonthlySentCount()
+                    if count >= Self.freeTierMessagesPerMonth {
+                        await MainActor.run {
+                            if let idx = messages.firstIndex(where: { $0.id == userMessage.id }) {
+                                messages.remove(at: idx)
+                            }
+                            inputText = messageText
+                            isLoading = false
+                            showPaywallForLimitReached = true
+                        }
+                        return
+                    }
+                }
+                
                 let lowercased = messageText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
                 
                 // Check if user is initiating "Add income" or "Add expense"
@@ -515,6 +578,7 @@ class ChatViewModel: ObservableObject {
                         }
                     }
                     if let convId = conversationId {
+                        if !(await SubscriptionManager.shared.isPremium) { incrementFreeMonthlySentCount() }
                         await saveMessage(userMessage, conversationId: convId)
                     }
                     
@@ -534,6 +598,7 @@ class ChatViewModel: ObservableObject {
                         }
                     }
                     if let convId = conversationId {
+                        if !(await SubscriptionManager.shared.isPremium) { incrementFreeMonthlySentCount() }
                         await saveMessage(userMessage, conversationId: convId)
                     }
                     
@@ -554,6 +619,7 @@ class ChatViewModel: ObservableObject {
                         }
                     }
                     if let convId = conversationId {
+                        if !(await SubscriptionManager.shared.isPremium) { incrementFreeMonthlySentCount() }
                         await saveMessage(userMessage, conversationId: convId)
                     }
                     
@@ -615,6 +681,7 @@ class ChatViewModel: ObservableObject {
                     
                     // Save user message first
                     if let convId = conversationId {
+                        if !(await SubscriptionManager.shared.isPremium) { incrementFreeMonthlySentCount() }
                         await saveMessage(userMessage, conversationId: convId)
                     }
                     
@@ -702,6 +769,7 @@ class ChatViewModel: ObservableObject {
                 // Save user message
                 if let convId = conversationId {
                     print("[ChatViewModel] Saving user message to conversation: \(convId)")
+                    if !(await SubscriptionManager.shared.isPremium) { incrementFreeMonthlySentCount() }
                     await saveMessage(userMessage, conversationId: convId)
                 }
                 

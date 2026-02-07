@@ -954,6 +954,66 @@ struct SubscriptionPlanPlaceholder: View {
     }
 }
 
+// MARK: - Premium gate (paywall) for locked features
+
+struct PremiumGateView: View {
+    var onUpgrade: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "crown.fill")
+                .font(.system(size: 32))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.91, green: 0.72, blue: 0.2),
+                            Color(red: 0.91, green: 0.72, blue: 0.2).opacity(0.8)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            Text(AppL10n.t("paywall.upgrade_to_use"))
+                .font(.system(size: 15, weight: .medium, design: .rounded))
+                .foregroundColor(.white.opacity(0.85))
+                .multilineTextAlignment(.center)
+            Button(action: onUpgrade) {
+                HStack(spacing: 8) {
+                    Image(systemName: "crown.fill")
+                        .font(.system(size: 14))
+                    Text(AppL10n.t("paywall.upgrade_button"))
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.91, green: 0.72, blue: 0.2).opacity(0.4),
+                                    Color(red: 0.91, green: 0.72, blue: 0.2).opacity(0.25)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color(red: 0.91, green: 0.72, blue: 0.2).opacity(0.6), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity)
+        .liquidGlass(cornerRadius: 20)
+        .padding(.horizontal, 20)
+    }
+}
+
 // MARK: - Safari View Wrapper
 
 struct SafariView: UIViewControllerRepresentable {
