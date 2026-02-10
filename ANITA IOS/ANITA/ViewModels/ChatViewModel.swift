@@ -582,8 +582,8 @@ class ChatViewModel: ObservableObject {
                         await saveMessage(userMessage, conversationId: convId)
                     }
                     
-                    // Send message to AI asking for amount
-                    await sendAIResponse("I'd be happy to help you add income! Please enter the amount you'd like to add.")
+                    // Ask for category, amount, and optional description (not only amount)
+                    await sendAIResponse("I'd be happy to help you add income! Please tell me the category (e.g. Salary, Freelance & Side Income, Other), the amount, and optionally a short description.")
                     return
                 } else if lowercased == "add expense" || lowercased == "addexpense" {
                     pendingTransactionType = "expense"
@@ -602,12 +602,12 @@ class ChatViewModel: ObservableObject {
                         await saveMessage(userMessage, conversationId: convId)
                     }
                     
-                    // Send message to AI asking for amount
-                    await sendAIResponse("I'd be happy to help you add an expense! Please enter the amount you'd like to add.")
+                    // Ask for category, amount, and optional description (not only amount)
+                    await sendAIResponse("I'd be happy to help you add an expense! Please tell me the category (e.g. Groceries, Dining Out, Entertainment), the amount, and optionally a short description.")
                     return
                 }
                 
-                // If we're waiting for transaction amount, try to parse it
+                // If we're waiting for transaction amount, try to parse it. If we find an amount, save and confirm. If not, send the message to the backend — the AI interprets meaning (e.g. P3/P4 or "please enter amount" for P1/P2).
                 if let pendingType = pendingTransactionType {
                     // Create conversation if needed and save user message
                     var conversationId = currentConversationId
@@ -623,46 +623,44 @@ class ChatViewModel: ObservableObject {
                         await saveMessage(userMessage, conversationId: convId)
                     }
                     
-                    // Try to extract amount from the message
                     if let amount = extractAmount(from: messageText) {
-                        // Detect currency from user input
+                        // Detect category from message using standard definitions (e.g. Salary, Groceries, Dining Out)
+                        let categoryDefinitions = CategoryDefinitions.shared
+                        let detectedCategory = categoryDefinitions.detectCategory(from: messageText)
+                        let category = categoryDefinitions.normalizeCategory(detectedCategory)
                         let detectedCurrency = detectCurrency(from: messageText)
                         let currencyToUse = detectedCurrency ?? (UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD")
-                        
-                        // User provided an amount - save the transaction
                         let currentUserId = userManager.isAuthenticated ? (userManager.currentUser?.id ?? userId) : userId
                         do {
-                            let savedTransaction = try await networkService.createTransaction(
+                            _ = try await networkService.createTransaction(
                                 userId: currentUserId,
                                 type: pendingType,
                                 amount: amount,
-                                category: nil,
+                                category: category,
                                 description: messageText,
                                 date: nil
                             )
-                        print("[ChatViewModel] Transaction saved successfully: \(savedTransaction.id)")
-                        
-                        NotificationCenter.default.post(name: NSNotification.Name("TransactionAdded"), object: nil)
-                        try? await Task.sleep(nanoseconds: 250_000_000)
-                        await XPStore.shared.refresh()
-                        try? await Task.sleep(nanoseconds: 350_000_000)
-                        await XPStore.shared.refresh()
-                        NotificationCenter.default.post(name: NSNotification.Name("XPStatsDidUpdate"), object: nil)
-                        pendingTransactionType = nil
-                        await sendAIResponse("Got it! I've noted your \(formatCurrency(amount, currencyCode: currencyToUse)) \(pendingType == "income" ? "income" : "expense").")
-                        return
-                    } catch {
-                        print("[ChatViewModel] Error saving transaction: \(error.localizedDescription)")
-                        pendingTransactionType = nil
-                        await sendAIResponse("I encountered an error saving that transaction. Could you try again?")
-                        return
+                            print("[ChatViewModel] Transaction saved successfully (category: \(category))")
+                            NotificationCenter.default.post(name: NSNotification.Name("TransactionAdded"), object: nil)
+                            try? await Task.sleep(nanoseconds: 250_000_000)
+                            await XPStore.shared.refresh()
+                            try? await Task.sleep(nanoseconds: 350_000_000)
+                            await XPStore.shared.refresh()
+                            NotificationCenter.default.post(name: NSNotification.Name("XPStatsDidUpdate"), object: nil)
+                            pendingTransactionType = nil
+                            let categoryPhrase = category.isEmpty ? "" : " under \(category)"
+                            await sendAIResponse("Got it! I've noted your \(formatCurrency(amount, currencyCode: currencyToUse)) \(pendingType == "income" ? "income" : "expense")\(categoryPhrase). ✅")
+                            return
+                        } catch {
+                            print("[ChatViewModel] Error saving transaction: \(error.localizedDescription)")
+                            pendingTransactionType = nil
+                            await sendAIResponse("I encountered an error saving that transaction. Could you try again?")
+                            return
+                        }
                     }
-                } else {
-                    // Amount not found - ask again
-                    await sendAIResponse("I couldn't find an amount in your message. Please enter the amount (e.g., $100 or 100).")
-                    return
+                    // No amount parsed — let the AI interpret the message (set target, analytics, or ask for amount). Clear pending so the conversation is driven by the backend.
+                    pendingTransactionType = nil
                 }
-            }
                 
                 // Try to parse transaction from user message (only if not in pending state)
                 if let transaction = parseTransaction(from: messageText) {
