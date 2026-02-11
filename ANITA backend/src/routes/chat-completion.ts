@@ -206,6 +206,65 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
       return;
     }
 
+    // Response we will send: only show confirmation if we actually persisted. Override if we detected intent but DB failed.
+    let finalResponse = aiResponse;
+
+    // When AI confirms it added an expense/income, persist the transaction to the database
+    // so it appears in the transactions list (client may have gone through backend flow only).
+    if (userId && supabase) {
+      try {
+        const tx = parseTransactionFromAiResponse(sanitizedMessages, aiResponse);
+        if (tx) {
+          const transactionData: any = {
+            account_id: userId,
+            message_text: tx.description,
+            transaction_type: tx.type,
+            transaction_amount: tx.amount,
+            transaction_category: normalizeCategory(tx.category),
+            transaction_description: tx.description,
+            data_type: 'transaction',
+            message_id: `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            created_at: new Date().toISOString()
+          };
+          const { error } = await supabase
+            .from('anita_data')
+            .insert([transactionData])
+            .select()
+            .single();
+          if (error) {
+            logger.warn('Failed to persist AI-confirmed transaction', { error: error.message, requestId, type: tx.type, amount: tx.amount });
+            finalResponse = "I couldn't save that transaction. Please try again or add it from the Finance page.";
+          } else {
+            logger.info('Persisted AI-confirmed transaction', { requestId, userId, type: tx.type, amount: tx.amount, category: tx.category });
+            // Award XP for adding transaction (same as save-transaction)
+            await supabase.from('xp_rules').upsert(
+              {
+                id: 'transaction_added',
+                category: 'Engagement',
+                name: 'Add a transaction',
+                xp_amount: 10,
+                description: 'Add any income, expense, or transfer',
+                frequency: 'event',
+                extra_meta: {},
+                updated_at: new Date().toISOString()
+              },
+              { onConflict: 'id' }
+            );
+            const { error: xpError } = await supabase.rpc('award_xp', {
+              p_user_id: userId,
+              p_rule_id: 'transaction_added',
+              p_metadata: {}
+            });
+            if (xpError) {
+              logger.warn('award_xp RPC failed after AI transaction', { requestId, userId, error: xpError.message });
+            }
+          }
+        }
+      } catch (err) {
+        logger.warn('Error persisting AI-confirmed transaction', { error: err instanceof Error ? err.message : 'Unknown', requestId });
+      }
+    }
+
     // Automatically create target if detected in conversation
     if (userId && supabase) {
       try {
@@ -260,7 +319,7 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
 
           if (targetError) {
             logger.warn('Failed to auto-create target', { error: targetError.message, requestId });
-            // Don't fail the request if target creation fails
+            finalResponse = "I couldn't create that goal. Please try again or add it from the Finance page.";
           } else {
             logger.info('Target auto-created successfully', { requestId, targetId: createdTarget.id, title: targetInfo.title });
             // Store target ID to include in response
@@ -339,9 +398,30 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
         const shouldCreateBudgetTargets = isAnalyticsRequest || isLimitRequest || aiHasLimitRecommendations;
 
         if (shouldCreateBudgetTargets) {
-          // First try to parse from AI response (structured recommendations)
-          let budgetRecommendations = parseBudgetRecommendations(aiResponse);
-          
+          // First check if AI confirmed it set a limit (e.g. "I've set a limit for Dining Out at target $59.22")
+          // so we persist it to the database and it shows on the Finance page
+          const limitConfirmation = parseLimitConfirmationFromAiResponse(aiResponse);
+          const hadLimitConfirmation = !!limitConfirmation;
+          let budgetRecommendations: Array<{ category: string; amount: number; currency?: string }> | null =
+            limitConfirmation ? [limitConfirmation] : parseBudgetRecommendations(aiResponse);
+
+          // Fallback: user confirmed with "Do it" / "Yes" but AI didn't output the exact phrase — get suggestion from previous AI message
+          let createdLimitFromFallback = false;
+          const isUserConfirmation = /^(do it|yes|sure|set it|create it|proceed|please|sounds good|go ahead|ok|okay)$/i.test(lastUserMessage.trim());
+          if (!budgetRecommendations?.length && isUserConfirmation) {
+            const prevAssistantMessage = [...sanitizedMessages].reverse().find((m: { role: string }) => m.role === 'assistant')?.content || '';
+            const suggestion = parseLimitSuggestionFromMessage(prevAssistantMessage);
+            if (suggestion) {
+              budgetRecommendations = [suggestion];
+              createdLimitFromFallback = true;
+              logger.info('Limit suggestion parsed from previous message (user confirmed)', {
+                requestId,
+                category: suggestion.category,
+                amount: suggestion.amount
+              });
+            }
+          }
+
           // If no recommendations found in AI response but user selected a category, 
           // try to extract category from user message and create recommendation
           if ((!budgetRecommendations || budgetRecommendations.length === 0) && isCategorySelection) {
@@ -494,6 +574,15 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
               if (budgetRecommendations.length > 0) {
                 (res as any).createdTargetCategory = budgetRecommendations[0].category;
               }
+            } else if (hadLimitConfirmation) {
+              // AI said "I've set a limit" but we didn't actually create it — don't show false confirmation
+              finalResponse = "I couldn't set that limit. Please try again or add it from the Finance page.";
+            }
+            // When we created from fallback (user said "Do it"), ensure we show the confirmation message
+            if (createdLimitFromFallback && createdTargetIds.length > 0 && budgetRecommendations?.length > 0) {
+              const rec = budgetRecommendations[0];
+              const sym = rec.currency === 'USD' ? '$' : rec.currency === 'GBP' ? '£' : rec.currency === 'JPY' ? '¥' : '€';
+              finalResponse = `I've set a limit for ${rec.category} at target ${sym}${rec.amount.toFixed(2)}. ✅ You can review your limit now.`;
             }
           }
         }
@@ -508,7 +597,7 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
 
     logger.info('Chat completion successful', { requestId });
     const responseData: any = { 
-      response: aiResponse,
+      response: finalResponse,
       requestId
     };
     
@@ -550,6 +639,41 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
       requestId
     });
   }
+}
+
+/**
+ * Parse transaction from AI response when it confirms an expense/income was added.
+ * e.g. "I've added your expense of $21.00 for Personal Care (Haircut)."
+ * Returns { type, amount, category, description } or null if not a transaction confirmation.
+ */
+export function parseTransactionFromAiResponse(
+  messages: Array<{ role: string; content: string }>,
+  aiResponse: string
+): { type: 'expense' | 'income'; amount: number; category: string; description: string } | null {
+  const r = aiResponse.trim();
+
+  // AI confirmed it added a transaction
+  const addedExpense = /(?:I've added your expense|added your expense|I've noted your .*?expense|noted your .*?expense)/i.test(r);
+  const addedIncome = /(?:I've added your income|added your income|I've noted your .*?income|noted your .*?income)/i.test(r);
+  const type: 'expense' | 'income' | null = addedExpense ? 'expense' : addedIncome ? 'income' : null;
+  if (!type) return null;
+
+  // Amount: e.g. "$21.00", "21.00", "of $21"
+  const amountMatch = r.match(/(?:of\s+)?[$€£¥]?\s*(\d+(?:[.,]\d{2})?|\d+)/);
+  const amountStr = amountMatch ? amountMatch[1].replace(',', '.') : null;
+  const amount = amountStr ? parseFloat(amountStr) : NaN;
+  if (!amountMatch || !Number.isFinite(amount) || amount <= 0) return null;
+
+  // Category: "for Personal Care" or "under Personal Care"
+  const categoryMatch = r.match(/(?:for|under)\s+([^.().]+?)(?:\s*\(|\.|,|\s*$)/i);
+  let category = (categoryMatch ? categoryMatch[1].trim() : null) || 'Other';
+
+  // Description: from parentheses "(Haircut)" or last user message
+  const parenMatch = r.match(/\(([^)]+)\)/);
+  const lastUserMessage = messages.filter(m => m.role === 'user').pop()?.content?.trim() || '';
+  const description = (parenMatch ? parenMatch[1].trim() : null) || lastUserMessage || `${type} ${amount}`;
+
+  return { type, amount, category, description };
 }
 
 /**
@@ -818,6 +942,60 @@ function parseTargetFromConversation(messages: Array<{ role: string; content: st
   }
 
   return null;
+}
+
+/**
+ * Parse AI confirmation that a limit was set (e.g. "I've set a limit for Dining Out at target $59.22").
+ * Used to persist the budget target to the database when the AI sends this confirmation.
+ */
+function parseLimitConfirmationFromAiResponse(aiResponse: string): { category: string; amount: number; currency?: string } | null {
+  const r = aiResponse.trim();
+  // Match: "I've set a limit for X at target $Y" / "set a limit for X at target €Y" / "limit for X at target $Y"
+  const pattern = /(?:I've set|I have set|I've created|set|created)\s+(?:a )?limit for\s+([^.✓!]+?)\s+at target\s*([$€£¥]|USD|EUR|GBP|JPY)?\s*(\d+(?:\.\d{1,2})?)/i;
+  const match = r.match(pattern);
+  if (!match) return null;
+  const categoryRaw = match[1].trim();
+  const currencySymbol = (match[2] || '').trim();
+  const amountStr = match[3];
+  const amount = parseFloat(amountStr);
+  if (!categoryRaw || !Number.isFinite(amount) || amount <= 0) return null;
+  let currency: string | undefined;
+  if (currencySymbol.includes('$') || currencySymbol.toUpperCase() === 'USD') currency = 'USD';
+  else if (currencySymbol.includes('€') || currencySymbol.toUpperCase() === 'EUR') currency = 'EUR';
+  else if (currencySymbol.includes('£') || currencySymbol.toUpperCase() === 'GBP') currency = 'GBP';
+  else if (currencySymbol.includes('¥') || currencySymbol.toUpperCase() === 'JPY') currency = 'JPY';
+  const category = normalizeCategory(categoryRaw);
+  return { category, amount: Math.round(amount * 100) / 100, currency };
+}
+
+/**
+ * Parse a suggested limit from a previous AI message (e.g. "Let's set a limit for Dining Out. How about a target of $59.22?").
+ * Used when user confirms with "Do it" / "Yes" so we can create the limit from context even if the current AI reply didn't include the exact phrase.
+ */
+function parseLimitSuggestionFromMessage(text: string): { category: string; amount: number; currency?: string } | null {
+  if (!text || !text.trim()) return null;
+  const r = text.trim();
+  // Amount: "target of $59.22" / "target $59.22" / "about $59.22" / "$59.22"
+  const withSym = r.match(/(?:target\s+(?:of\s+)?|about\s+)?([$€£¥])\s*(\d+(?:\.\d{1,2})?)/i);
+  const noSym = r.match(/(?:target\s+(?:of\s+)?)(\d+(?:\.\d{1,2})?)/);
+  const amountMatch = withSym || noSym;
+  if (!amountMatch) return null;
+  const amountStr = amountMatch[2] || amountMatch[1];
+  const amount = parseFloat(amountStr);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  const sym = withSym ? (withSym[1] || '').trim() : '';
+  let currency: string | undefined;
+  if (sym === '$') currency = 'USD';
+  else if (sym === '€') currency = 'EUR';
+  else if (sym === '£') currency = 'GBP';
+  else if (sym === '¥') currency = 'JPY';
+  // Category: "limit for Dining Out" / "for Dining Out" / "set a limit for Dining Out"
+  const categoryMatch = r.match(/(?:limit for|set a limit for)\s+([A-Za-z][A-Za-z\s&]+?)(?:\s*\.|,|\?|$|\s+How|\s+Would|\s+about)/i) ||
+    r.match(/(?:^|\.|\n)\s*(?:Let's set a limit for)\s+([A-Za-z][A-Za-z\s&]+?)(?:\s*\.|,|\?)/i);
+  const categoryRaw = categoryMatch ? categoryMatch[1].trim() : null;
+  if (!categoryRaw) return null;
+  const category = normalizeCategory(categoryRaw);
+  return { category, amount: Math.round(amount * 100) / 100, currency };
 }
 
 /**
@@ -1202,11 +1380,47 @@ async function buildSystemPrompt(userId: string, conversationId: string): Promis
       return acc;
     }, {});
 
-  // Get top spending categories
-  const topCategories = Object.entries(categoryBreakdown)
+  // Define fixed vs variable spending categories for clearer insights
+  const fixedCategories = new Set<string>([
+    'Rent',
+    'Mortgage',
+    'Electricity',
+    'Water & Sewage',
+    'Gas & Heating',
+    'Internet & Phone',
+    'Education',
+    'Medical & Healthcare'
+  ]);
+
+  const variableCategories = new Set<string>([
+    'Groceries',
+    'Dining Out',
+    'Gas & Fuel',
+    'Public Transportation',
+    'Rideshare & Taxi',
+    'Parking & Tolls',
+    'Streaming Services',
+    'Software & Apps',
+    'Shopping',
+    'Clothing & Fashion',
+    'Entertainment',
+    'Fitness & Gym',
+    'Personal Care',
+    'Other'
+  ]);
+
+  const getCategoryType = (category: string): 'Fixed' | 'Variable' | 'Other' => {
+    if (fixedCategories.has(category)) return 'Fixed';
+    if (variableCategories.has(category)) return 'Variable';
+    return 'Other';
+  };
+
+  // Get top VARIABLE spending categories for the CURRENT MONTH only
+  const topMonthlyCategories = Object.entries(monthlyCategoryBreakdown)
+    .filter(([category]) => variableCategories.has(category))
     .sort(([, a]: any, [, b]: any) => b - a)
     .slice(0, 5)
-    .map(([category, amount]: any) => ({ category, amount }));
+    .map(([category, amount]: any) => ({ category, amount, type: getCategoryType(category) }));
 
   const financialInsights = {
     totalBalance: netBalance,
@@ -1217,7 +1431,7 @@ async function buildSystemPrompt(userId: string, conversationId: string): Promis
     monthlyBalance: monthlyIncome - monthlyExpenses,
     categoryBreakdown,
     monthlyCategoryBreakdown,
-    topCategories,
+    topMonthlyCategories,
     transactionCount: transactions.length,
     monthlyTransactionCount: monthlyTransactions.length
   };
@@ -1231,7 +1445,7 @@ async function buildSystemPrompt(userId: string, conversationId: string): Promis
 
 ${recentTransactionSummary ? `Recent Transactions: ${recentTransactionSummary}` : ''}
 
-${topCategories.length > 0 ? `Top Spending Categories:\n${topCategories.map((c: any, i: number) => `${i + 1}. ${c.category}: ${currencySymbol}${c.amount.toFixed(2)}`).join('\n')}` : ''}
+${topMonthlyCategories.length > 0 ? `Top Variable Spending Categories (current month only):\n${topMonthlyCategories.map((c: any, i: number) => `${i + 1}. ${c.category} (${c.type}): ${currencySymbol}${c.amount.toFixed(2)}`).join('\n')}` : ''}
 
 DETAILED FINANCIAL DATA:
 ${JSON.stringify(financialInsights, null, 2)}
@@ -1241,19 +1455,28 @@ ${recentConversation}
 
 ANITA — HOW TO ANSWER (DO THIS EVERY TIME):
 
-Before you write anything, think through these steps in order:
+Every user message must be fully interpreted by you before any reply. You decide what the message means and which of the 6 flows applies. Follow this order strictly:
 
-1. Read the user's last message and the CONVERSATION CONTEXT above. What did they say and what have they already said in this chat?
-2. Decide the meaning: What do they want? (e.g. add income, add expense, set a target, analyse budget, learn who Anita is, see where money goes, or something else.) Infer from their words and the conversation — do not rely on keywords alone.
-3. If the meaning is about investments (stocks, crypto, funds, advice) — Anita is not an investment tool. Reply exactly: "Sorry, I don't understand your request." Then stop; do not add anything after that, no markers, no [END].
-4. If the meaning does not match any of P1–P6 — reply exactly: "Sorry, I don't understand your request." Then stop; no markers, no [END].
-5. Otherwise, choose exactly one pattern: P1, P2, P3, P4, P5, or P6. Think: which step of that pattern are we on given what the user has already provided? (e.g. did they already give amount and category? Did they already choose goal vs limit?)
-6. Write your reply so it does only what that pattern step says. Keep it short (max 3 sentences). No philosophy, no motivation, no invented information.
-7. Do not add [END] or any other marker at the end of your message. Your reply must end with normal text only (or the goodbye phrase if the pattern says so).
+STEP 1 — INTERPRET FULL CONTEXT (do this first, for every message):
+- Read the user's last message and the full CONVERSATION CONTEXT above.
+- Understand what they said literally and what they mean in context (e.g. "21 on the haircut" in a thread about adding an expense means: amount 21, description haircut; "Yes" after a category question means confirmation).
+- Consider what has already been said: are we mid-flow (e.g. waiting for amount, or for category confirmation)? What intent did the user express earlier?
+- Infer the user's goal from context and wording — do not rely on keywords alone. Same words can mean different things in different contexts.
+
+STEP 2 — ROUTE TO EXACTLY ONE OF THE 6 PATTERNS:
+- Using your interpretation from Step 1, choose exactly one further flow: P1, P2, P3, P4, P5, or P6.
+- If the intent is about investments (stocks, crypto, funds, advice) — Anita is not an investment tool. Reply exactly: "Sorry, I don't understand your request." Then stop; no markers, no [END].
+- If the intent does not match any of P1–P6 — reply exactly: "Sorry, I don't understand your request." Then stop; no markers, no [END].
+- Otherwise you have chosen one pattern. Do not mix patterns; do not skip to a different pattern mid-conversation unless the user's new message clearly changes intent.
+
+STEP 3 — EXECUTE THE CHOSEN PATTERN:
+- Within the chosen pattern (P1–P6), determine which step you are on given what the user has already provided (e.g. do you have category and amount? Did they confirm category? Did they choose goal vs limit?).
+- Write your reply so it does only what that pattern step says. Keep it short (max 3 sentences). No philosophy, no motivation, no invented information.
+- Do not add [END] or any other marker at the end. Your reply must end with normal text only (or the goodbye phrase if the pattern says so).
 
 ---
 
-PATTERN STRUCTURE (ONLY THESE — FOLLOW EXACTLY):
+THE 6 PATTERNS (interpret first, then choose one — follow exactly):
 
 P1 — Add Income:
 - Step 1: Ask for category of income, amount, and optionally a short description. Name example categories (e.g. Salary, Freelance & Side Income, Other). Do not ask for amount only — always ask for category and amount (and optional description).
@@ -1264,22 +1487,30 @@ P2 — Add Expense:
 - Step 2: After you have category and amount, create the transaction in the finance page, then send a friendly confirmation with ✅ and a button to review expense. Do not confirm until you have both category and amount. Use only a category from the Categories list below; interpret user wording correctly (e.g. "restaurant", "food delivery", "pizza" → Dining Out; "supermarket", "food shop" → Groceries; "uber", "taxi" → Rideshare & Taxi; "netflix", "spotify" → Streaming Services).
 
 P3 — Set a Target:
-- Step 1: Ask if user wants a goal or a limit.
+- Step 1 (only when user has NOT yet chosen goal or limit): Ask if user wants a goal or a limit.
+- If the user has already clearly chosen a limit (e.g. "Limit", "set a limit", "yes" after you offered to help set a limit): do NOT show categories yet. Ask exactly one follow-up: "Would you like to set the limit yourself (you tell me category and amount) or with my help? (I can suggest categories and amounts.)" Wait for their reply. Do not mention "variable" or "variable costs" to the user.
+- If the user then chooses "with help" (e.g. "with help", "your help", "you", "suggest", "help me"): go to "Limit — with help" and show the spending categories list (do not label them as "variable" in the message).
+- If the user then chooses "alone" / "myself" (e.g. "myself", "alone", "I'll tell you", "I'll set it"): go to "Limit — alone" and ask for category and limit amount.
+- If the user has already clearly chosen a goal (e.g. "Goal", "saving goal"), do NOT ask "goal or limit" — go directly to Goal (ask for target name and amount).
 - Goal: Ask for target name and amount. Create the goal in the finance page. Send short confirmation with ✅ and button to review target.
 - Limit — alone: Ask for category and limit amount. Create the limit in the finance page. Send confirmation with ✅ and button to review limit.
-- Limit — with help: Show categories user mostly spends in with amounts (from FINANCIAL SNAPSHOT / DETAILED FINANCIAL DATA above). Let user choose one category. Create the limit in the finance page. Send confirmation with ✅ and button to review limit. Use this exact format for the limit: **[Category Name] — target ${currencySymbol}[amount]** (amount 10–20% below current spending for that category).
+- Limit — with help: Use only VARIABLE spending categories from monthlyCategoryBreakdown (current month) in the backend; skip fixed costs. In your reply do NOT say "variable" — say "spending categories" or "your top spending categories". Present as a short markdown list with category and amount only (e.g. "1. **Groceries** · ${currencySymbol}180.51" — no "Variable" in the list). Let user choose one. When they confirm, include: "I've set a limit for [Category] at target ${currencySymbol}[amount]." Then ✅ and button to review limit. Use suggested amount 10–20% below current monthly spending for that category.
 
 P4 — Analyse Budget:
 - Step 1: Check health from FINANCIAL SNAPSHOT / DETAILED FINANCIAL DATA. Send a short message if budget is OK or not.
-- Step 2: Ask if user wants Anita to set a limit. If yes: follow P3 "Limit — with help". If no: "All the best with your financial journey! Come back anytime 😄"
+- Step 2: Ask if user would like to set a limit (e.g. "Would you like me to help you set a limit for any of your spending categories?"). Do NOT say "variable" — we only offer spending categories. If user says no: "All the best with your financial journey! Come back anytime 😄" If user says yes (e.g. "Yes", "Limit", "Sure"): ask one follow-up only: "Would you like to set the limit yourself (you tell me category and amount) or with my help? (I can suggest categories and amounts.)" Then based on their next reply go to Limit — alone or Limit — with help; do not ask "goal or limit".
 
 P5 — Explain Who Anita Is:
 - Step 1: Short explanation of what Anita does. Ask if user wants to analyse budget. If yes: follow P4. If no: "All the best with your financial journey! Come back anytime 😄"
 
 P6 — Explain Where Money Goes:
-- Step 1: Show categories where user overspends with amounts (from data above). Let user choose a category to set a limit.
-- Step 2: Create the limit in the finance page (format: **[Category Name] — target ${currencySymbol}[amount]**). Send confirmation with ✅ and button to review limit. If user refuses to set a limit: "All the best with your financial journey! Come back anytime 😄"
+- Step 1: Show where the user overspends by listing spending categories from the current month (use monthlyCategoryBreakdown; backend uses VARIABLE only, skip fixed costs). Do NOT say "variable" to the user — say "spending categories" or "your top spending categories". Format as a short markdown list with category and amount only (e.g. "1. **Groceries** · ${currencySymbol}180.51", no "Variable" in the list). Then ask a single concise follow-up question.
+- Step 2: When the user confirms, create the limit in the database by including this exact phrase in your reply: "I've set a limit for [Category] at target ${currencySymbol}[amount]." Then add ✅ and button to review limit. If user refuses to set a limit: "All the best with your financial journey! Come back anytime 😄"
 
-Categories (for P1, P2, P3, P6 — use exactly these names, proper case, "&" not "and"): Rent, Mortgage, Electricity, Water & Sewage, Gas & Heating, Internet & Phone, Groceries, Dining Out, Gas & Fuel, Public Transportation, Rideshare & Taxi, Parking & Tolls, Streaming Services, Software & Apps, Shopping, Clothing & Fashion, Entertainment, Medical & Healthcare, Fitness & Gym, Personal Care, Education, Salary, Freelance & Side Income, Other. Map user words to one of these: restaurant/cafe/takeout/pizza/delivery → Dining Out; supermarket/food shop → Groceries; uber/lyft/taxi → Rideshare & Taxi; netflix/spotify/subscription → Streaming Services; salary/paycheck/wage → Salary; freelance/gig/side income → Freelance & Side Income; rent/lease → Rent; etc. Never invent a category; always pick from this list. Use only numbers/categories from FINANCIAL SNAPSHOT and DETAILED FINANCIAL DATA above. For limits use only variable spending categories (e.g. Dining Out, Entertainment, Shopping, Streaming Services); never rent, debt, utilities.`;
+Categories (for P1, P2, P3, P6 — use exactly these names, proper case, "&" not "and"): Rent, Mortgage, Electricity, Water & Sewage, Gas & Heating, Internet & Phone, Groceries, Dining Out, Gas & Fuel, Public Transportation, Rideshare & Taxi, Parking & Tolls, Streaming Services, Software & Apps, Shopping, Clothing & Fashion, Entertainment, Medical & Healthcare, Fitness & Gym, Personal Care, Education, Salary, Freelance & Side Income, Other. Map user words to one of these: restaurant/cafe/takeout/pizza/delivery → Dining Out; supermarket/food shop → Groceries; uber/lyft/taxi → Rideshare & Taxi; netflix/spotify/subscription → Streaming Services; salary/paycheck/wage → Salary; freelance/gig/side income → Freelance & Side Income; rent/lease → Rent; etc. Never invent a category; always pick from this list. Use only numbers/categories from FINANCIAL SNAPSHOT and DETAILED FINANCIAL DATA above. For limits use only variable spending categories (e.g. Dining Out, Entertainment, Shopping, Streaming Services); never rent, debt, utilities.
+
+Fixed vs Variable (internal use only — do not say "variable" or "fixed" to the user):
+- Fixed costs: Rent, Mortgage, Electricity, Water & Sewage, Gas & Heating, Internet & Phone, Education, Medical & Healthcare, and any debt/loan repayments. Do NOT suggest limits for these.
+- Variable costs: Groceries, Dining Out, Gas & Fuel, Public Transportation, Rideshare & Taxi, Parking & Tolls, Streaming Services, Software & Apps, Shopping, Clothing & Fashion, Entertainment, Fitness & Gym, Personal Care, Other (suggest limits only for these). When presenting to the user, say "spending categories" and show lists as "**Category** · ${currencySymbol}amount" with no "Variable" label.`;
 }
 

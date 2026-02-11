@@ -221,7 +221,7 @@ export async function handleSaveTransaction(req: Request, res: Response): Promis
     );
 
     // Award 10 XP for adding any transaction; stored in user_xp_events and user_xp_stats
-    const { data: xpResult, error: xpError } = await supabase.rpc('award_xp', {
+    const { error: xpError } = await supabase.rpc('award_xp', {
       p_user_id: userId,
       p_rule_id: 'transaction_added',
       p_metadata: {}

@@ -564,8 +564,13 @@ class ChatViewModel: ObservableObject {
                 
                 let lowercased = messageText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
                 
-                // Check if user is initiating "Add income" or "Add expense"
-                if lowercased == "add income" || lowercased == "addincome" {
+                // Check if user is initiating "Add income" or "Add expense" (exact or intent: "I wanna add expense", "add an expense", etc.)
+                let wantsAddIncome = lowercased == "add income" || lowercased == "addincome"
+                    || (lowercased.contains("add") && lowercased.contains("income") && !lowercased.contains("expense"))
+                let wantsAddExpense = lowercased == "add expense" || lowercased == "addexpense"
+                    || (lowercased.contains("add") && lowercased.contains("expense"))
+                
+                if wantsAddIncome {
                     pendingTransactionType = "income"
                     
                     // Create conversation if needed and save user message
@@ -585,7 +590,7 @@ class ChatViewModel: ObservableObject {
                     // Ask for category, amount, and optional description (not only amount)
                     await sendAIResponse("I'd be happy to help you add income! Please tell me the category (e.g. Salary, Freelance & Side Income, Other), the amount, and optionally a short description.")
                     return
-                } else if lowercased == "add expense" || lowercased == "addexpense" {
+                } else if wantsAddExpense {
                     pendingTransactionType = "expense"
                     
                     // Create conversation if needed and save user message

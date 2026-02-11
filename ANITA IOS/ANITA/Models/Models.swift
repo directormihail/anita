@@ -143,6 +143,10 @@ struct Subscription: Codable {
     let status: String
     let transactionId: String?
     let updatedAt: String?
+    /// When the current billing period started (purchase/renewal date).
+    let currentPeriodStart: String?
+    /// When the current period ends; renews same calendar day each month (e.g. 14 Feb -> 14 Mar).
+    let currentPeriodEnd: String?
     
     enum CodingKeys: String, CodingKey {
         case userId
@@ -150,6 +154,8 @@ struct Subscription: Codable {
         case status
         case transactionId
         case updatedAt
+        case currentPeriodStart
+        case currentPeriodEnd
     }
     
     init(from decoder: Decoder) throws {
@@ -159,6 +165,8 @@ struct Subscription: Codable {
         status = try container.decode(String.self, forKey: .status)
         transactionId = try container.decodeIfPresent(String.self, forKey: .transactionId)
         updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
+        currentPeriodStart = try container.decodeIfPresent(String.self, forKey: .currentPeriodStart)
+        currentPeriodEnd = try container.decodeIfPresent(String.self, forKey: .currentPeriodEnd)
     }
 }
 
