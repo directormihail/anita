@@ -664,9 +664,11 @@ export function parseTransactionFromAiResponse(
   const amount = amountStr ? parseFloat(amountStr) : NaN;
   if (!amountMatch || !Number.isFinite(amount) || amount <= 0) return null;
 
-  // Category: "for Personal Care" or "under Personal Care"
+  // Category: "for Personal Care", "under Personal Care", or "your fishing expense of $120"
   const categoryMatch = r.match(/(?:for|under)\s+([^.().]+?)(?:\s*\(|\.|,|\s*$)/i);
-  let category = (categoryMatch ? categoryMatch[1].trim() : null) || 'Other';
+  const yourCategoryExpense = !categoryMatch ? r.match(/(?:your\s+)?([a-z\s&]+?)\s+expense\s+(?:of|$)/i) : null;
+  const categoryFromPhrase = categoryMatch ? categoryMatch[1].trim() : (yourCategoryExpense && yourCategoryExpense[1] ? yourCategoryExpense[1].trim() : null);
+  const category = categoryFromPhrase || 'Other';
 
   // Description: from parentheses "(Haircut)" or last user message
   const parenMatch = r.match(/\(([^)]+)\)/);

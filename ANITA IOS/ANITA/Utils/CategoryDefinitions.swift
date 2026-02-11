@@ -149,9 +149,9 @@ class CategoryDefinitions {
         CategoryDefinition(
             id: "Entertainment",
             name: "Entertainment",
-            definition: "Movies, concerts, events, games, and entertainment activities",
-            keywords: ["movie", "cinema", "concert", "event", "game", "entertainment", "ticket"],
-            exampleDescriptions: ["movie", "cinema", "concert", "event ticket", "game"]
+            definition: "Movies, concerts, events, games, hobbies, and entertainment activities",
+            keywords: ["movie", "cinema", "concert", "event", "game", "entertainment", "ticket", "fishing", "hobby", "hobbies"],
+            exampleDescriptions: ["movie", "cinema", "concert", "event ticket", "game", "fishing", "hobby"]
         ),
         
         // HEALTH & FITNESS

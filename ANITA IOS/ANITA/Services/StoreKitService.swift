@@ -90,11 +90,12 @@ class StoreKitService: ObservableObject {
         )
     }
     
-    /// Verify subscription with backend API
+    /// Verify subscription with backend API (uses same URL as Settings → Backend URL)
     private func verifySubscriptionWithBackend(userId: String, transactionId: String, productId: String) async {
-        let baseUrl = Config.backendURL.hasSuffix("/") ? String(Config.backendURL.dropLast()) : Config.backendURL
-        guard let url = URL(string: "\(baseUrl)/api/v1/verify-ios-subscription") else {
-            print("[StoreKit] Invalid backend URL: \(baseUrl)")
+        let baseUrl = NetworkService.shared.getCurrentBaseURL()
+        let baseUrlTrimmed = baseUrl.hasSuffix("/") ? String(baseUrl.dropLast()) : baseUrl
+        guard let url = URL(string: "\(baseUrlTrimmed)/api/v1/verify-ios-subscription") else {
+            print("[StoreKit] Invalid backend URL: \(baseUrlTrimmed)")
             return
         }
         

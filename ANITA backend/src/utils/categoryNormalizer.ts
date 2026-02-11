@@ -115,7 +115,10 @@ const STANDARD_CATEGORIES: { [key: string]: string } = {
   'cinema': 'Entertainment',
   'concert': 'Entertainment',
   'game': 'Entertainment',
-  
+  'fishing': 'Entertainment',
+  'hobby': 'Entertainment',
+  'hobbies': 'Entertainment',
+
   // Health
   'medical': 'Medical & Healthcare',
   'medical & healthcare': 'Medical & Healthcare',
