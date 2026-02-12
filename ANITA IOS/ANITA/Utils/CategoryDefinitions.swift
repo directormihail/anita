@@ -63,8 +63,8 @@ class CategoryDefinitions {
             id: "Utilities_Internet_Phone",
             name: "Internet & Phone",
             definition: "Internet, mobile phone, and home phone service subscriptions",
-            keywords: ["internet", "phone", "mobile", "broadband", "wifi", "cellular", "data"],
-            exampleDescriptions: ["internet", "phone bill", "mobile", "broadband", "wifi", "cellular", "data plan"]
+            keywords: ["internet", "phone", "mobile", "broadband", "wifi", "cellular", "data", "radio tax", "radio", "tv tax", "broadcasting", "license fee", "rundfunkbeitrag"],
+            exampleDescriptions: ["internet", "phone bill", "mobile", "broadband", "wifi", "cellular", "data plan", "radio tax", "tv tax"]
         ),
         
         // FOOD & DINING

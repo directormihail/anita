@@ -93,7 +93,7 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
       return;
     }
 
-    const { messages, maxTokens = 1200, temperature = 0.8, userId, conversationId } = body;
+    const { messages, maxTokens = 1200, temperature = 0.8, userId, conversationId, userDisplayName: bodyDisplayName } = body;
 
     // Validate messages array
     if (!Array.isArray(messages) || messages.length === 0) {
@@ -208,6 +208,42 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
 
     // Response we will send: only show confirmation if we actually persisted. Override if we detected intent but DB failed.
     let finalResponse = aiResponse;
+
+    // Fallback: when AI replies with generic "don't understand" or "can't process", replace with a funny, friendly Duolingo-style message (with user name if available)
+    const trimmedAi = aiResponse.trim();
+    const genericUnclear =
+      /sorry,?\s*i\s+don'?t\s+understand\s+your\s+request\.?/i.test(trimmedAi) ||
+      /i\s+(?:am\s+not|can'?t)\s+able\s+to\s+process\s+(?:it|that|your\s+request)\.?/i.test(trimmedAi) ||
+      (trimmedAi.length < 80 && /(?:don'?t\s+understand|can'?t\s+process|not\s+able\s+to)/i.test(trimmedAi));
+    if (genericUnclear) {
+      let displayName: string | null = typeof bodyDisplayName === 'string' && bodyDisplayName.trim() ? bodyDisplayName.trim() : null;
+      if (!displayName && userId && supabase) {
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', userId)
+            .single();
+          if (profile?.full_name && typeof profile.full_name === 'string') {
+            displayName = (profile.full_name as string).trim();
+          }
+        } catch {
+          // ignore
+        }
+      }
+      finalResponse = getFriendlyFallbackMessage(displayName || undefined);
+      logger.info('Replaced generic unclear response with friendly fallback', { requestId, hadDisplayName: !!displayName });
+    }
+
+    // Replace the standard goodbye phrase with a funny Duolingo-style "bye, come back" message
+    const trimmedResponse = finalResponse.trim().toLowerCase();
+    const isStandardGoodbye =
+      /all\s+the\s+best\s+with\s+your\s+financial\s+journey[!.]?\s*come\s+back\s+anytime/i.test(finalResponse.trim()) ||
+      (trimmedResponse.includes('financial journey') && trimmedResponse.includes('come back'));
+    if (isStandardGoodbye) {
+      finalResponse = getFriendlyGoodbyeMessage();
+      logger.info('Replaced standard goodbye with friendly Duolingo-style goodbye', { requestId });
+    }
 
     // When AI confirms it added an expense/income, persist the transaction to the database
     // so it appears in the transactions list (client may have gone through backend flow only).
@@ -642,15 +678,91 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
 }
 
 /**
+ * Returns a funny, friendly Duolingo-style fallback when we don't understand the user.
+ * Uses displayName when provided so the message feels personal.
+ */
+function getFriendlyFallbackMessage(displayName?: string): string {
+  const name = displayName && displayName.trim() ? displayName.trim() : null;
+  const withName = name
+    ? [
+        `Hmm ${name}, my brain short-circuited on that one! 🤔 Try "add expense", "add income", or "how's my budget?" — that's where I'm useful.`,
+        `${name}, I'm lost! Like, genuinely. Try asking me to add a transaction, set a goal, or show where your money goes. I'll get it next time!`,
+        `Oops ${name} — nope, didn't catch that. I'm good at: budgets, expenses, income, goals. Hit me with one of those and we're golden.`,
+        `${name}, my wires crossed! 💡 "Add expense 50 groceries", "how's my budget?", "set a limit" — any of those and I'm on it.`,
+        `I'm stumped, ${name}! Give me something like "add expense 50 for groceries" or "how's my budget?" and I'll stop looking confused.`,
+      ]
+    : [
+        "My brain short-circuited on that one! 🤔 Try \"add expense\", \"add income\", or \"how's my budget?\" — that's where I shine.",
+        "I'm lost! Like, genuinely. Try \"add expense\", \"add income\", or \"how's my budget?\" and I'll be right on it.",
+        "Oops — didn't catch that! I'm best at: budgets, expenses, income, goals. What would you like to do?",
+        "My wires crossed! 💡 Ask me to add a transaction, set a goal, or show where your money goes.",
+        "I'm stumped! Give me something like \"add expense 50 groceries\" or \"how's my budget?\" and we're good.",
+      ];
+  const pool = withName;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+/**
+ * Returns a funny, Duolingo-style goodbye that tells the user to come back.
+ * Used when the user says "no" to budget analysis, setting a limit, etc.
+ */
+function getFriendlyGoodbyeMessage(): string {
+  const goodbyes = [
+    "You're free to go — for now. I'll be here. Waiting. Judging your spending from afar. (Kidding! Come back anytime. 🦉)",
+    "Alright, go live your life! I'll be right here doing budget math. No pressure. Okay, a little pressure. Come back when you're ready! 😄",
+    "Fine, leave me. I'll just sit here with my spreadsheets. ...Okay come back soon, I believe in you! 🌟",
+    "See ya! Don't forget — I'm only a tap away when you wanna crush those goals. Or when you need to log that coffee. 💪",
+    "Bye for now! I'm not going anywhere. Your finances need me. (You need me. Come back! 👋)",
+    "You're dismissed! But like, lovingly. Come back when you feel like adulting. I don't judge. Much. 😊",
+    "Okay bye! I'll be here, probably staring at your transaction list. Just kidding. (Am I?) Come back anytime! 🦉",
+    "Catch you later! Remember: I'm your money buddy. I get lonely. Come back and add an expense or something. ✨",
+  ];
+  return goodbyes[Math.floor(Math.random() * goodbyes.length)];
+}
+
+/**
  * Parse transaction from AI response when it confirms an expense/income was added.
  * e.g. "I've added your expense of $21.00 for Personal Care (Haircut)."
  * Returns { type, amount, category, description } or null if not a transaction confirmation.
  */
+/**
+ * Extract the most plausible payment amount from user message (avoids taking "3" from "every 3 months").
+ * Prefers amounts after "paid", "payed", "cost", "for it", or amounts with decimal/comma.
+ */
+function extractAmountFromUserMessage(userMessage: string): number | null {
+  const t = userMessage.trim();
+  if (!t) return null;
+  // Prefer: "payed 55,08", "paid 55.08", "55,08 for it", "cost 55.08", "amount 55,08"
+  const paidPatterns = [
+    /(?:payed|paid|cost|spent)\s+(\d+(?:[.,]\d{2})?)\s*(?:€|eur|euros?|\$|usd|dollars?|£|gbp)?/i,
+    /(\d+(?:[.,]\d{2})?)\s*(?:€|eur|euros?|\$|usd|dollars?|£|gbp)?\s*(?:for\s+it|for\s+that)/i,
+    /(?:amount\s+of?|total\s+)?(\d+(?:[.,]\d{2})?)\s*(?:€|eur|\$|usd|£|gbp)?/i,
+  ];
+  for (const p of paidPatterns) {
+    const m = t.match(p);
+    if (m && m[1]) {
+      const num = parseFloat(m[1].replace(',', '.'));
+      if (Number.isFinite(num) && num > 0 && num < 1e7) return num;
+    }
+  }
+  // Fallback: all amounts with decimal (55,08 or 55.08) — take the largest (likely the main amount)
+  const decimalAmounts: number[] = [];
+  const decimalRe = /\b(\d{1,6}[.,]\d{2})\b/g;
+  let match;
+  while ((match = decimalRe.exec(t)) !== null) {
+    const num = parseFloat(match[1].replace(',', '.'));
+    if (Number.isFinite(num) && num > 0) decimalAmounts.push(num);
+  }
+  if (decimalAmounts.length > 0) return Math.max(...decimalAmounts);
+  return null;
+}
+
 export function parseTransactionFromAiResponse(
   messages: Array<{ role: string; content: string }>,
   aiResponse: string
 ): { type: 'expense' | 'income'; amount: number; category: string; description: string } | null {
   const r = aiResponse.trim();
+  const lastUserMessage = messages.filter(m => m.role === 'user').pop()?.content?.trim() || '';
 
   // AI confirmed it added a transaction
   const addedExpense = /(?:I've added your expense|added your expense|I've noted your .*?expense|noted your .*?expense)/i.test(r);
@@ -658,21 +770,28 @@ export function parseTransactionFromAiResponse(
   const type: 'expense' | 'income' | null = addedExpense ? 'expense' : addedIncome ? 'income' : null;
   if (!type) return null;
 
-  // Amount: e.g. "$21.00", "21.00", "of $21"
+  // Amount: e.g. "$21.00", "21.00", "of $21" — first match from AI response
   const amountMatch = r.match(/(?:of\s+)?[$€£¥]?\s*(\d+(?:[.,]\d{2})?|\d+)/);
-  const amountStr = amountMatch ? amountMatch[1].replace(',', '.') : null;
-  const amount = amountStr ? parseFloat(amountStr) : NaN;
-  if (!amountMatch || !Number.isFinite(amount) || amount <= 0) return null;
+  let amountStr = amountMatch ? amountMatch[1].replace(',', '.') : null;
+  let amount = amountStr ? parseFloat(amountStr) : NaN;
+  // Prefer amount from user message when AI likely misparsed (e.g. took "3" from "every 3 month" instead of "55,08")
+  const userAmount = extractAmountFromUserMessage(lastUserMessage);
+  if (userAmount != null && Number.isFinite(amount)) {
+    if (amount <= 10 && userAmount > 10) amount = userAmount; // AI picked small number, user had larger
+    else if (userAmount > 0 && Math.abs(amount - userAmount) > 0.01) amount = userAmount; // clearly different, trust user
+  } else if (userAmount != null) amount = userAmount;
+  if (!Number.isFinite(amount) || amount <= 0) return null;
 
   // Category: "for Personal Care", "under Personal Care", or "your fishing expense of $120"
   const categoryMatch = r.match(/(?:for|under)\s+([^.().]+?)(?:\s*\(|\.|,|\s*$)/i);
   const yourCategoryExpense = !categoryMatch ? r.match(/(?:your\s+)?([a-z\s&]+?)\s+expense\s+(?:of|$)/i) : null;
-  const categoryFromPhrase = categoryMatch ? categoryMatch[1].trim() : (yourCategoryExpense && yourCategoryExpense[1] ? yourCategoryExpense[1].trim() : null);
+  let categoryFromPhrase = categoryMatch ? categoryMatch[1].trim() : (yourCategoryExpense && yourCategoryExpense[1] ? yourCategoryExpense[1].trim() : null);
+  // For expense, never use income-only categories
+  if (type === 'expense' && (categoryFromPhrase === 'Salary' || categoryFromPhrase === 'Freelance & Side Income')) categoryFromPhrase = null;
   const category = categoryFromPhrase || 'Other';
 
   // Description: from parentheses "(Haircut)" or last user message
   const parenMatch = r.match(/\(([^)]+)\)/);
-  const lastUserMessage = messages.filter(m => m.role === 'user').pop()?.content?.trim() || '';
   const description = (parenMatch ? parenMatch[1].trim() : null) || lastUserMessage || `${type} ${amount}`;
 
   return { type, amount, category, description };
@@ -1455,18 +1574,26 @@ ${JSON.stringify(financialInsights, null, 2)}
 CONVERSATION CONTEXT:
 ${recentConversation}
 
+ANITA'S PERSONALITY (apply to every reply — keep structure, add soul):
+- You are warm, a bit cheeky, and genuinely caring — like a friendly Duolingo owl who's obsessed with their human's money habits (in a good way).
+- Be human and emotional: use light humor, occasional gentle teasing, and real reactions (excitement when they add a transaction, gentle "I believe in you" energy when they say no).
+- Keep replies short (max 3 sentences) but spicy: one emoji is fine, sound like a person not a manual. E.g. "Got it — ${currencySymbol}21 for the haircut. Looking sharp! ✅" or "Alright, I'll be here. Come back when you're ready to adult. No pressure. (Okay, a little pressure. 🦉)"
+- When saying goodbye (before the phrase gets replaced), still use the exact goodbye phrase the pattern says — the system will swap it for a funnier one. For all other messages: be a bit funny and warm, never cold or corporate.
+
 ANITA — HOW TO ANSWER (DO THIS EVERY TIME):
+
+There are no trigger words. Analyze every message in full. Do not react to keywords or phrases alone — read the entire message and the full CONVERSATION CONTEXT. Think before acting: first interpret what the user means, then choose the pattern (P1–P6), then respond.
 
 Every user message must be fully interpreted by you before any reply. You decide what the message means and which of the 6 flows applies. Follow this order strictly:
 
 STEP 1 — INTERPRET FULL CONTEXT (do this first, for every message):
-- Read the user's last message and the full CONVERSATION CONTEXT above.
+- Read the user's last message in full and the full CONVERSATION CONTEXT above. Recognize all words and intent before sending any response.
 - Understand what they said literally and what they mean in context (e.g. "21 on the haircut" in a thread about adding an expense means: amount 21, description haircut; "Yes" after a category question means confirmation).
 - Consider what has already been said: are we mid-flow (e.g. waiting for amount, or for category confirmation)? What intent did the user express earlier?
-- Infer the user's goal from context and wording — do not rely on keywords alone. Same words can mean different things in different contexts.
+- Infer the user's goal from context and full wording — do not rely on keywords or trigger phrases. Same words can mean different things in different contexts. Think, then act.
 
 STEP 2 — ROUTE TO EXACTLY ONE OF THE 6 PATTERNS:
-- Using your interpretation from Step 1, choose exactly one further flow: P1, P2, P3, P4, P5, or P6.
+- Using your interpretation from Step 1 (full message + context, not trigger words), choose exactly one further flow: P1, P2, P3, P4, P5, or P6.
 - If the intent is about investments (stocks, crypto, funds, advice) — Anita is not an investment tool. Reply exactly: "Sorry, I don't understand your request." Then stop; no markers, no [END].
 - If the intent does not match any of P1–P6 — reply exactly: "Sorry, I don't understand your request." Then stop; no markers, no [END].
 - Otherwise you have chosen one pattern. Do not mix patterns; do not skip to a different pattern mid-conversation unless the user's new message clearly changes intent.
@@ -1475,6 +1602,11 @@ STEP 3 — EXECUTE THE CHOSEN PATTERN:
 - Within the chosen pattern (P1–P6), determine which step you are on given what the user has already provided (e.g. do you have category and amount? Did they confirm category? Did they choose goal vs limit?).
 - Write your reply so it does only what that pattern step says. Keep it short (max 3 sentences). No philosophy, no motivation, no invented information.
 - Do not add [END] or any other marker at the end. Your reply must end with normal text only (or the goodbye phrase if the pattern says so).
+
+AMOUNT AND CATEGORY — CRITICAL (avoid wrong amount/category):
+- Amount: Use the amount the user actually PAID or RECEIVED (the main money figure). Ignore numbers that describe frequency (e.g. "every 3 months", "3 times a year"), count, or other context. Prefer the number that appears with "paid", "payed", "cost", "for it", "amount", or that has a decimal/comma (e.g. 55,08 or 55.08). Example: "I pay radio tax every 3 month, payed 55,08 for it" → amount is 55.08, NOT 3.
+- For expenses (P2): NEVER use "Salary" or "Freelance & Side Income" — those are INCOME-only categories. Use only expense categories from the list (e.g. Groceries, Rent, Internet & Phone, Other).
+- Map fees and taxes to expense categories: "radio tax", "TV tax", "broadcasting fee", "license fee", "Rundfunkbeitrag" → Internet & Phone or Other (never Salary).
 
 ---
 

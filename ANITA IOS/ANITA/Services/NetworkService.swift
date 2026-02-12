@@ -39,7 +39,7 @@ class NetworkService: ObservableObject {
     
     // MARK: - Chat Completion
     
-    func sendChatMessage(messages: [ChatMessageRequest], maxTokens: Int = 800, temperature: Double = 0.7, userId: String? = nil, conversationId: String? = nil) async throws -> ChatCompletionResponse {
+    func sendChatMessage(messages: [ChatMessageRequest], maxTokens: Int = 800, temperature: Double = 0.7, userId: String? = nil, conversationId: String? = nil, userDisplayName: String? = nil) async throws -> ChatCompletionResponse {
         let url = URL(string: "\(baseURL)/api/v1/chat-completion")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -50,7 +50,8 @@ class NetworkService: ObservableObject {
             maxTokens: maxTokens,
             temperature: temperature,
             userId: userId,
-            conversationId: conversationId
+            conversationId: conversationId,
+            userDisplayName: userDisplayName
         )
         
         request.httpBody = try JSONEncoder().encode(requestBody)

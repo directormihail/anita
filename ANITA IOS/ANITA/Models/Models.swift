@@ -38,6 +38,7 @@ struct ChatCompletionRequest: Codable {
     let temperature: Double?
     let userId: String?
     let conversationId: String?
+    let userDisplayName: String?
     
     enum CodingKeys: String, CodingKey {
         case messages
@@ -45,6 +46,7 @@ struct ChatCompletionRequest: Codable {
         case temperature
         case userId
         case conversationId
+        case userDisplayName
     }
 }
 

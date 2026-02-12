@@ -22,11 +22,6 @@ class ChatViewModel: ObservableObject {
     /// Free tier: max user messages per calendar month.
     private static let freeTierMessagesPerMonth = 10
     
-    // Track pending transaction input (supports amount and category in separate messages)
-    private var pendingTransactionType: String? = nil // "income" or "expense"
-    private var pendingAmount: Double? = nil
-    private var pendingCategory: String? = nil
-    
     private let networkService = NetworkService.shared
     private let supabaseService = SupabaseService.shared
     private let userManager = UserManager.shared
@@ -335,22 +330,51 @@ class ChatViewModel: ObservableObject {
         
         guard let type = transactionType else { return nil }
         
-        // Extract amount using regex - improved pattern to handle various formats
-        // Pattern matches: $50, $1,200, $1,200.50, 50, 1200, 1200.50, etc.
-        // First try to match numbers with thousands separators, then plain numbers
-        let amountPatterns = [
-            #"\$?\s*(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{2})?)"#,  // With thousands: 1,200 or 1,200.50
-            #"\$?\s*(\d+(?:[.,]\d{2})?)"#  // Plain number: 1200 or 1200.50
-        ]
-        
+        // Prefer amount the user actually paid (e.g. "payed 55,08" or "55,08 for it") over other numbers (e.g. "3" from "every 3 month")
         var amountString: String?
-        for pattern in amountPatterns {
-            if let regex = try? NSRegularExpression(pattern: pattern, options: []),
+        let paidPatterns = [
+            #"(?:payed|paid|cost|spent)\s+(\d+(?:[.,]\d{2})?)"#,
+            #"(\d+(?:[.,]\d{2})?)\s*(?:€|eur|euros?|\$|usd|dollars?|£|gbp)?\s*(?:for\s+it|for\s+that)"#,
+            #"(?:amount|total)\s+(?:of\s+)?(\d+(?:[.,]\d{2})?)"#
+        ]
+        for pattern in paidPatterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
                let match = regex.firstMatch(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count)),
                match.numberOfRanges > 1,
                let amountRange = Range(match.range(at: 1), in: text) {
                 amountString = String(text[amountRange])
                 break
+            }
+        }
+        // Fallback: numbers with decimal (55,08 or 55.50) — take the largest as the main amount
+        if amountString == nil {
+            let decimalPattern = #"\b(\d{1,6}[.,]\d{2})\b"#
+            if let regex = try? NSRegularExpression(pattern: decimalPattern, options: []) {
+                let range = NSRange(location: 0, length: text.utf16.count)
+                let matches = regex.matches(in: text, options: [], range: range)
+                var candidates: [Double] = []
+                for match in matches {
+                    guard match.numberOfRanges > 1, let r = Range(match.range(at: 1), in: text) else { continue }
+                    var s = String(text[r]).replacingOccurrences(of: ",", with: ".")
+                    if let n = Double(s), n > 0 { candidates.append(n) }
+                }
+                if let maxAmount = candidates.max(), maxAmount > 0 { amountString = String(format: "%.2f", maxAmount) }
+            }
+        }
+        // Last resort: first number (with or without thousands/decimal)
+        if amountString == nil {
+            let amountPatterns = [
+                #"\$?\s*(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{2})?)"#,
+                #"\$?\s*(\d+(?:[.,]\d{2})?)"#
+            ]
+            for pattern in amountPatterns {
+                if let regex = try? NSRegularExpression(pattern: pattern, options: []),
+                   let match = regex.firstMatch(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count)),
+                   match.numberOfRanges > 1,
+                   let amountRange = Range(match.range(at: 1), in: text) {
+                    amountString = String(text[amountRange])
+                    break
+                }
             }
         }
         
@@ -389,47 +413,51 @@ class ChatViewModel: ObservableObject {
         return (type: type, amount: amount, category: category, description: text, currency: detectedCurrency)
     }
     
-    // Extract just the amount from a message (simpler version for pending transactions)
+    // Extract just the amount from a message (simpler version for pending transactions). Prefers amount user paid (e.g. "payed 55,08") over other numbers (e.g. "3" from "every 3 month").
     private func extractAmount(from text: String) -> Double? {
-        // Extract amount using regex - improved pattern to handle various formats
-        let amountPatterns = [
-            #"\$?\s*(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{2})?)"#,  // With thousands: 1,200 or 1,200.50
-            #"\$?\s*(\d+(?:[.,]\d{2})?)"#  // Plain number: 1200 or 1200.50
+        // Prefer: "payed 55,08", "55,08 for it", then largest decimal amount, then first number
+        let paidPatterns = [
+            #"(?:payed|paid|cost|spent)\s+(\d+(?:[.,]\d{2})?)"#,
+            #"(\d+(?:[.,]\d{2})?)\s*(?:€|eur|euros?|\$|usd|dollars?|£|gbp)?\s*(?:for\s+it|for\s+that)"#,
+            #"(?:amount|total)\s+(?:of\s+)?(\d+(?:[.,]\d{2})?)"#
         ]
-        
-        var amountString: String?
+        for pattern in paidPatterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
+               let match = regex.firstMatch(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count)),
+               match.numberOfRanges > 1,
+               let amountRange = Range(match.range(at: 1), in: text) {
+                var s = String(text[amountRange]).replacingOccurrences(of: ",", with: ".")
+                if let n = Double(s), n > 0 { return n }
+            }
+        }
+        let decimalPattern = #"\b(\d{1,6}[.,]\d{2})\b"#
+        if let regex = try? NSRegularExpression(pattern: decimalPattern, options: []) {
+            let range = NSRange(location: 0, length: text.utf16.count)
+            let matches = regex.matches(in: text, options: [], range: range)
+            var candidates: [Double] = []
+            for match in matches {
+                guard match.numberOfRanges > 1, let r = Range(match.range(at: 1), in: text) else { continue }
+                var s = String(text[r]).replacingOccurrences(of: ",", with: ".")
+                if let n = Double(s), n > 0 { candidates.append(n) }
+            }
+            if let maxAmount = candidates.max(), maxAmount > 0 { return maxAmount }
+        }
+        let amountPatterns = [#"\$?\s*(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{2})?)"#, #"\$?\s*(\d+(?:[.,]\d{2})?)"#]
         for pattern in amountPatterns {
             if let regex = try? NSRegularExpression(pattern: pattern, options: []),
                let match = regex.firstMatch(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count)),
                match.numberOfRanges > 1,
                let amountRange = Range(match.range(at: 1), in: text) {
-                amountString = String(text[amountRange])
-                break
+                var amountString = String(text[amountRange])
+                if amountString.contains(",") && !amountString.contains(".") {
+                    let parts = amountString.split(separator: ",")
+                    if parts.count == 2 && parts[0].count >= 3 { amountString = amountString.replacingOccurrences(of: ",", with: "") }
+                    else { amountString = amountString.replacingOccurrences(of: ",", with: ".") }
+                } else if amountString.contains(",") { amountString = amountString.replacingOccurrences(of: ",", with: "") }
+                if let n = Double(amountString), n > 0 { return n }
             }
         }
-        
-        guard var amountString = amountString else {
-            return nil
-        }
-        
-        // Handle comma as thousands separator (e.g., "1,000" or "1,000.50")
-        if amountString.contains(",") && amountString.contains(".") {
-            // Format: "1,000.50" - remove comma
-            amountString = amountString.replacingOccurrences(of: ",", with: "")
-        } else if amountString.contains(",") && !amountString.contains(".") {
-            // Could be "1,000" (thousands) or "1,50" (decimal with comma)
-            // Check if it's likely thousands (3+ digits before comma)
-            let parts = amountString.split(separator: ",")
-            if parts.count == 2 && parts[0].count >= 3 {
-                // Likely thousands separator
-                amountString = amountString.replacingOccurrences(of: ",", with: "")
-            } else {
-                // Likely decimal separator
-                amountString = amountString.replacingOccurrences(of: ",", with: ".")
-            }
-        }
-        
-        return Double(amountString)
+        return nil
     }
     
     // Format currency for display - uses user's currency preference from Settings
@@ -564,200 +592,7 @@ class ChatViewModel: ObservableObject {
                     }
                 }
                 
-                let lowercased = messageText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-                
-                // Check if user is initiating "Add income" or "Add expense" (exact or intent: "I wanna add expense", "add an expense", etc.)
-                let wantsAddIncome = lowercased == "add income" || lowercased == "addincome"
-                    || (lowercased.contains("add") && lowercased.contains("income") && !lowercased.contains("expense"))
-                let wantsAddExpense = lowercased == "add expense" || lowercased == "addexpense"
-                    || (lowercased.contains("add") && lowercased.contains("expense"))
-                
-                if wantsAddIncome {
-                    pendingTransactionType = "income"
-                    pendingAmount = nil
-                    pendingCategory = nil
-                    
-                    // Create conversation if needed and save user message
-                    var conversationId = currentConversationId
-                    if conversationId == nil {
-                        do {
-                            conversationId = try await createConversation(title: "New Conversation")
-                        } catch {
-                            print("[ChatViewModel] Error creating conversation: \(error.localizedDescription)")
-                        }
-                    }
-                    if let convId = conversationId {
-                        if !(await SubscriptionManager.shared.isPremium) { incrementFreeMonthlySentCount() }
-                        await saveMessage(userMessage, conversationId: convId)
-                    }
-                    
-                    // Ask for category, amount, and optional description (not only amount)
-                    await sendAIResponse("I'd be happy to help you add income! Please tell me the category (e.g. Salary, Freelance & Side Income, Other), the amount, and optionally a short description.")
-                    return
-                } else if wantsAddExpense {
-                    pendingTransactionType = "expense"
-                    pendingAmount = nil
-                    pendingCategory = nil
-                    
-                    // Create conversation if needed and save user message
-                    var conversationId = currentConversationId
-                    if conversationId == nil {
-                        do {
-                            conversationId = try await createConversation(title: "New Conversation")
-                        } catch {
-                            print("[ChatViewModel] Error creating conversation: \(error.localizedDescription)")
-                        }
-                    }
-                    if let convId = conversationId {
-                        if !(await SubscriptionManager.shared.isPremium) { incrementFreeMonthlySentCount() }
-                        await saveMessage(userMessage, conversationId: convId)
-                    }
-                    
-                    // Ask for category, amount, and optional description (not only amount)
-                    await sendAIResponse("I'd be happy to help you add an expense! Please tell me the category (e.g. Groceries, Dining Out, Entertainment), the amount, and optionally a short description.")
-                    return
-                }
-                
-                // If we're waiting for transaction details, collect amount and/or category (they can come in separate messages).
-                if let pendingType = pendingTransactionType {
-                    // Create conversation if needed and save user message
-                    var conversationId = currentConversationId
-                    if conversationId == nil {
-                        do {
-                            conversationId = try await createConversation(title: "New Conversation")
-                        } catch {
-                            print("[ChatViewModel] Error creating conversation: \(error.localizedDescription)")
-                        }
-                    }
-                    if let convId = conversationId {
-                        if !(await SubscriptionManager.shared.isPremium) { incrementFreeMonthlySentCount() }
-                        await saveMessage(userMessage, conversationId: convId)
-                    }
-                    
-                    let categoryDefinitions = CategoryDefinitions.shared
-                    let amountFromMessage = extractAmount(from: messageText)
-                    let detectedCategory = categoryDefinitions.detectCategory(from: messageText)
-                    let normalizedCat = categoryDefinitions.normalizeCategory(detectedCategory)
-                    // Treat "Other" as no category specified (e.g. user only said "50")
-                    let categoryFromMessage = (normalizedCat != CategoryDefinitions.defaultCategory) ? normalizedCat : nil
-                    
-                    let effectiveAmount = amountFromMessage ?? pendingAmount
-                    let hasCategorySpecified = (categoryFromMessage != nil) || (pendingCategory != nil)
-                    let effectiveCategory = categoryFromMessage ?? pendingCategory ?? CategoryDefinitions.defaultCategory
-                    
-                    // We have both amount and category — save transaction
-                    if let amount = effectiveAmount, hasCategorySpecified {
-                        let detectedCurrency = detectCurrency(from: messageText)
-                        let currencyToUse = detectedCurrency ?? (UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD")
-                        let currentUserId = userManager.isAuthenticated ? (userManager.currentUser?.id ?? userId) : userId
-                        do {
-                            _ = try await networkService.createTransaction(
-                                userId: currentUserId,
-                                type: pendingType,
-                                amount: amount,
-                                category: effectiveCategory,
-                                description: messageText.isEmpty ? "Transaction" : messageText,
-                                date: nil
-                            )
-                            print("[ChatViewModel] Transaction saved successfully (category: \(effectiveCategory))")
-                            NotificationCenter.default.post(name: NSNotification.Name("TransactionAdded"), object: nil)
-                            try? await Task.sleep(nanoseconds: 250_000_000)
-                            await XPStore.shared.refresh()
-                            try? await Task.sleep(nanoseconds: 350_000_000)
-                            await XPStore.shared.refresh()
-                            NotificationCenter.default.post(name: NSNotification.Name("XPStatsDidUpdate"), object: nil)
-                            pendingTransactionType = nil
-                            pendingAmount = nil
-                            pendingCategory = nil
-                            let categoryPhrase = effectiveCategory.isEmpty ? "" : " under \(effectiveCategory)"
-                            await sendAIResponse("Got it! I've noted your \(formatCurrency(amount, currencyCode: currencyToUse)) \(pendingType == "income" ? "income" : "expense")\(categoryPhrase). ✅")
-                            return
-                        } catch {
-                            print("[ChatViewModel] Error saving transaction: \(error.localizedDescription)")
-                            pendingTransactionType = nil
-                            pendingAmount = nil
-                            pendingCategory = nil
-                            await sendAIResponse("I encountered an error saving that transaction. Could you try again?")
-                            return
-                        }
-                    }
-                    
-                    // Amount provided but no category — store amount and ask for category
-                    if let amount = amountFromMessage ?? pendingAmount, !hasCategorySpecified {
-                        pendingAmount = amount
-                        let typeLabel = pendingType == "income" ? "income" : "expense"
-                        await sendAIResponse("What category for this \(typeLabel)? (e.g. \(pendingType == "income" ? "Salary, Freelance & Side Income" : "Groceries, Dining Out, Entertainment"))")
-                        return
-                    }
-                    
-                    // Category provided but no amount — store category and ask for amount
-                    if categoryFromMessage != nil {
-                        pendingCategory = categoryFromMessage
-                        await sendAIResponse("How much was it?")
-                        return
-                    }
-                    
-                    // No amount and no category in this message — clear pending and let AI handle it
-                    pendingTransactionType = nil
-                    pendingAmount = nil
-                    pendingCategory = nil
-                }
-                
-                // Try to parse transaction from user message (only if not in pending state)
-                if let transaction = parseTransaction(from: messageText) {
-                    let currencyToUse = transaction.currency ?? (UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD")
-                    print("[ChatViewModel] Detected transaction: \(transaction.type) - \(formatCurrency(transaction.amount, currencyCode: currencyToUse))")
-                    
-                    // Create conversation if needed
-                    var conversationId = currentConversationId
-                    if conversationId == nil {
-                        do {
-                            conversationId = try await createConversation(title: "New Conversation")
-                        } catch {
-                            print("[ChatViewModel] Error creating conversation: \(error.localizedDescription)")
-                        }
-                    }
-                    
-                    // Save user message first
-                    if let convId = conversationId {
-                        if !(await SubscriptionManager.shared.isPremium) { incrementFreeMonthlySentCount() }
-                        await saveMessage(userMessage, conversationId: convId)
-                    }
-                    
-                    // Save transaction to database
-                    let currentUserId = userManager.isAuthenticated ? (userManager.currentUser?.id ?? userId) : userId
-                    do {
-                        let savedTransaction = try await networkService.createTransaction(
-                            userId: currentUserId,
-                            type: transaction.type,
-                            amount: transaction.amount,
-                            category: transaction.category,
-                            description: transaction.description,
-                            date: nil
-                        )
-                        print("[ChatViewModel] Transaction saved successfully: \(savedTransaction.id)")
-                        
-                        NotificationCenter.default.post(name: NSNotification.Name("TransactionAdded"), object: nil)
-                        try? await Task.sleep(nanoseconds: 250_000_000)
-                        await XPStore.shared.refresh()
-                        try? await Task.sleep(nanoseconds: 350_000_000)
-                        await XPStore.shared.refresh()
-                        NotificationCenter.default.post(name: NSNotification.Name("XPStatsDidUpdate"), object: nil)
-                        
-                        // Send confirmation with correct currency
-                        let confirmationMessage = "Got it! I've noted your \(formatCurrency(transaction.amount, currencyCode: currencyToUse)) \(transaction.type)."
-                        await sendAIResponse(confirmationMessage)
-                        
-                        // Return early - transaction handled, don't send to AI backend
-                        await MainActor.run {
-                            isLoading = false
-                        }
-                        return
-                    } catch {
-                        print("[ChatViewModel] Error saving transaction: \(error.localizedDescription)")
-                        // Continue with chat even if transaction save fails
-                    }
-                }
+                // No trigger words: every message is sent to the AI. The AI analyzes the full message and conversation context, interprets intent, and responds (no client-side shortcuts).
                 
                 // First, check backend connection
                 print("[ChatViewModel] Checking backend connection...")
@@ -829,11 +664,13 @@ class ChatViewModel: ObservableObject {
                 print("[ChatViewModel] Sending chat message to backend...")
                 // Always use authenticated user ID if available
                 let currentUserId = userManager.isAuthenticated ? (userManager.currentUser?.id ?? userId) : userId
-                // Pass userId and conversationId for context-aware responses
+                // User display name for friendly fallback when AI doesn't understand (e.g. Duolingo-style message)
+                let displayName = (OnboardingSurveyResponse.loadFromUserDefaults()?.userName).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 let response = try await networkService.sendChatMessage(
                     messages: apiMessages,
                     userId: currentUserId,
-                    conversationId: conversationId
+                    conversationId: conversationId,
+                    userDisplayName: displayName?.isEmpty == false ? displayName : nil
                 )
                 print("[ChatViewModel] Received response from backend")
                 
