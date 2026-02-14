@@ -5924,7 +5924,7 @@ struct XPLevelWidget: View {
                             .foregroundColor(.white)
                             .digit3D(baseColor: .white)
                         
-                        Text(xpStats.level_title)
+                        Text(AppL10n.translatedLevelTitle(xpStats.level_title))
                             .font(.system(size: titleFontSize, weight: .medium, design: .rounded))
                             .foregroundColor(.white.opacity(0.6))
                     }

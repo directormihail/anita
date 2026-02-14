@@ -40,6 +40,26 @@ enum AppL10n {
         return key
     }
     
+    /// Returns localized level title for XP level widget (chat sidebar + finance page). Keys match XPLevelConfig in Models.swift.
+    static func translatedLevelTitle(_ title: String) -> String {
+        let keyMap: [String: String] = [
+            "Newcomer": "level.newcomer",
+            "Explorer": "level.explorer",
+            "Budget Apprentice": "level.budget_apprentice",
+            "Smart Planner": "level.smart_planner",
+            "Saver": "level.saver",
+            "Analyzer": "level.analyzer",
+            "Strategist": "level.strategist",
+            "Financial Thinker": "level.financial_thinker",
+            "Optimizer": "level.optimizer",
+            "Money Master": "level.money_master"
+        ]
+        if let key = keyMap[title] {
+            return t(key)
+        }
+        return title
+    }
+    
     // MARK: - Strings
     
     private static let translations: [String: [String: String]] = [
@@ -400,13 +420,17 @@ enum AppL10n {
             "xp_info.levels": "Level up = you're building better money habits.",
             "xp_info.got_it": "Got it",
             
-            // Level Titles
+            // Level Titles (match XPLevelConfig in Models.swift)
             "level.newcomer": "Newcomer",
-            "level.wealth_builder": "Wealth Builder",
+            "level.explorer": "Explorer",
+            "level.budget_apprentice": "Budget Apprentice",
+            "level.smart_planner": "Smart Planner",
             "level.saver": "Saver",
-            "level.investor": "Investor",
-            "level.financial_guru": "Financial Guru",
-            "level.millionaire": "Millionaire",
+            "level.analyzer": "Analyzer",
+            "level.strategist": "Strategist",
+            "level.financial_thinker": "Financial Thinker",
+            "level.optimizer": "Optimizer",
+            "level.money_master": "Money Master",
             
             // Settings
             "settings.language": "Language",
@@ -649,7 +673,7 @@ enum AppL10n {
             "finance.remove_asset_confirm": "Möchtest du dieses Vermögen wirklich entfernen?",
             "finance.remove_asset_warning": "Diese Aktion kann nicht rückgängig gemacht werden.",
             "finance.auto": "AUTO",
-            "finance.level": "Level",
+            "finance.level": "Stufe",
             "finance.xp": "XP",
             "finance.xp_to_next_level": "XP bis zum nächsten Level",
             "finance.xp_max_level": "Max-Level",
@@ -812,11 +836,15 @@ enum AppL10n {
             "ai_recommendation.goal_progress_description": "Sie sind %@%% auf dem Weg zu Ihrem Ziel mit %d verbleibenden Tagen. Erwägen Sie, monatliche Beiträge zu erhöhen.",
             
             "level.newcomer": "Neuling",
-            "level.wealth_builder": "Vermögensaufbauer",
+            "level.explorer": "Entdecker",
+            "level.budget_apprentice": "Budget-Lehrling",
+            "level.smart_planner": "Cleverer Planer",
             "level.saver": "Sparer",
-            "level.investor": "Investor",
-            "level.financial_guru": "Finanzguru",
-            "level.millionaire": "Millionär",
+            "level.analyzer": "Analyst",
+            "level.strategist": "Stratege",
+            "level.financial_thinker": "Finanzdenker",
+            "level.optimizer": "Optimierer",
+            "level.money_master": "Geldmeister",
             
             "privacy.data_collection": "Datenerfassung",
             "privacy.data_usage": "Datenverwendung",
