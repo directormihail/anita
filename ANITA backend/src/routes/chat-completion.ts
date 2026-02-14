@@ -221,11 +221,12 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
         try {
           const { data: profile } = await supabase
             .from('profiles')
-            .select('full_name')
+            .select('display_name, name, full_name')
             .eq('id', userId)
             .single();
-          if (profile?.full_name && typeof profile.full_name === 'string') {
-            displayName = (profile.full_name as string).trim();
+          const nameFromDb = (profile?.display_name ?? profile?.name ?? profile?.full_name);
+          if (nameFromDb && typeof nameFromDb === 'string' && nameFromDb.trim()) {
+            displayName = (nameFromDb as string).trim();
           }
         } catch {
           // ignore
@@ -1360,17 +1361,20 @@ async function buildSystemPrompt(userId: string, conversationId: string): Promis
     return 'No financial data available. Use conversation context only.';
   }
 
-  // Fetch user preferences (currency)
+  // Fetch user preferences (currency) and display name so AI can address the user
   let userCurrency = 'USD';
+  let userNameFromDb: string | null = null;
   try {
     const { data: profileData, error: profileError } = await supabase
       .from('profiles')
-      .select('currency_code')
+      .select('currency_code, display_name, name, full_name')
       .eq('id', userId)
       .single();
     
-    if (!profileError && profileData?.currency_code) {
-      userCurrency = profileData.currency_code;
+    if (!profileError && profileData) {
+      if (profileData.currency_code) userCurrency = profileData.currency_code;
+      const name = (profileData.display_name ?? profileData.name ?? profileData.full_name) as string | undefined;
+      if (name && typeof name === 'string' && name.trim()) userNameFromDb = name.trim();
     }
   } catch (error) {
     logger.warn('Failed to fetch user preferences', { error: error instanceof Error ? error.message : 'Unknown' });
@@ -1556,7 +1560,10 @@ async function buildSystemPrompt(userId: string, conversationId: string): Promis
     transactionCount: transactions.length,
     monthlyTransactionCount: monthlyTransactions.length
   };
-  return `FINANCIAL SNAPSHOT:
+  const userNameLine = userNameFromDb
+    ? `The user's name is ${userNameFromDb}. You may address them by name when appropriate.\n\n`
+    : '';
+  return `${userNameLine}FINANCIAL SNAPSHOT:
 - Total Income: ${currencySymbol}${totalIncome.toFixed(2)}
 - Total Expenses: ${currencySymbol}${totalExpenses.toFixed(2)}
 - Net Balance: ${currencySymbol}${netBalance.toFixed(2)}

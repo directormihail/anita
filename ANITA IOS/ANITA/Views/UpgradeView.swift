@@ -415,23 +415,21 @@ struct SubscriptionPlanCard: View {
         switch planType {
         case .pro:
             return [
-                AppL10n.t("plans.feature.replies_50"),
-                AppL10n.t("plans.feature.full_budget"),
-                AppL10n.t("plans.feature.financial_goals"),
-                AppL10n.t("plans.feature.smart_insights"),
-                AppL10n.t("plans.feature.faster_ai"),
                 AppL10n.t("plans.feature.unlimited_replies"),
-                AppL10n.t("plans.feature.advanced_analytics"),
-                AppL10n.t("plans.feature.priority_support"),
-                AppL10n.t("plans.feature.custom_ai")
+                AppL10n.t("plans.feature.full_ai"),
+                AppL10n.t("plans.feature.spending_limits"),
+                AppL10n.t("plans.feature.saving_goals"),
+                AppL10n.t("plans.feature.assets"),
+                AppL10n.t("plans.feature.full_budget")
             ]
         case .ultimate:
             return [
                 AppL10n.t("plans.feature.unlimited_replies"),
-                AppL10n.t("plans.feature.advanced_analytics"),
-                AppL10n.t("plans.feature.priority_support"),
-                AppL10n.t("plans.feature.custom_ai"),
-                AppL10n.t("plans.feature.all_pro")
+                AppL10n.t("plans.feature.full_ai"),
+                AppL10n.t("plans.feature.spending_limits"),
+                AppL10n.t("plans.feature.saving_goals"),
+                AppL10n.t("plans.feature.assets"),
+                AppL10n.t("plans.feature.full_budget")
             ]
         case .free:
             return []
@@ -771,23 +769,21 @@ struct SubscriptionPlanPlaceholder: View {
         switch planType {
         case .pro:
             return [
-                AppL10n.t("plans.feature.replies_50"),
-                AppL10n.t("plans.feature.full_budget"),
-                AppL10n.t("plans.feature.financial_goals"),
-                AppL10n.t("plans.feature.smart_insights"),
-                AppL10n.t("plans.feature.faster_ai"),
                 AppL10n.t("plans.feature.unlimited_replies"),
-                AppL10n.t("plans.feature.advanced_analytics"),
-                AppL10n.t("plans.feature.priority_support"),
-                AppL10n.t("plans.feature.custom_ai")
+                AppL10n.t("plans.feature.full_ai"),
+                AppL10n.t("plans.feature.spending_limits"),
+                AppL10n.t("plans.feature.saving_goals"),
+                AppL10n.t("plans.feature.assets"),
+                AppL10n.t("plans.feature.full_budget")
             ]
         case .ultimate:
             return [
                 AppL10n.t("plans.feature.unlimited_replies"),
-                AppL10n.t("plans.feature.advanced_analytics"),
-                AppL10n.t("plans.feature.priority_support"),
-                AppL10n.t("plans.feature.custom_ai"),
-                AppL10n.t("plans.feature.all_pro")
+                AppL10n.t("plans.feature.full_ai"),
+                AppL10n.t("plans.feature.spending_limits"),
+                AppL10n.t("plans.feature.saving_goals"),
+                AppL10n.t("plans.feature.assets"),
+                AppL10n.t("plans.feature.full_budget")
             ]
         case .free:
             return []

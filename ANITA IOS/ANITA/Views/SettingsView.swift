@@ -24,9 +24,11 @@ struct SettingsView: View {
     // Profile
     @State private var profileName: String = ""
     @State private var isSavingName = false
+    @State private var nameSaveSuccess = false
+    @FocusState private var isNameFieldFocused: Bool
     
     // Preferences
-    @State private var selectedCurrency: String = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "EUR"
+    @State private var selectedCurrency: String = "EUR"
     @State private var emailNotifications: Bool = UserDefaults.standard.bool(forKey: "anita_email_notifications")
     @State private var currentLanguageCode: String = AppL10n.currentLanguageCode()
     @State private var languageRefreshTrigger = UUID()
@@ -158,18 +160,33 @@ struct SettingsView: View {
                                     value: nil,
                                     showChevron: false
                                 ) {
-                                    HStack {
+                                    HStack(spacing: 8) {
                                         TextField(AppL10n.t("settings.enter_name"), text: $profileName)
                                             .font(.system(size: 16, weight: .regular))
                                             .foregroundColor(.white.opacity(0.9))
+                                            .focused($isNameFieldFocused)
                                             .onChange(of: profileName) { _, newValue in
-                                                saveNameDebounced(newValue)
+                                                saveNameLocallyOnly(newValue)
                                             }
+                                            .onSubmit {
+                                                saveNameToServerImmediately(profileName)
+                                            }
+                                            .submitLabel(.done)
                                         
                                         if isSavingName {
                                             ProgressView()
-                                                .tint(.white.opacity(0.6))
-                                                .scaleEffect(0.8)
+                                                .tint(.white.opacity(0.5))
+                                                .scaleEffect(0.75)
+                                        } else if isNameFieldFocused && userManager.isAuthenticated {
+                                            Spacer(minLength: 4)
+                                            Button(action: {
+                                                saveNameToServerImmediately(profileName)
+                                            }) {
+                                                Image(systemName: nameSaveSuccess ? "checkmark.circle.fill" : "arrow.down.circle.fill")
+                                                    .font(.system(size: 18))
+                                                    .foregroundColor(nameSaveSuccess ? .green.opacity(0.9) : Color.white.opacity(0.45))
+                                            }
+                                            .buttonStyle(.plain)
                                         }
                                     }
                                 }
@@ -691,15 +708,36 @@ struct SettingsView: View {
     
     func loadProfile() {
         guard userManager.currentUser != nil else { return }
-        // Prefer name from onboarding (saved to anita_profile_name on completion), else stored profile name
-        let fromOnboarding = OnboardingSurveyResponse.loadFromUserDefaults()?.userName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let fromPrefs = UserDefaults.standard.string(forKey: "anita_profile_name")?.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Per-account name so it doesn't flow between accounts
+        let fromOnboarding = userManager.getOnboardingSurvey()?.userName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fromPrefs = userManager.getProfileName()
         profileName = (fromOnboarding?.isEmpty == false ? fromOnboarding : nil) ?? fromPrefs ?? ""
     }
     
-    func saveNameDebounced(_ name: String) {
-        UserDefaults.standard.set(name, forKey: "anita_profile_name")
-        // TODO: Save to Supabase profile table
+    /// Only update local storage when typing (no server). Use the Save button to persist to database.
+    func saveNameLocallyOnly(_ name: String) {
+        userManager.setProfileName(name)
+    }
+    
+    /// Saves name to database when user taps the Save (arrow) button. After success, name persists and shows when scrolling between pages; AI will use it from DB.
+    func saveNameToServerImmediately(_ name: String) {
+        guard userManager.isAuthenticated else { return }
+        userManager.setProfileName(name)
+        Task {
+            await MainActor.run { isSavingName = true; nameSaveSuccess = false }
+            do {
+                try await userManager.saveProfileNameToSupabase(name)
+                await MainActor.run {
+                    isSavingName = false
+                    nameSaveSuccess = true
+                }
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                await MainActor.run { nameSaveSuccess = false }
+            } catch {
+                print("[SettingsView] Failed to save name to database: \(error)")
+                await MainActor.run { isSavingName = false }
+            }
+        }
     }
     
     func loadSubscription() {
@@ -724,7 +762,7 @@ struct SettingsView: View {
     }
     
     func loadPreferences() {
-        let saved = UserDefaults.standard.string(forKey: "anita_user_currency")
+        let saved = UserDefaults.standard.string(forKey: userManager.prefKey("anita_user_currency"))
         selectedCurrency = (saved == "CHF" || saved == "EUR") ? saved! : "EUR"
         emailNotifications = UserDefaults.standard.bool(forKey: "anita_email_notifications")
         
@@ -742,7 +780,7 @@ struct SettingsView: View {
         
         do {
             let baseUrl = Config.supabaseURL.hasSuffix("/") ? String(Config.supabaseURL.dropLast()) : Config.supabaseURL
-            let url = URL(string: "\(baseUrl)/rest/v1/profiles?id=eq.\(userId)&select=currency_code,date_format,number_format,email_notifications")!
+            let url = URL(string: "\(baseUrl)/rest/v1/profiles?id=eq.\(userId)&select=currency_code,date_format,number_format,email_notifications,display_name,name,full_name")!
             
             var request = URLRequest(url: url)
             request.setValue(Config.supabaseAnonKey, forHTTPHeaderField: "apikey")
@@ -762,23 +800,34 @@ struct SettingsView: View {
             if let json = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
                let profile = json.first {
                 
+                // Profile name from database (so Settings shows same name across devices)
+                let dbName = (profile["display_name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    ?? (profile["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    ?? (profile["full_name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let name = dbName, !name.isEmpty {
+                    await MainActor.run {
+                        self.userManager.setProfileName(name)
+                        self.profileName = name
+                    }
+                }
+                
                 if let currencyCode = profile["currency_code"] as? String, (currencyCode == "EUR" || currencyCode == "CHF") {
                     await MainActor.run {
                         self.selectedCurrency = currencyCode
-                        UserDefaults.standard.set(currencyCode, forKey: "anita_user_currency")
-                        UserDefaults.standard.set("1.234,56", forKey: "anita_number_format")
+                        UserDefaults.standard.set(currencyCode, forKey: self.userManager.prefKey("anita_user_currency"))
+                        UserDefaults.standard.set("1.234,56", forKey: self.userManager.prefKey("anita_number_format"))
                     }
                 }
                 
                 if let dateFormat = profile["date_format"] as? String, !dateFormat.isEmpty {
                     await MainActor.run {
-                        UserDefaults.standard.set(dateFormat, forKey: "anita_date_format")
+                        UserDefaults.standard.set(dateFormat, forKey: self.userManager.prefKey("anita_date_format"))
                     }
                 }
                 
                 if let numberFormat = profile["number_format"] as? String, !numberFormat.isEmpty {
                     await MainActor.run {
-                        UserDefaults.standard.set(numberFormat, forKey: "anita_number_format")
+                        UserDefaults.standard.set(numberFormat, forKey: self.userManager.prefKey("anita_number_format"))
                     }
                 }
                 
@@ -796,11 +845,9 @@ struct SettingsView: View {
     
     func saveCurrency(_ currency: String) {
         selectedCurrency = currency
-        UserDefaults.standard.set(currency, forKey: "anita_user_currency")
-        
+        UserDefaults.standard.set(currency, forKey: userManager.prefKey("anita_user_currency"))
         let newNumberFormat = getNumberFormatForCurrency(currency)
-        UserDefaults.standard.set(newNumberFormat, forKey: "anita_number_format")
-        
+        UserDefaults.standard.set(newNumberFormat, forKey: userManager.prefKey("anita_number_format"))
         savePreferencesToSupabase(currency: currency, numberFormat: newNumberFormat)
     }
     
@@ -875,18 +922,17 @@ struct SettingsView: View {
     }
     
     func clearAllData() {
-        // Clear local data
-        UserDefaults.standard.removeObject(forKey: "anita_profile_name")
-        UserDefaults.standard.removeObject(forKey: "anita_user_currency")
-        UserDefaults.standard.removeObject(forKey: "anita_date_format")
-        UserDefaults.standard.removeObject(forKey: "anita_number_format")
+        // Clear current account's local data only (per-account keys)
+        userManager.setProfileName("")
+        UserDefaults.standard.removeObject(forKey: userManager.prefKey("anita_user_currency"))
+        UserDefaults.standard.removeObject(forKey: userManager.prefKey("anita_date_format"))
+        UserDefaults.standard.removeObject(forKey: userManager.prefKey("anita_number_format"))
         UserDefaults.standard.removeObject(forKey: "anita_email_notifications")
         
-        // Reset preferences to defaults
         selectedCurrency = "EUR"
-        UserDefaults.standard.set("EUR", forKey: "anita_user_currency")
-        UserDefaults.standard.set("MM/DD/YYYY", forKey: "anita_date_format")
-        UserDefaults.standard.set("1.234,56", forKey: "anita_number_format")
+        UserDefaults.standard.set("EUR", forKey: userManager.prefKey("anita_user_currency"))
+        UserDefaults.standard.set("MM/DD/YYYY", forKey: userManager.prefKey("anita_date_format"))
+        UserDefaults.standard.set("1.234,56", forKey: userManager.prefKey("anita_number_format"))
         emailNotifications = true
         
         // Clear from Supabase if authenticated
@@ -902,9 +948,9 @@ struct SettingsView: View {
         // Collect all local data
         var exportData: [String: Any] = [:]
         
-        // User preferences
-        let dateFormat = UserDefaults.standard.string(forKey: "anita_date_format") ?? "MM/DD/YYYY"
-        let numberFormat = UserDefaults.standard.string(forKey: "anita_number_format") ?? getNumberFormatForCurrency(selectedCurrency)
+        // User preferences (per-account keys)
+        let dateFormat = UserDefaults.standard.string(forKey: userManager.prefKey("anita_date_format")) ?? "MM/DD/YYYY"
+        let numberFormat = UserDefaults.standard.string(forKey: userManager.prefKey("anita_number_format")) ?? getNumberFormatForCurrency(selectedCurrency)
         exportData["preferences"] = [
             "currency": selectedCurrency,
             "dateFormat": dateFormat,
@@ -912,8 +958,7 @@ struct SettingsView: View {
             "emailNotifications": emailNotifications
         ]
         
-        // Profile
-        if let profileName = UserDefaults.standard.string(forKey: "anita_profile_name") {
+        if let profileName = userManager.getProfileName() {
             exportData["profile"] = ["name": profileName]
         }
         
@@ -952,11 +997,11 @@ struct SettingsView: View {
                         saveCurrency(currency)
                     }
                     if let dateFormat = prefs["dateFormat"] as? String {
-                        UserDefaults.standard.set(dateFormat, forKey: "anita_date_format")
+                        UserDefaults.standard.set(dateFormat, forKey: userManager.prefKey("anita_date_format"))
                         savePreferencesToSupabase(dateFormat: dateFormat)
                     }
                     if let numberFormat = prefs["numberFormat"] as? String {
-                        UserDefaults.standard.set(numberFormat, forKey: "anita_number_format")
+                        UserDefaults.standard.set(numberFormat, forKey: userManager.prefKey("anita_number_format"))
                         savePreferencesToSupabase(numberFormat: numberFormat)
                     }
                     if let emailNotifications = prefs["emailNotifications"] as? Bool {
@@ -964,10 +1009,10 @@ struct SettingsView: View {
                     }
                 }
                 
-                // Import profile
+                // Import profile (per-account)
                 if let profile = json["profile"] as? [String: Any],
                    let name = profile["name"] as? String {
-                    UserDefaults.standard.set(name, forKey: "anita_profile_name")
+                    userManager.setProfileName(name)
                     profileName = name
                 }
                 

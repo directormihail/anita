@@ -665,7 +665,7 @@ class ChatViewModel: ObservableObject {
                 // Always use authenticated user ID if available
                 let currentUserId = userManager.isAuthenticated ? (userManager.currentUser?.id ?? userId) : userId
                 // User display name for friendly fallback when AI doesn't understand (e.g. Duolingo-style message)
-                let displayName = (OnboardingSurveyResponse.loadFromUserDefaults()?.userName).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                let displayName = (OnboardingSurveyResponse.loadFromUserDefaults(userId: userId)?.userName).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 let response = try await networkService.sendChatMessage(
                     messages: apiMessages,
                     userId: currentUserId,
@@ -738,8 +738,8 @@ class ChatViewModel: ObservableObject {
     }
 
     private func buildSystemPrompt() -> String? {
-        let survey = OnboardingSurveyResponse.loadFromUserDefaults()
-        let languageCode = survey?.languageCode ?? OnboardingSurveyResponse.preferredLanguageCode() ?? "en"
+        let survey = OnboardingSurveyResponse.loadFromUserDefaults(userId: userId)
+        let languageCode = survey?.languageCode ?? OnboardingSurveyResponse.preferredLanguageCode(userId: userId) ?? "en"
         
         let languageName: String
         switch languageCode {

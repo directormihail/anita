@@ -130,24 +130,23 @@ enum AppL10n {
             "plans.pending": "Purchase is pending approval.",
             "plans.cancel_subscription_hint": "You can cancel your subscription anytime in your Apple ID subscription settings."
             ,
-            // Plan features
+            // Plan features (match actual subscription limits)
             "plans.feature.replies_20": "10 messages per month",
-            "plans.feature.basic_expense": "Basic expense analysis",
+            "plans.feature.basic_expense": "Track income & expenses",
             "paywall.upgrade_to_use": "Upgrade to Premium to use this feature.",
             "paywall.upgrade_button": "Upgrade",
+            "chat.upgrade_banner_title": "Full AI & unlimited messages",
+            "chat.upgrade_banner_short": "Understand your finances better with Premium",
+            "chat.upgrade_banner_body": "Upgrade to Premium for full AI capabilities and unlimited chat.",
+            "chat.upgrade_banner_line": "Unlock with Premium",
             "chat.limit_reached": "You've used your 10 free messages this month. Upgrade to Premium for unlimited chat.",
             
-            "plans.feature.replies_50": "50 replies per month",
-            "plans.feature.full_budget": "Full budget analysis",
-            "plans.feature.financial_goals": "Financial goals",
-            "plans.feature.smart_insights": "Smart insights",
-            "plans.feature.faster_ai": "Faster AI responses",
-            
-            "plans.feature.unlimited_replies": "Unlimited replies",
-            "plans.feature.advanced_analytics": "Advanced analytics",
-            "plans.feature.priority_support": "Priority support",
-            "plans.feature.custom_ai": "Custom AI training",
-            "plans.feature.all_pro": "All Pro features"
+            "plans.feature.unlimited_replies": "Unlimited chat messages",
+            "plans.feature.full_ai": "Full AI capabilities",
+            "plans.feature.spending_limits": "Spending limits",
+            "plans.feature.saving_goals": "Saving goals",
+            "plans.feature.assets": "Assets tracking",
+            "plans.feature.full_budget": "Insights & budget overview"
             ,
             // Settings sections
             "settings.profile": "Profile",
@@ -544,22 +543,21 @@ enum AppL10n {
             "plans.cancel_subscription_hint": "Du kannst dein Abo jederzeit in den Abo-Einstellungen deiner Apple-ID kündigen."
             ,
             "plans.feature.replies_20": "10 Nachrichten pro Monat",
-            "plans.feature.basic_expense": "Einfache Ausgabenanalyse",
+            "plans.feature.basic_expense": "Einnahmen & Ausgaben erfassen",
             "paywall.upgrade_to_use": "Upgrade auf Premium, um diese Funktion zu nutzen.",
             "paywall.upgrade_button": "Upgrade",
+            "chat.upgrade_banner_title": "Vollständige KI & unbegrenzte Nachrichten",
+            "chat.upgrade_banner_short": "Finanzen besser verstehen mit Premium",
+            "chat.upgrade_banner_body": "Upgrade auf Premium für volle KI-Funktionen und unbegrenzten Chat.",
+            "chat.upgrade_banner_line": "Mit Premium freischalten",
             "chat.limit_reached": "Du hast deine 10 kostenlosen Nachrichten diesen Monat verbraucht. Upgrade auf Premium für unbegrenzten Chat.",
             
-            "plans.feature.replies_50": "50 Antworten pro Monat",
-            "plans.feature.full_budget": "Vollständige Budgetanalyse",
-            "plans.feature.financial_goals": "Finanzziele",
-            "plans.feature.smart_insights": "Smartere Insights",
-            "plans.feature.faster_ai": "Schnellere KI‑Antworten",
-            
-            "plans.feature.unlimited_replies": "Unbegrenzte Antworten",
-            "plans.feature.advanced_analytics": "Erweiterte Analysen",
-            "plans.feature.priority_support": "Prioritäts‑Support",
-            "plans.feature.custom_ai": "Individuelles KI‑Training",
-            "plans.feature.all_pro": "Alle Pro‑Features"
+            "plans.feature.unlimited_replies": "Unbegrenzte Chat-Nachrichten",
+            "plans.feature.full_ai": "Vollständige KI-Funktionen",
+            "plans.feature.spending_limits": "Ausgabenlimits",
+            "plans.feature.saving_goals": "Sparziele",
+            "plans.feature.assets": "Vermögen erfassen",
+            "plans.feature.full_budget": "Insights & Budget-Übersicht"
             ,
             "settings.profile": "Profil",
             "settings.preferences": "Einstellungen",

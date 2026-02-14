@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ChatView: View {
     @StateObject private var viewModel = ChatViewModel()
+    @StateObject private var subscriptionManager = SubscriptionManager.shared
     @FocusState private var isInputFocused: Bool
     @State private var isSidebarPresented = false
     @State private var showUpgradeView = false
@@ -233,7 +234,14 @@ struct ChatView: View {
                                     .padding(.horizontal, 20)
                                     .padding(.top, 12)
                                     
-                                    // Task options in 2x2 grid - premium spacing with full text visibility
+                                    // Free tier: upgrade banner (same size as task buttons)
+                                    if !subscriptionManager.isPremium {
+                                        ChatUpgradeBanner(onUpgrade: { showUpgradeView = true })
+                                            .padding(.horizontal, 20)
+                                            .padding(.top, 12)
+                                    }
+                                    
+                                    // Task options in 2x2 grid
                                     VStack(spacing: 12) {
                                         // Row 1
                                         HStack(spacing: 12) {
@@ -282,8 +290,10 @@ struct ChatView: View {
                                         }
                                     }
                                     .padding(.horizontal, 20)
-                                    .padding(.top, 24)
-                                    .padding(.bottom, 20)
+                                    .padding(.top, 12)
+                                    .padding(.bottom, 12)
+                                    
+                                    Spacer(minLength: 12)
                                 }
                             }
                         } else {
@@ -779,6 +789,76 @@ struct CheckLimitButtonStyle: ButtonStyle {
     }
 }
 
+// Free-tier upgrade banner — same size as task buttons (height 64, cornerRadius 16)
+struct ChatUpgradeBanner: View {
+    var onUpgrade: () -> Void
+    private static let premiumGold = Color(red: 0.91, green: 0.72, blue: 0.2)
+    
+    var body: some View {
+        HStack(spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(white: 0.2).opacity(0.3),
+                                Color(white: 0.15).opacity(0.2)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 40, height: 40)
+                    .overlay {
+                        Circle()
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.2),
+                                        Color.white.opacity(0.1)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1
+                            )
+                    }
+                Image(systemName: "crown.fill")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [Self.premiumGold.opacity(0.95), Self.premiumGold.opacity(0.8)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+            .frame(width: 40)
+            Text(AppL10n.t("chat.upgrade_banner_short"))
+                .font(.system(size: 15, weight: .medium, design: .rounded))
+                .foregroundColor(.white.opacity(0.9))
+                .lineSpacing(5)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Button(action: onUpgrade) {
+                Text(AppL10n.t("paywall.upgrade_button"))
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundColor(.black.opacity(0.9))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(Self.premiumGold))
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: 64)
+        .padding(.leading, 14)
+        .padding(.trailing, 16)
+        .liquidGlass(cornerRadius: 16)
+    }
+}
 
 struct CurrencyLoadingAnimation: View {
     @State private var animationOffsets: [CGFloat] = [0, 0, 0]
