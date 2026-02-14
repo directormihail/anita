@@ -80,6 +80,7 @@ struct ChatView: View {
             }
         }
         .onAppear {
+            Task { await subscriptionManager.refresh() }
             // If we have a current conversation but no messages loaded, try to load them
             if let conversationId = viewModel.currentConversationId, viewModel.messages.isEmpty {
                 Task {
@@ -132,9 +133,9 @@ struct ChatView: View {
                             .padding(.trailing, 16)
                     }
                     
-                    // Plan information - centered
+                    // Plan information - centered (from database via SubscriptionManager)
                     HStack(spacing: 8) {
-                        Text(AppL10n.t("plans.premium"))
+                        Text(subscriptionManager.subscriptionDisplayName)
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.white)
                         

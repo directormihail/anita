@@ -2190,13 +2190,42 @@ struct FinanceView: View {
                     .transition(.expandSection)
                 }
             }
-            
+        }
+    }
+    
+    /// Error banner at top of Finance page (same style as Chat).
+    private var financeErrorBanner: some View {
+        Group {
             if let errorMessage = viewModel.errorMessage {
-                Text(errorMessage)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.red.opacity(0.8))
-                    .padding(.horizontal, 20)
-                    .padding(.top, 4)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.red)
+                        Text(AppL10n.t("chat.error"))
+                            .font(.headline)
+                            .foregroundColor(.red)
+                        Spacer()
+                        Button(action: {
+                            viewModel.errorMessage = nil
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.gray)
+                        }
+                    }
+                    Text(errorMessage)
+                        .font(.subheadline)
+                        .foregroundColor(.white)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(12)
+                .background(Color.red.opacity(0.2))
+                .cornerRadius(8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.red.opacity(0.5), lineWidth: 1)
+                )
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
             }
         }
     }
@@ -2227,6 +2256,7 @@ struct FinanceView: View {
                             
                             ScrollView {
                                 VStack(spacing: 20) {
+                                    financeErrorBanner
                                     monthPickerView
                                     balanceCardView
                                     trendsAndComparisonsView

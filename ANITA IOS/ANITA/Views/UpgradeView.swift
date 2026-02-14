@@ -20,13 +20,11 @@ struct UpgradeView: View {
     
     private let networkService = NetworkService.shared
     
-    // Determine current plan - prioritize database subscription over StoreKit
+    // Determine current plan - prioritize database subscription over StoreKit. Only Free/Premium now; legacy "ultimate" → "pro".
     private var currentPlan: String {
-        // First check database subscription
         if let subscription = databaseSubscription, subscription.status == "active" {
-            return subscription.plan
+            return (subscription.plan == "pro" || subscription.plan == "ultimate") ? "pro" : "free"
         }
-        // Fallback to StoreKit if database not loaded yet
         if storeKitService.isPurchased("com.anita.pro.monthly") {
             return "pro"
         }
@@ -265,7 +263,6 @@ struct UpgradeView: View {
 enum PlanType {
     case free
     case pro
-    case ultimate
 }
 
 struct FreePlanCard: View {
@@ -404,8 +401,6 @@ struct SubscriptionPlanCard: View {
         switch planType {
         case .pro:
             return AppL10n.t("plans.premium")
-        case .ultimate:
-            return AppL10n.t("plans.ultimate")
         case .free:
             return AppL10n.t("plans.free")
         }
@@ -414,15 +409,6 @@ struct SubscriptionPlanCard: View {
     var planFeatures: [String] {
         switch planType {
         case .pro:
-            return [
-                AppL10n.t("plans.feature.unlimited_replies"),
-                AppL10n.t("plans.feature.full_ai"),
-                AppL10n.t("plans.feature.spending_limits"),
-                AppL10n.t("plans.feature.saving_goals"),
-                AppL10n.t("plans.feature.assets"),
-                AppL10n.t("plans.feature.full_budget")
-            ]
-        case .ultimate:
             return [
                 AppL10n.t("plans.feature.unlimited_replies"),
                 AppL10n.t("plans.feature.full_ai"),
@@ -446,8 +432,6 @@ struct SubscriptionPlanCard: View {
         switch planType {
         case .pro:
             return Self.premiumGold
-        case .ultimate:
-            return Color.purple
         case .free:
             return Color.gray
         }
@@ -456,8 +440,6 @@ struct SubscriptionPlanCard: View {
     var planIcon: String {
         switch planType {
         case .pro:
-            return "crown.fill"
-        case .ultimate:
             return "crown.fill"
         case .free:
             return "circle.fill"
@@ -688,7 +670,7 @@ struct SubscriptionPlanCard: View {
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
-                    lineWidth: (planType == .ultimate || planType == .pro) ? 1.5 : 1
+                    lineWidth: planType == .pro ? 1.5 : 1
                 )
                 .allowsHitTesting(false)
         )
@@ -697,8 +679,8 @@ struct SubscriptionPlanCard: View {
                 .fill(
                     LinearGradient(
                         gradient: Gradient(colors: [
-                            accentColor.opacity((planType == .ultimate || planType == .pro) ? 0.1 : 0.06),
-                            accentColor.opacity((planType == .ultimate || planType == .pro) ? 0.05 : 0.02)
+                            accentColor.opacity(planType == .pro ? 0.1 : 0.06),
+                            accentColor.opacity(planType == .pro ? 0.05 : 0.02)
                         ]),
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -747,8 +729,6 @@ struct SubscriptionPlanPlaceholder: View {
         switch planType {
         case .pro:
             return AppL10n.t("plans.premium")
-        case .ultimate:
-            return AppL10n.t("plans.ultimate")
         case .free:
             return AppL10n.t("plans.free")
         }
@@ -758,8 +738,6 @@ struct SubscriptionPlanPlaceholder: View {
         switch planType {
         case .pro:
             return "€4.99"
-        case .ultimate:
-            return "€9.99"
         case .free:
             return "$0"
         }
@@ -768,15 +746,6 @@ struct SubscriptionPlanPlaceholder: View {
     var planFeatures: [String] {
         switch planType {
         case .pro:
-            return [
-                AppL10n.t("plans.feature.unlimited_replies"),
-                AppL10n.t("plans.feature.full_ai"),
-                AppL10n.t("plans.feature.spending_limits"),
-                AppL10n.t("plans.feature.saving_goals"),
-                AppL10n.t("plans.feature.assets"),
-                AppL10n.t("plans.feature.full_budget")
-            ]
-        case .ultimate:
             return [
                 AppL10n.t("plans.feature.unlimited_replies"),
                 AppL10n.t("plans.feature.full_ai"),
@@ -800,8 +769,6 @@ struct SubscriptionPlanPlaceholder: View {
         switch planType {
         case .pro:
             return Self.premiumGold
-        case .ultimate:
-            return Color.purple
         case .free:
             return Color.gray
         }
@@ -810,8 +777,6 @@ struct SubscriptionPlanPlaceholder: View {
     var planIcon: String {
         switch planType {
         case .pro:
-            return "crown.fill"
-        case .ultimate:
             return "crown.fill"
         case .free:
             return "circle.fill"
@@ -931,14 +896,14 @@ struct SubscriptionPlanPlaceholder: View {
         .liquidGlass(cornerRadius: 16)
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(accentColor.opacity(0.4), lineWidth: (planType == .ultimate || planType == .pro) ? 1.5 : 1)
+                .stroke(accentColor.opacity(0.4), lineWidth: planType == .pro ? 1.5 : 1)
         )
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(
                     LinearGradient(
                         gradient: Gradient(colors: [
-                            accentColor.opacity((planType == .ultimate || planType == .pro) ? 0.08 : 0.04),
+                            accentColor.opacity(planType == .pro ? 0.08 : 0.04),
                             Color.clear
                         ]),
                         startPoint: .topLeading,

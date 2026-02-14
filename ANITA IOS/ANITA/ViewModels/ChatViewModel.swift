@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Network
 import SwiftUI
 
 @MainActor
@@ -21,6 +22,40 @@ class ChatViewModel: ObservableObject {
     
     /// Free tier: max user messages per calendar month.
     private static let freeTierMessagesPerMonth = 10
+    
+    /// Finance-themed, funny + friendly fallbacks when connection is bad or missing.
+    private static let connectionFallbackMessages: [String] = [
+        "No connection again—maybe time to check if that internet bill is actually doing its job? 📶💸 Try again when you’re back online!",
+        "I can’t reach you right now. Your Wi‑Fi might be on a coffee break (or we should look at that bill together later). Try again! ☕📡",
+        "Connection’s being shy. When it’s back, we can even chat about saving on your next internet bill—try again in a sec! 💡",
+        "Signal’s gone AWOL. Come back when you’re connected and we’ll pick up right where we left off (and maybe trim that internet budget). 📴✨",
+        "Your message didn’t make it through—connection’s napping. Better signal, then resend; I’ll be here counting the savings with you! 😴💰"
+    ]
+    
+    /// True when the error is due to network/connection (no internet, timeout, unreachable). Check this before treating as auth.
+    private static func isConnectionError(_ errorDesc: String) -> Bool {
+        let lower = errorDesc.lowercased()
+        return lower.contains("timed out") || lower.contains("timeout")
+            || lower.contains("cannot find host") || lower.contains("cannot connect")
+            || lower.contains("no internet connection") || lower.contains("offline")
+            || lower.contains("the internet connection appears to be offline")
+            || lower.contains("could not connect") || lower.contains("network error")
+    }
+    
+    /// Returns true if the device has a network path (Wi‑Fi or cellular). Use before health check so we show connection fallback when offline instead of auth.
+    private static func hasDeviceNetwork() async -> Bool {
+        await withCheckedContinuation { continuation in
+            let monitor = NWPathMonitor()
+            var resolved = false
+            monitor.pathUpdateHandler = { path in
+                guard !resolved else { return }
+                resolved = true
+                monitor.cancel()
+                continuation.resume(returning: path.status == .satisfied)
+            }
+            monitor.start(queue: DispatchQueue.global(qos: .userInitiated))
+        }
+    }
     
     private let networkService = NetworkService.shared
     private let supabaseService = SupabaseService.shared
@@ -594,6 +629,19 @@ class ChatViewModel: ObservableObject {
                 
                 // No trigger words: every message is sent to the AI. The AI analyzes the full message and conversation context, interprets intent, and responds (no client-side shortcuts).
                 
+                // Device has no network (e.g. airplane mode, WiFi off) → show connection fallback so we never show sign-in by mistake
+                if !(await Self.hasDeviceNetwork()) {
+                    print("[ChatViewModel] No device network path")
+                    await MainActor.run {
+                        let fallbackText = Self.connectionFallbackMessages.randomElement() ?? Self.connectionFallbackMessages[0]
+                        let fallbackMessage = ChatMessage(role: "assistant", content: fallbackText)
+                        messages.append(fallbackMessage)
+                        isLoading = false
+                        errorMessage = nil
+                    }
+                    return
+                }
+                
                 // First, check backend connection
                 print("[ChatViewModel] Checking backend connection...")
                 do {
@@ -602,12 +650,11 @@ class ChatViewModel: ObservableObject {
                 } catch {
                     print("[ChatViewModel] Backend connection failed: \(error.localizedDescription)")
                     await MainActor.run {
-                        errorMessage = "Cannot connect to backend. Please check:\n1. Backend is running on port 3001\n2. Backend URL is correct in Settings\n3. Device and backend are on same network"
+                        let fallbackText = Self.connectionFallbackMessages.randomElement() ?? Self.connectionFallbackMessages[0]
+                        let fallbackMessage = ChatMessage(role: "assistant", content: fallbackText)
+                        messages.append(fallbackMessage)
                         isLoading = false
-                        if let index = messages.firstIndex(where: { $0.id == userMessage.id }) {
-                            messages.remove(at: index)
-                        }
-                        inputText = messageText
+                        errorMessage = nil
                     }
                     return
                 }
@@ -623,15 +670,24 @@ class ChatViewModel: ObservableObject {
                     } catch {
                         print("[ChatViewModel] Failed to create conversation: \(error.localizedDescription)")
                         let errorDesc = error.localizedDescription
+                        // Connection errors first: no internet / timeout must show connection fallback, not sign-in
+                        if Self.isConnectionError(errorDesc) {
+                            await MainActor.run {
+                                let fallbackText = Self.connectionFallbackMessages.randomElement() ?? Self.connectionFallbackMessages[0]
+                                let fallbackMessage = ChatMessage(role: "assistant", content: fallbackText)
+                                messages.append(fallbackMessage)
+                                isLoading = false
+                                errorMessage = nil
+                            }
+                            return
+                        }
+                        // Then auth errors
                         var userFriendlyError = errorDesc
-                        
-                        // Provide more helpful error messages for authentication issues
                         if errorDesc.contains("sign in") || errorDesc.contains("authenticate") || errorDesc.contains("User not found") {
                             userFriendlyError = "Please sign in to use ANITA. Go to Settings → Sign In to authenticate your account."
                         } else if errorDesc.contains("foreign key") || errorDesc.contains("does not exist") {
                             userFriendlyError = "User account not found. Please sign in or sign up first. Go to Settings to authenticate."
                         }
-                        
                         await MainActor.run {
                             errorMessage = userFriendlyError
                             isLoading = false
@@ -713,25 +769,33 @@ class ChatViewModel: ObservableObject {
             } catch {
                 print("[ChatViewModel] Error sending message: \(error)")
                 let errorDesc = error.localizedDescription
-                var userFriendlyError = errorDesc
-                
-                // Provide more helpful error messages
-                if errorDesc.contains("timed out") || errorDesc.contains("timeout") {
-                    userFriendlyError = "Request timed out. Please check your internet connection and try again."
-                } else if errorDesc.contains("cannot find host") || errorDesc.contains("cannot connect") {
-                    userFriendlyError = "Cannot connect to backend server. Please check:\n1. Backend is running\n2. Backend URL in Settings is correct\n3. Device and backend are on same network"
-                } else if errorDesc.contains("The Internet connection appears to be offline") {
-                    userFriendlyError = "No internet connection. Please check your network settings."
-                }
-                
-                await MainActor.run {
-                    errorMessage = userFriendlyError
-                    isLoading = false
-                    // Remove the user message if sending failed
-                    if let index = messages.firstIndex(where: { $0.id == userMessage.id }) {
-                        messages.remove(at: index)
+                if Self.isConnectionError(errorDesc) {
+                    // In-chat fallback: keep user message and reply with a funny connection message
+                    await MainActor.run {
+                        let fallbackText = Self.connectionFallbackMessages.randomElement() ?? Self.connectionFallbackMessages[0]
+                        let fallbackMessage = ChatMessage(role: "assistant", content: fallbackText)
+                        messages.append(fallbackMessage)
+                        isLoading = false
+                        errorMessage = nil
                     }
-                    inputText = messageText // Restore input text
+                } else {
+                    // Non-connection errors: show error and restore input
+                    var userFriendlyError = errorDesc
+                    if errorDesc.contains("timed out") || errorDesc.contains("timeout") {
+                        userFriendlyError = "Request timed out. Please check your internet connection and try again."
+                    } else if errorDesc.contains("cannot find host") || errorDesc.contains("cannot connect") {
+                        userFriendlyError = "Cannot connect to backend server. Please check:\n1. Backend is running\n2. Backend URL in Settings is correct\n3. Device and backend are on same network"
+                    } else if errorDesc.contains("The Internet connection appears to be offline") {
+                        userFriendlyError = "No internet connection. Please check your network settings."
+                    }
+                    await MainActor.run {
+                        errorMessage = userFriendlyError
+                        isLoading = false
+                        if let index = messages.firstIndex(where: { $0.id == userMessage.id }) {
+                            messages.remove(at: index)
+                        }
+                        inputText = messageText
+                    }
                 }
             }
         }

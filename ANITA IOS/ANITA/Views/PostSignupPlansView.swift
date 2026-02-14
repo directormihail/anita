@@ -14,10 +14,10 @@ struct PostSignupPlansView: View {
     private let networkService = NetworkService.shared
     let onContinue: () -> Void
     
-    // Determine current plan - prioritize database subscription over StoreKit
+    // Determine current plan - prioritize database subscription over StoreKit. Only Free/Premium now; legacy "ultimate" → "pro".
     private var currentPlan: String {
         if let subscription = databaseSubscription, subscription.status == "active" {
-            return subscription.plan
+            return (subscription.plan == "pro" || subscription.plan == "ultimate") ? "pro" : "free"
         }
         if storeKitService.isPurchased("com.anita.pro.monthly") {
             return "pro"

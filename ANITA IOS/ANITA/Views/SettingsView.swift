@@ -33,9 +33,8 @@ struct SettingsView: View {
     @State private var currentLanguageCode: String = AppL10n.currentLanguageCode()
     @State private var languageRefreshTrigger = UUID()
     
-    // Subscription
-    @State private var subscriptionPlan: String? = nil
-    @State private var isLoadingSubscription = false
+    // Subscription (display name from SubscriptionManager — database-backed)
+    @StateObject private var subscriptionManager = SubscriptionManager.shared
     @State private var showUpgradeView = false
     
     // Data export/import
@@ -135,7 +134,7 @@ struct SettingsView: View {
                                             .foregroundColor(.white.opacity(0.95))
                                         
                                         HStack(spacing: 6) {
-                                            Text(subscriptionPlan?.capitalized ?? AppL10n.t("plans.free"))
+                                            Text(subscriptionManager.subscriptionDisplayName)
                                                 .font(.system(size: 14, weight: .medium))
                                                 .foregroundColor(.white.opacity(0.7))
                                             Text(AppL10n.t("plans.current").components(separatedBy: " ").last ?? "Plan")
@@ -236,8 +235,8 @@ struct SettingsView: View {
                     }
                     .onAppear {
                         loadProfile()
-                        loadSubscription()
                         loadPreferences()
+                        Task { await subscriptionManager.refresh() }
                     }
                     
                     // Preferences Section
@@ -323,7 +322,7 @@ struct SettingsView: View {
                                     icon: "crown.fill",
                                     iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
                                     title: AppL10n.t("settings.manage_subscription"),
-                                    value: subscriptionPlan?.capitalized ?? AppL10n.t("plans.free"),
+                                    value: subscriptionManager.subscriptionDisplayName,
                                     showChevron: true
                                 ) {}
                             }
@@ -563,6 +562,11 @@ struct SettingsView: View {
         .sheet(isPresented: $showUpgradeView) {
             UpgradeView()
         }
+        .onChange(of: showUpgradeView) { _, isShowing in
+            if !isShowing {
+                Task { await subscriptionManager.refresh() }
+            }
+        }
         .sheet(isPresented: $showBackendURLSheet) {
             BackendURLSheet(
                 urlText: $backendURLText,
@@ -736,21 +740,6 @@ struct SettingsView: View {
             } catch {
                 print("[SettingsView] Failed to save name to database: \(error)")
                 await MainActor.run { isSavingName = false }
-            }
-        }
-    }
-    
-    func loadSubscription() {
-        guard userManager.isAuthenticated else { return }
-        
-        Task {
-            do {
-                let response = try await networkService.getSubscription(userId: userManager.userId)
-                await MainActor.run {
-                    subscriptionPlan = response.subscription.plan
-                }
-            } catch {
-                print("Error loading subscription: \(error)")
             }
         }
     }
