@@ -180,10 +180,68 @@ const STANDARD_CATEGORIES: { [key: string]: string } = {
   'miscellaneous': 'Other'
 };
 
+// Context phrases checked first (longer = more specific). Order matters: e.g. "food delivery" must match before "food".
+const CONTEXT_PHRASES: Array<{ phrase: string; category: string }> = [
+  // Dining Out (check before "food" → Groceries)
+  { phrase: 'food delivery', category: 'Dining Out' },
+  { phrase: 'dining out', category: 'Dining Out' },
+  { phrase: 'takeout', category: 'Dining Out' },
+  { phrase: 'take out', category: 'Dining Out' },
+  { phrase: 'fast food', category: 'Dining Out' },
+  { phrase: 'restaurant', category: 'Dining Out' },
+  { phrase: 'cafe', category: 'Dining Out' },
+  { phrase: 'coffee shop', category: 'Dining Out' },
+  { phrase: 'pizza', category: 'Dining Out' },
+  { phrase: 'delivery', category: 'Dining Out' },
+  { phrase: 'lunch', category: 'Dining Out' },
+  { phrase: 'dinner', category: 'Dining Out' },
+  { phrase: 'breakfast', category: 'Dining Out' },
+  // Groceries (supermarket, food at home)
+  { phrase: 'grocerries', category: 'Groceries' },
+  { phrase: 'groceries', category: 'Groceries' },
+  { phrase: 'grocery', category: 'Groceries' },
+  { phrase: 'supermarket', category: 'Groceries' },
+  { phrase: 'food shop', category: 'Groceries' },
+  { phrase: 'food store', category: 'Groceries' },
+  // Personal care
+  { phrase: 'haircut', category: 'Personal Care' },
+  { phrase: 'salon', category: 'Personal Care' },
+  { phrase: 'barber', category: 'Personal Care' },
+  { phrase: 'personal care', category: 'Personal Care' },
+  // Streaming
+  { phrase: 'streaming services', category: 'Streaming Services' },
+  { phrase: 'streaming', category: 'Streaming Services' },
+  { phrase: 'netflix', category: 'Streaming Services' },
+  { phrase: 'spotify', category: 'Streaming Services' },
+  { phrase: 'subscription', category: 'Streaming Services' },
+  // Transport
+  { phrase: 'rideshare & taxi', category: 'Rideshare & Taxi' },
+  { phrase: 'rideshare', category: 'Rideshare & Taxi' },
+  { phrase: 'uber', category: 'Rideshare & Taxi' },
+  { phrase: 'lyft', category: 'Rideshare & Taxi' },
+  { phrase: 'taxi', category: 'Rideshare & Taxi' },
+  { phrase: 'public transportation', category: 'Public Transportation' },
+  { phrase: 'gas & heating', category: 'Gas & Heating' },
+  { phrase: 'gas bill', category: 'Gas & Heating' },
+  { phrase: 'heating', category: 'Gas & Heating' },
+  { phrase: 'gas & fuel', category: 'Gas & Fuel' },
+  { phrase: 'gasoline', category: 'Gas & Fuel' },
+  { phrase: 'gas station', category: 'Gas & Fuel' },
+  { phrase: 'gas', category: 'Gas & Fuel' },
+  { phrase: 'fuel', category: 'Gas & Fuel' },
+  // Income (for add-income flow only)
+  { phrase: 'freelance & side income', category: 'Freelance & Side Income' },
+  { phrase: 'freelance', category: 'Freelance & Side Income' },
+  { phrase: 'side income', category: 'Freelance & Side Income' },
+  { phrase: 'salary', category: 'Salary' },
+  { phrase: 'paycheck', category: 'Salary' },
+  { phrase: 'wage', category: 'Salary' },
+];
+
 /**
  * Normalize category name to standard format
  * - Converts to proper case (not all caps)
- * - Maps common variations to standard names
+ * - Maps common variations to standard names (context-aware: longer phrases first)
  * - Detects restaurant/fast food names and maps to "Dining Out"
  * - Returns "Other" as default
  */
@@ -210,12 +268,19 @@ export function normalizeCategory(category: string | null | undefined): string {
     }
   }
   
+  // Context-aware: match longer phrases first so "food delivery" → Dining Out, not "food" → Groceries
+  for (const { phrase, category } of CONTEXT_PHRASES) {
+    if (lowercased.includes(phrase) || phrase.includes(lowercased)) {
+      return category;
+    }
+  }
+  
   // Check if it's already a standard category (case-insensitive)
   if (STANDARD_CATEGORIES[lowercased]) {
     return STANDARD_CATEGORIES[lowercased];
   }
   
-  // Check if it matches any standard category (fuzzy match)
+  // Check if it matches any standard category (fuzzy match) — shorter keys may match now
   for (const [key, value] of Object.entries(STANDARD_CATEGORIES)) {
     if (lowercased.includes(key) || key.includes(lowercased)) {
       return value;

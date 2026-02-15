@@ -126,12 +126,54 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
     // This ensures the AI has access to user's financial data and strict pattern rules on every request
     let systemPrompt: string | null = null;
     const supabase = getSupabaseClient();
+    let transactionAddedInPreCall = false;
     if (userId && supabase) {
       try {
         // Use conversationId if provided, otherwise use empty string (will still fetch transactions)
         systemPrompt = await buildSystemPrompt(userId, conversationId || '');
+        // If we can extract a full transaction from the conversation, add it to the DB first and verify;
+        // then tell the AI to confirm. This way we only confirm after the backend has actually added it.
+        const txFromConversation = extractTransactionFromConversation(sanitizedMessages);
+        if (txFromConversation && systemPrompt) {
+          const messageId = `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          const transactionData: any = {
+            account_id: userId,
+            message_text: txFromConversation.description,
+            transaction_type: txFromConversation.type,
+            transaction_amount: txFromConversation.amount,
+            transaction_category: normalizeCategory(txFromConversation.category),
+            transaction_description: txFromConversation.description,
+            data_type: 'transaction',
+            message_id: messageId,
+            created_at: new Date().toISOString()
+          };
+          const { error: insertErr } = await supabase
+            .from('anita_data')
+            .insert([transactionData])
+            .select()
+            .single();
+          if (!insertErr) {
+            const { data: verified } = await supabase
+              .from('anita_data')
+              .select('message_id')
+              .eq('account_id', userId)
+              .eq('message_id', messageId)
+              .eq('data_type', 'transaction')
+              .maybeSingle();
+            if (verified) {
+              transactionAddedInPreCall = true;
+              const currencySymbol = systemPrompt.includes('€') ? '€' : systemPrompt.includes('£') ? '£' : '$';
+              systemPrompt += `\n\n[BACKEND INSTRUCTION - FOLLOW EXACTLY] The following transaction was just successfully added to the database by the system: ${txFromConversation.type} ${currencySymbol}${txFromConversation.amount} in category "${txFromConversation.category}" (${txFromConversation.description}). Confirm this to the user in a short, friendly message with ✅. Do NOT say you are about to add it or will add it — it is already saved.`;
+              logger.info('Pre-call transaction added and verified', { requestId, userId, type: txFromConversation.type, amount: txFromConversation.amount });
+              await supabase.from('xp_rules').upsert(
+                { id: 'transaction_added', category: 'Engagement', name: 'Add a transaction', xp_amount: 10, description: 'Add any income, expense, or transfer', frequency: 'event', extra_meta: {}, updated_at: new Date().toISOString() },
+                { onConflict: 'id' }
+              );
+              await supabase.rpc('award_xp', { p_user_id: userId, p_rule_id: 'transaction_added', p_metadata: {} }).then(() => {}, () => {});
+            }
+          }
+        }
         // Always insert backend system prompt at the beginning, even if the client already sent a system message.
-        // This guarantees Anita always sees the database snapshot + pattern rules first.
         if (systemPrompt) {
           sanitizedMessages.unshift({
             role: 'system',
@@ -246,12 +288,16 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
       logger.info('Replaced standard goodbye with friendly Duolingo-style goodbye', { requestId });
     }
 
-    // When AI confirms it added an expense/income, persist the transaction to the database
-    // so it appears in the transactions list (client may have gone through backend flow only).
-    if (userId && supabase) {
+    // When AI confirms it added an expense/income, we MUST persist and verify in DB before showing success.
+    // Never show a confirmation (✅) to the user unless the transaction is actually in the database.
+    if (userId && supabase && !transactionAddedInPreCall) {
       try {
-        const tx = parseTransactionFromAiResponse(sanitizedMessages, aiResponse);
+        let tx = parseTransactionFromAiResponse(sanitizedMessages, aiResponse);
+        if (!tx && looksLikeTransactionConfirmation(aiResponse)) {
+          tx = parseTransactionFromConfirmationFallback(sanitizedMessages, aiResponse);
+        }
         if (tx) {
+          const messageId = `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
           const transactionData: any = {
             account_id: userId,
             message_text: tx.description,
@@ -260,7 +306,7 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
             transaction_category: normalizeCategory(tx.category),
             transaction_description: tx.description,
             data_type: 'transaction',
-            message_id: `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            message_id: messageId,
             created_at: new Date().toISOString()
           };
           const { error } = await supabase
@@ -272,33 +318,52 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
             logger.warn('Failed to persist AI-confirmed transaction', { error: error.message, requestId, type: tx.type, amount: tx.amount });
             finalResponse = "I couldn't save that transaction. Please try again or add it from the Finance page.";
           } else {
-            logger.info('Persisted AI-confirmed transaction', { requestId, userId, type: tx.type, amount: tx.amount, category: tx.category });
-            // Award XP for adding transaction (same as save-transaction)
-            await supabase.from('xp_rules').upsert(
-              {
-                id: 'transaction_added',
-                category: 'Engagement',
-                name: 'Add a transaction',
-                xp_amount: 10,
-                description: 'Add any income, expense, or transfer',
-                frequency: 'event',
-                extra_meta: {},
-                updated_at: new Date().toISOString()
-              },
-              { onConflict: 'id' }
-            );
-            const { error: xpError } = await supabase.rpc('award_xp', {
-              p_user_id: userId,
-              p_rule_id: 'transaction_added',
-              p_metadata: {}
-            });
-            if (xpError) {
-              logger.warn('award_xp RPC failed after AI transaction', { requestId, userId, error: xpError.message });
+            // Always verify in DB before saying anything is done — check every time, not just first time
+            const { data: verified, error: verifyErr } = await supabase
+              .from('anita_data')
+              .select('message_id')
+              .eq('account_id', userId)
+              .eq('message_id', messageId)
+              .eq('data_type', 'transaction')
+              .maybeSingle();
+            if (verifyErr || !verified) {
+              logger.warn('Transaction insert succeeded but verification failed', { requestId, messageId, verifyError: verifyErr?.message });
+              finalResponse = "I couldn't save that transaction. Please try again or add it from the Finance page.";
+            } else {
+              logger.info('Persisted and verified AI-confirmed transaction', { requestId, userId, type: tx.type, amount: tx.amount, category: tx.category });
+              await supabase.from('xp_rules').upsert(
+                {
+                  id: 'transaction_added',
+                  category: 'Engagement',
+                  name: 'Add a transaction',
+                  xp_amount: 10,
+                  description: 'Add any income, expense, or transfer',
+                  frequency: 'event',
+                  extra_meta: {},
+                  updated_at: new Date().toISOString()
+                },
+                { onConflict: 'id' }
+              );
+              const { error: xpError } = await supabase.rpc('award_xp', {
+                p_user_id: userId,
+                p_rule_id: 'transaction_added',
+                p_metadata: {}
+              });
+              if (xpError) {
+                logger.warn('award_xp RPC failed after AI transaction', { requestId, userId, error: xpError.message });
+              }
             }
           }
+        } else if (looksLikeTransactionConfirmation(aiResponse)) {
+          // AI response looks like a success (✅ + amount) but we couldn't parse or persist — never show false success
+          logger.warn('AI sent confirmation-like response but no transaction persisted', { requestId, aiResponsePreview: aiResponse.slice(0, 120) });
+          finalResponse = "I couldn't save that transaction. Please try again or add it from the Finance page.";
         }
       } catch (err) {
         logger.warn('Error persisting AI-confirmed transaction', { error: err instanceof Error ? err.message : 'Unknown', requestId });
+        if (looksLikeTransactionConfirmation(aiResponse)) {
+          finalResponse = "I couldn't save that transaction. Please try again or add it from the Finance page.";
+        }
       }
     }
 
@@ -632,6 +697,9 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
       }
     }
 
+    // Verify and sanitize response before sending (strip internal markers, debug text)
+    finalResponse = verifyAndSanitizeAssistantResponse(finalResponse);
+
     logger.info('Chat completion successful', { requestId });
     const responseData: any = { 
       response: finalResponse,
@@ -704,6 +772,37 @@ function getFriendlyFallbackMessage(displayName?: string): string {
 }
 
 /**
+ * Verify and sanitize the assistant response before sending to the user.
+ * Strips internal markers, debug lines, and ensures we never send reasoning or pattern labels.
+ */
+function verifyAndSanitizeAssistantResponse(content: string): string {
+  if (!content || typeof content !== 'string') return content;
+  let out = content.trim();
+  // Remove lines that are only internal markers or debug (e.g. [END], [P1], "Thinking:", "Step 2:")
+  const internalPatterns = [
+    /^\s*\[END\]\s*$/i,
+    /^\s*\[P[1-6]\]\s*$/i,
+    /^\s*Thinking:\s*$/i,
+    /^\s*Interpretation:\s*$/i,
+    /^\s*Step\s+\d+[.:]\s*$/i,
+    /^\s*Verification:\s*$/i,
+    /^\s*\(internal[^)]*\)\s*$/i,
+  ];
+  out = out
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => {
+      if (!line) return false;
+      return !internalPatterns.some(p => p.test(line));
+    })
+    .join('\n')
+    .trim();
+  // Strip trailing marker-like fragments on the same line (e.g. "Got it. [END]")
+  out = out.replace(/\s*\[END\]\s*$/i, '').replace(/\s*\[P[1-6]\]\s*$/i, '').trim();
+  return out.length > 0 ? out : content.trim();
+}
+
+/**
  * Returns a funny, Duolingo-style goodbye that tells the user to come back.
  * Used when the user says "no" to budget analysis, setting a limit, etc.
  */
@@ -765,9 +864,9 @@ export function parseTransactionFromAiResponse(
   const r = aiResponse.trim();
   const lastUserMessage = messages.filter(m => m.role === 'user').pop()?.content?.trim() || '';
 
-  // AI confirmed it added a transaction
-  const addedExpense = /(?:I've added your expense|added your expense|I've noted your .*?expense|noted your .*?expense)/i.test(r);
-  const addedIncome = /(?:I've added your income|added your income|I've noted your .*?income|noted your .*?income)/i.test(r);
+  // AI confirmed it added a transaction (broad patterns so we don't miss phrasings)
+  const addedExpense = /(?:I've added your expense|added your expense|I've noted your .*?expense|noted your .*?expense|Got it[,!].*?added.*?expense|Done[!.]?.*?added.*?expense|Saved your expense|added.*?expense of|expense of \$\d)/i.test(r);
+  const addedIncome = /(?:I've added your income|added your income|I've noted your .*?income|noted your .*?income|Got it[,!].*?added.*?income|Done[!.]?.*?added.*?income|Saved your income|added.*?income of|income of \$\d)/i.test(r);
   const type: 'expense' | 'income' | null = addedExpense ? 'expense' : addedIncome ? 'income' : null;
   if (!type) return null;
 
@@ -789,13 +888,127 @@ export function parseTransactionFromAiResponse(
   let categoryFromPhrase = categoryMatch ? categoryMatch[1].trim() : (yourCategoryExpense && yourCategoryExpense[1] ? yourCategoryExpense[1].trim() : null);
   // For expense, never use income-only categories
   if (type === 'expense' && (categoryFromPhrase === 'Salary' || categoryFromPhrase === 'Freelance & Side Income')) categoryFromPhrase = null;
-  const category = categoryFromPhrase || 'Other';
+  const category = normalizeCategory(categoryFromPhrase || 'Other');
 
-  // Description: from parentheses "(Haircut)" or last user message
+  // Description: prefer AI's short description in parentheses, else shortify from context
   const parenMatch = r.match(/\(([^)]+)\)/);
-  const description = (parenMatch ? parenMatch[1].trim() : null) || lastUserMessage || `${type} ${amount}`;
+  const description = (parenMatch ? parenMatch[1].trim() : null) || shortifyDescription(lastUserMessage, category) || `${type} ${amount}`;
 
   return { type, amount, category, description };
+}
+
+/**
+ * Shortify user message into a 1–4 word description for the transaction (e.g. "Spent 7.26 on grocerries" → "Groceries", "21 on the haircut" → "Haircut").
+ */
+function shortifyDescription(userMessage: string, category: string): string {
+  if (!userMessage || !userMessage.trim()) return category;
+  const words = userMessage.trim().split(/\s+/).filter(w => w.length > 0);
+  const skip = new Set(['spent', 'paid', 'payed', 'cost', 'on', 'for', 'at', 'the', 'a', 'an', 'next', 'added', 'income', 'expense', 'eur', 'usd', 'dollars', 'euros']);
+  const numeric = /^\d+([.,]\d+)?[bkm]?$/i;
+  const meaningful = words.filter(w => !skip.has(w.toLowerCase().replace(/[^a-z]/g, '')) && !numeric.test(w.replace(/[.,]/g, '')));
+  if (meaningful.length === 0) return category;
+  const phrase = meaningful.slice(0, 3).join(' ').replace(/[^a-zA-Z\s&]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (phrase.length < 2) return category;
+  const capped = phrase.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  return capped.length <= 50 ? capped : capped.slice(0, 47) + '...';
+}
+
+/**
+ * Detect if the AI response looks like a transaction confirmation (e.g. "Got it — $7.26 for groceries. Yum! ✅")
+ * even when it doesn't use the exact "I've added your expense" phrasing. Used so we never show ✅ without verifying DB.
+ */
+function looksLikeTransactionConfirmation(aiResponse: string): boolean {
+  const r = aiResponse.trim();
+  if (!r.includes('✅')) return false;
+  const hasAmount = /[$€£¥]\s*\d+(?:[.,]\d{2})?|\d+(?:[.,]\d{2})?\s*(?:€|eur|\$|usd|dollars?)/i.test(r);
+  const hasCategory = /\bfor\s+[a-z\s&]+\b|groceries|dining|rent|entertainment|shopping|personal care|salary|other/i.test(r);
+  return !!(hasAmount && (hasCategory || /for\s+\w+/.test(r)));
+}
+
+/**
+ * Fallback: extract transaction from AI response when it looks like a confirmation (✅ + amount + category)
+ * but doesn't match the strict "added your expense" regex. E.g. "Got it — $7.26 for groceries. Yum! ✅"
+ */
+function parseTransactionFromConfirmationFallback(
+  messages: Array<{ role: string; content: string }>,
+  aiResponse: string
+): { type: 'expense' | 'income'; amount: number; category: string; description: string } | null {
+  if (!looksLikeTransactionConfirmation(aiResponse)) return null;
+  const r = aiResponse.trim();
+  const lastUserMessage = messages.filter(m => m.role === 'user').pop()?.content?.trim() || '';
+  const lastAssistant = messages.filter(m => m.role === 'assistant' || (m as any).role === 'anita').pop()?.content?.trim() || '';
+
+  const amountMatch = r.match(/(?:of\s+)?[$€£¥]?\s*(\d+(?:[.,]\d{2})?|\d+)/);
+  let amount = amountMatch ? parseFloat(amountMatch[1].replace(',', '.')) : NaN;
+  const userAmount = extractAmountFromUserMessage(lastUserMessage);
+  if (!Number.isFinite(amount) && userAmount != null) amount = userAmount;
+  else if (userAmount != null && Number.isFinite(amount) && (amount <= 10 && userAmount > 10 || Math.abs(amount - userAmount) > 0.01)) amount = userAmount;
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+
+  const categoryMatch = r.match(/for\s+([a-z\s&]+?)(?:\s*[.!,]|\s*$)/i);
+  const categoryPhrase = categoryMatch ? categoryMatch[1].trim() : null;
+  const category = normalizeCategory(categoryPhrase || extractCategoryFromUserMessage(lastUserMessage) || 'Other');
+
+  const type: 'expense' | 'income' =
+    /income|salary|freelance|earned|received|einkommen/i.test(lastAssistant) && !/expense|spent|paid|ausgabe/i.test(lastAssistant)
+      ? 'income'
+      : 'expense';
+  if (type === 'expense' && (category === 'Salary' || category === 'Freelance & Side Income')) return null;
+  const parenMatch = r.match(/\(([^)]+)\)/);
+  const description = (parenMatch ? parenMatch[1].trim() : null) || shortifyDescription(lastUserMessage, category) || `${type} ${amount} ${category}`;
+  return { type, amount, category, description };
+}
+
+/**
+ * Extract a full transaction from the conversation when the user has given type, amount, category in one or two messages.
+ * Used to add the transaction in the backend BEFORE calling the AI, so we only confirm after it's actually saved.
+ * Returns { type, amount, category, description } or null.
+ */
+function extractTransactionFromConversation(
+  messages: Array<{ role: string; content: string }>
+): { type: 'expense' | 'income'; amount: number; category: string; description: string } | null {
+  const lastUser = messages.filter(m => m.role === 'user').pop()?.content?.trim() || '';
+  if (!lastUser) return null;
+  const lower = lastUser.toLowerCase();
+  const isAddExpense = /add\s+expense|expense\s+\d|spent\s+\d|paid\s+\d|ausgabe\s+hinzufügen/i.test(lastUser) || (lower.includes('expense') && /\d+(?:[.,]\d{2})?/.test(lastUser));
+  const isAddIncome = /add\s+income|income\s+\d|earned\s+\d|received\s+\d|einkommen\s+hinzufügen/i.test(lastUser) || (lower.includes('income') && /\d+(?:[.,]\d{2})?/.test(lastUser));
+  const type: 'expense' | 'income' | null = isAddIncome ? 'income' : isAddExpense ? 'expense' : null;
+  if (!type) return null;
+  const amount = extractAmountFromUserMessage(lastUser);
+  if (amount == null || amount <= 0 || !Number.isFinite(amount)) return null;
+  const categoryFromMessage = extractCategoryFromUserMessage(lastUser);
+  const category = categoryFromMessage || 'Other';
+  const description = shortifyDescription(lastUser, category) || `${type} ${amount} ${category}`;
+  return { type, amount, category, description };
+}
+
+/**
+ * Extract category from user message for add expense/income using full message context.
+ * Always normalizes via normalizeCategory so Finance page and chat use the same canonical categories.
+ */
+function extractCategoryFromUserMessage(message: string): string {
+  const m = message.trim();
+  if (!m) return 'Other';
+  // Extract phrase after "on", "for", "at" (e.g. "spent 7.26 on groceries", "9.10 for groceries", "at supermarket")
+  const onMatch = m.match(/(?:on|for|at)\s+([a-z\s&]+?)(?:\s|$|,|\.)/i);
+  const phrase = onMatch ? onMatch[1].trim() : null;
+  if (phrase && phrase.length >= 2) {
+    const normalized = normalizeCategory(phrase);
+    if (normalized !== 'Other') return normalized;
+  }
+  // Use full message so "Spent 7.26b on grocerries" → we try "grocerries" and "7.26b on grocerries" etc.
+  const normalizedFull = normalizeCategory(m);
+  if (normalizedFull !== 'Other') return normalizedFull;
+  // Try last word as category (e.g. "next 9.10 on groceries" → "groceries")
+  const words = m.split(/\s+/).filter(Boolean);
+  for (let i = words.length - 1; i >= Math.max(0, words.length - 3); i--) {
+    const w = words[i].replace(/[^a-z&]/gi, '');
+    if (w.length >= 2) {
+      const n = normalizeCategory(w);
+      if (n !== 'Other') return n;
+    }
+  }
+  return 'Other';
 }
 
 /**
@@ -1610,6 +1823,9 @@ STEP 3 — EXECUTE THE CHOSEN PATTERN:
 - Write your reply so it does only what that pattern step says. Keep it short (max 3 sentences). No philosophy, no motivation, no invented information.
 - Do not add [END] or any other marker at the end. Your reply must end with normal text only (or the goodbye phrase if the pattern says so).
 
+STEP 4 — VERIFY BEFORE SENDING (mandatory before you output):
+- Before you output your reply, verify: (1) Your reply is in the correct language (as specified for the user). (2) Your reply contains no internal markers, tags, or debug text (e.g. [END], [P1]–[P6], "Step 2:", "Thinking:", "Interpretation:"). (3) Your reply matches the pattern you chose: e.g. if P2 confirmation, it clearly confirms expense with amount and category; if asking for input, it asks for the right missing piece only. (4) If you are unsure what the user meant, ask one short clarifying question instead of guessing. Output only the final user-facing message; the user must never see internal reasoning or pattern labels.
+
 AMOUNT AND CATEGORY — CRITICAL (avoid wrong amount/category):
 - Amount: Use the amount the user actually PAID or RECEIVED (the main money figure). Ignore numbers that describe frequency (e.g. "every 3 months", "3 times a year"), count, or other context. Prefer the number that appears with "paid", "payed", "cost", "for it", "amount", or that has a decimal/comma (e.g. 55,08 or 55.08). Example: "I pay radio tax every 3 month, payed 55,08 for it" → amount is 55.08, NOT 3.
 - For expenses (P2): NEVER use "Salary" or "Freelance & Side Income" — those are INCOME-only categories. Use only expense categories from the list (e.g. Groceries, Rent, Internet & Phone, Other).
@@ -1621,11 +1837,11 @@ THE 6 PATTERNS (interpret first, then choose one — follow exactly):
 
 P1 — Add Income:
 - Step 1: Ask for category of income, amount, and optionally a short description. Name example categories (e.g. Salary, Freelance & Side Income, Other). Do not ask for amount only — always ask for category and amount (and optional description).
-- Step 2: After you have category and amount, create the transaction in the finance page, then send a friendly confirmation with ✅ and a button to review income. Do not confirm until you have both category and amount. Use only a category from the Categories list below; interpret user wording (e.g. "salary", "paycheck", "job") as Salary; "freelance", "side gig" as Freelance & Side Income.
+- Step 2: After you have category and amount, send a friendly confirmation with ✅. Include a short, context-based description in parentheses (1–4 words) that will be stored as the transaction description. Example: "I've added your income of \${amount} for {category} (Salary). ✅" or "(Freelance project). ✅". The backend saves the transaction when it has type, amount, and category; only after it is saved will the user see your confirmation. Use only a category from the Categories list below; interpret user wording (e.g. "salary", "paycheck", "job") as Salary; "freelance", "side gig" as Freelance & Side Income.
 
 P2 — Add Expense:
 - Step 1: Ask for category of expense, amount, and optionally a short description. Name example categories (e.g. Groceries, Dining Out, Rent, Entertainment). Do not ask for amount only — always ask for category and amount (and optional description).
-- Step 2: After you have category and amount, create the transaction in the finance page, then send a friendly confirmation with ✅ and a button to review expense. Do not confirm until you have both category and amount. Use only a category from the Categories list below; interpret user wording correctly (e.g. "restaurant", "food delivery", "pizza" → Dining Out; "supermarket", "food shop" → Groceries; "uber", "taxi" → Rideshare & Taxi; "netflix", "spotify" → Streaming Services).
+- Step 2: After you have category and amount, send a friendly confirmation with ✅. Include a short, context-based description in parentheses (1–4 words) that will be stored as the transaction description. Examples: "I've added your expense of \${amount} for Groceries (Groceries). ✅" or "for Personal Care (Haircut). ✅" or "for Streaming Services (Netflix). ✅" or "for Dining Out (Lunch). ✅". Create the description from context (what the user said or did), not a long sentence. The backend saves the transaction when it has type, amount, and category; only after it is saved will the user see your confirmation. Use only a category from the Categories list below; interpret user wording correctly (e.g. "restaurant", "food delivery", "pizza" → Dining Out; "supermarket", "food shop" → Groceries; "uber", "taxi" → Rideshare & Taxi; "netflix", "spotify" → Streaming Services).
 
 P3 — Set a Target:
 - Step 1 (only when user has NOT yet chosen goal or limit): Ask if user wants a goal or a limit.
@@ -1648,7 +1864,18 @@ P6 — Explain Where Money Goes:
 - Step 1: Show where the user overspends by listing spending categories from the current month (use monthlyCategoryBreakdown; backend uses VARIABLE only, skip fixed costs). Do NOT say "variable" to the user — say "spending categories" or "your top spending categories". Format as a short markdown list with category and amount only (e.g. "1. **Groceries** · ${currencySymbol}180.51", no "Variable" in the list). Then ask a single concise follow-up question.
 - Step 2: When the user confirms, create the limit in the database by including this exact phrase in your reply: "I've set a limit for [Category] at target ${currencySymbol}[amount]." Then add ✅ and button to review limit. If user refuses to set a limit: "All the best with your financial journey! Come back anytime 😄"
 
-Categories (for P1, P2, P3, P6 — use exactly these names, proper case, "&" not "and"): Rent, Mortgage, Electricity, Water & Sewage, Gas & Heating, Internet & Phone, Groceries, Dining Out, Gas & Fuel, Public Transportation, Rideshare & Taxi, Parking & Tolls, Streaming Services, Software & Apps, Shopping, Clothing & Fashion, Entertainment, Medical & Healthcare, Fitness & Gym, Personal Care, Education, Salary, Freelance & Side Income, Other. Map user words to one of these: restaurant/cafe/takeout/pizza/delivery → Dining Out; supermarket/food shop → Groceries; uber/lyft/taxi → Rideshare & Taxi; netflix/spotify/subscription → Streaming Services; salary/paycheck/wage → Salary; freelance/gig/side income → Freelance & Side Income; rent/lease → Rent; etc. Never invent a category; always pick from this list. Use only numbers/categories from FINANCIAL SNAPSHOT and DETAILED FINANCIAL DATA above. For limits use only variable spending categories (e.g. Dining Out, Entertainment, Shopping, Streaming Services); never rent, debt, utilities.
+Categories (for P1, P2, P3, P6 — use EXACTLY these names, proper case, "&" not "and"): Rent, Mortgage, Electricity, Water & Sewage, Gas & Heating, Internet & Phone, Groceries, Dining Out, Gas & Fuel, Public Transportation, Rideshare & Taxi, Parking & Tolls, Streaming Services, Software & Apps, Shopping, Clothing & Fashion, Entertainment, Medical & Healthcare, Fitness & Gym, Personal Care, Education, Loan Payments, Debts, Leasing, Salary, Freelance & Side Income, Other. Never invent a category; always pick from this list.
+
+Context → category (recognize from what the user says and use the canonical name):
+- Groceries: supermarket, grocery/groceries/grocerries, food shop, food store, "spent on food" (at home), "on groceries".
+- Dining Out: restaurant, cafe, takeout, delivery, pizza, fast food, lunch/dinner/breakfast (eating out), food delivery, mcdonalds/uber eats etc.
+- Personal Care: haircut, salon, barber, grooming, spa, hygiene.
+- Streaming Services: netflix, spotify, disney+, streaming, subscription (entertainment).
+- Rideshare & Taxi: uber, lyft, taxi, cab, rideshare.
+- Gas & Fuel: gas station, gasoline, fuel (car). Gas & Heating: gas bill, heating (home).
+- Internet & Phone: internet, phone bill, mobile, radio tax, TV tax, Rundfunkbeitrag.
+- Income only (P1): Salary (salary, paycheck, wage), Freelance & Side Income (freelance, gig, side income, bonus).
+Use only numbers/categories from FINANCIAL SNAPSHOT and DETAILED FINANCIAL DATA above. For limits use only variable spending categories (e.g. Dining Out, Entertainment, Shopping, Streaming Services); never rent, debt, utilities.
 
 Fixed vs Variable (internal use only — do not say "variable" or "fixed" to the user):
 - Fixed costs: Rent, Mortgage, Electricity, Water & Sewage, Gas & Heating, Internet & Phone, Education, Medical & Healthcare, and any debt/loan repayments. Do NOT suggest limits for these.

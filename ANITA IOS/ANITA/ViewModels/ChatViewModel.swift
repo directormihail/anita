@@ -23,6 +23,13 @@ class ChatViewModel: ObservableObject {
     /// Free tier: max user messages per calendar month.
     private static let freeTierMessagesPerMonth = 10
     
+    /// Fallback when assistant response is empty or fails validation (difficult context / malformed).
+    private static let invalidResponseFallbackMessages: [String] = [
+        "I got a bit confused there. Try again with something like \"add expense 50 for groceries\" or \"how's my budget?\" — I'll get it next time! 💡",
+        "My reply got lost in translation. Ask me to add a transaction, set a goal, or show your budget and we're good! ✨",
+        "Oops — that response didn't come out right. Try \"add income\" or \"set a limit\" and I'll respond properly! 🦉",
+    ]
+    
     /// Finance-themed, funny + friendly fallbacks when connection is bad or missing.
     private static let connectionFallbackMessages: [String] = [
         "No connection again—maybe time to check if that internet bill is actually doing its job? 📶💸 Try again when you’re back online!",
@@ -293,6 +300,28 @@ class ChatViewModel: ObservableObject {
             print("[ChatViewModel] Error saving message: \(error.localizedDescription)")
             // Don't throw - message is already displayed, saving is secondary
         }
+    }
+    
+    // MARK: - Assistant response verification (difficult context)
+    
+    /// Validates and sanitizes the assistant response before showing to the user.
+    /// Ensures we never display empty content or internal markers (e.g. [END], [P1]).
+    /// Returns the content to display, or a friendly fallback if invalid.
+    private func validateAndSanitizeAssistantResponse(_ content: String?) -> String {
+        guard var text = content?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else {
+            return Self.invalidResponseFallbackMessages.randomElement() ?? Self.invalidResponseFallbackMessages[0]
+        }
+        // Strip trailing internal markers that might slip through
+        let markerPatterns = ["[END]", "[P1]", "[P2]", "[P3]", "[P4]", "[P5]", "[P6]"]
+        for marker in markerPatterns {
+            if text.hasSuffix(marker) {
+                text = text.dropLast(marker.count).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        guard !text.isEmpty else {
+            return Self.invalidResponseFallbackMessages.randomElement() ?? Self.invalidResponseFallbackMessages[0]
+        }
+        return text
     }
     
     // Detect currency from user input
@@ -581,9 +610,10 @@ class ChatViewModel: ObservableObject {
             }
         }
         
+        let displayContent = validateAndSanitizeAssistantResponse(responseText)
         let assistantMessage = ChatMessage(
             role: "assistant",
-            content: responseText
+            content: displayContent
         )
         
         await MainActor.run {
@@ -730,9 +760,12 @@ class ChatViewModel: ObservableObject {
                 )
                 print("[ChatViewModel] Received response from backend")
                 
+                // Verify response before showing: strict message patterns, no internal markers
+                let displayContent = validateAndSanitizeAssistantResponse(response.response)
+                
                 let assistantMessage = ChatMessage(
                     role: "assistant",
-                    content: response.response,
+                    content: displayContent,
                     targetId: response.targetId, // Include target ID if one was created
                     targetType: response.targetType, // Include target type (savings or budget)
                     category: response.category // Include category for budget targets
