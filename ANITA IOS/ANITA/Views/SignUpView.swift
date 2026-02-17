@@ -21,6 +21,8 @@ struct SignUpView: View {
     @State private var confirmPassword: String = ""
     @State private var showPassword: Bool = false
     @State private var showConfirmPassword: Bool = false
+    @State private var showPrivacySheet: Bool = false
+    @State private var showTermsSheet: Bool = false
     @State private var selectedCurrency: String = (UserDefaults.standard.string(forKey: "anita_user_currency") == "CHF" ? "CHF" : "EUR")
     @State private var needsCurrencyStep: Bool = false
     @FocusState private var focusedField: Field?
@@ -192,7 +194,7 @@ struct SignUpView: View {
                         
                         HStack(spacing: 4) {
                             Button(AppL10n.t("auth.terms")) {
-                                // TODO: Show terms
+                                showTermsSheet = true
                             }
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(.white.opacity(0.8))
@@ -202,7 +204,7 @@ struct SignUpView: View {
                                 .foregroundColor(.white.opacity(0.5))
                             
                             Button(AppL10n.t("auth.privacy")) {
-                                // TODO: Show privacy
+                                showPrivacySheet = true
                             }
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(.white.opacity(0.8))
@@ -219,6 +221,12 @@ struct SignUpView: View {
             if !needsCurrencyStep, let s = saved, (s == "CHF" || s == "EUR") {
                 selectedCurrency = s
             }
+        }
+        .sheet(isPresented: $showPrivacySheet) {
+            LegalDocumentSheetView(mode: .privacy)
+        }
+        .sheet(isPresented: $showTermsSheet) {
+            LegalDocumentSheetView(mode: .terms)
         }
     }
     

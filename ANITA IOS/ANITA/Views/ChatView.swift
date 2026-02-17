@@ -632,15 +632,9 @@ struct MessageBubble: View {
                                 .liquidGlass(cornerRadius: 16)
                         }
                         
-                        // Check Goal/Limit button (only shown when targetId is present)
-                        if let targetId = message.targetId {
-                            if message.targetType == "budget" {
-                                // For budget targets, we need to get the category from the target
-                                // For now, we'll pass nil and fetch it when needed
-                                CheckLimitButton(targetId: targetId, category: message.category)
-                            } else {
-                                CheckGoalButton(targetId: targetId)
-                            }
+                        // Check Goal button only (limit button hidden for now — show only confirmation)
+                        if let targetId = message.targetId, message.targetType != "budget" {
+                            CheckGoalButton(targetId: targetId)
                         }
                     }
                     // Buttons are in a separate container, so they won't be affected by the text tap gesture

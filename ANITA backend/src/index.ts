@@ -37,10 +37,14 @@ import { handleSaveMessageFeedback } from './routes/save-message-feedback';
 import { handleSaveTransaction } from './routes/save-transaction';
 import { handleUpdateTransaction } from './routes/update-transaction';
 import { handleDeleteTransaction } from './routes/delete-transaction';
+import { handleClearUserData } from './routes/clear-user-data';
 import { handleVerifyIOSSubscription } from './routes/verify-ios-subscription';
 import { handleGetSubscription } from './routes/get-subscription';
+import { handleSubmitSupport } from './routes/submit-support';
+import { handleSubmitFeedback } from './routes/submit-feedback';
 import { applySecurityHeaders } from './utils/securityHeaders';
 import { requestIdMiddleware } from './middleware/requestId';
+import { getPrivacyPayload, getTermsPayload } from './legal/content';
 import * as logger from './utils/logger';
 
 // #region agent log
@@ -102,15 +106,14 @@ app.get('/health', (_req: Request, res: Response) => {
   });
 });
 
-// Privacy policy endpoint (required for App Store)
+// Privacy policy endpoint (required for App Store) – full text for in-app display
 app.get('/privacy', (_req: Request, res: Response) => {
-  res.status(200).json({
-    privacyPolicy: 'https://anita.app/privacy',
-    dataCollection: 'We collect minimal data necessary for app functionality.',
-    dataUsage: 'Data is used solely for providing financial advisory services.',
-    dataSharing: 'We do not sell or share your data with third parties.',
-    contact: 'privacy@anita.app'
-  });
+  res.status(200).json(getPrivacyPayload());
+});
+
+// Terms of Use endpoint – full text for in-app display
+app.get('/terms', (_req: Request, res: Response) => {
+  res.status(200).json(getTermsPayload());
 });
 
 // API Routes with versioning (v1)
@@ -130,6 +133,7 @@ app.post('/api/v1/save-message-feedback', handleSaveMessageFeedback);
 app.post('/api/v1/save-transaction', handleSaveTransaction);
 app.post('/api/v1/update-transaction', handleUpdateTransaction);
 app.post('/api/v1/delete-transaction', handleDeleteTransaction);
+app.post('/api/v1/clear-user-data', handleClearUserData);
 app.get('/api/v1/financial-metrics', handleGetFinancialMetrics);
 app.get('/api/v1/xp-stats', handleGetXPStats);
 app.post('/api/v1/xp-award', handleAwardXP);
@@ -142,6 +146,8 @@ app.get('/api/v1/assets', handleGetAssets);
 app.post('/api/v1/assets', handleCreateAsset);
 app.post('/api/v1/update-asset', handleUpdateAsset);
 app.post('/api/v1/delete-asset', handleDeleteAsset);
+app.post('/api/v1/support', handleSubmitSupport);
+app.post('/api/v1/feedback', handleSubmitFeedback);
 
 // Legacy routes (redirect to v1 for backward compatibility)
 app.post('/api/chat-completion', handleChatCompletion);
@@ -221,6 +227,9 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('   - POST /api/v1/delete-asset');
   console.log('   - GET  /health');
   console.log('   - GET  /privacy');
+  console.log('   - GET  /terms');
+  console.log('   - POST /api/v1/support');
+  console.log('   - POST /api/v1/feedback');
   console.log('\n   ✅ Ready for iOS app!\n');
   
   // Check environment variables

@@ -261,6 +261,19 @@ class NetworkService: ObservableObject {
         return try decoder.decode(PrivacyResponse.self, from: data)
     }
     
+    // MARK: - Terms of Use
+    
+    func getTermsOfUse() async throws -> TermsResponse {
+        let url = URL(string: "\(baseURL)/terms")!
+        let request = URLRequest(url: url)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            throw NetworkError.invalidResponse
+        }
+        let decoder = JSONDecoder()
+        return try decoder.decode(TermsResponse.self, from: data)
+    }
+    
     // MARK: - Transactions
     
     func getTransactions(userId: String, month: Int? = nil, year: Int? = nil) async throws -> GetTransactionsResponse {
@@ -417,6 +430,32 @@ class NetworkService: ObservableObject {
         if httpResponse.statusCode == 200 {
             let decoder = JSONDecoder()
             return try decoder.decode(DeleteTransactionResponse.self, from: data)
+        } else {
+            if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
+                throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)
+            }
+            throw NetworkError.httpError(httpResponse.statusCode)
+        }
+    }
+    
+    func clearUserData(userId: String) async throws -> ClearUserDataResponse {
+        let url = URL(string: "\(baseURL)/api/v1/clear-user-data")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body = ["userId": userId]
+        request.httpBody = try JSONEncoder().encode(body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 200 {
+            let decoder = JSONDecoder()
+            return try decoder.decode(ClearUserDataResponse.self, from: data)
         } else {
             if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
                 throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)
@@ -872,6 +911,50 @@ class NetworkService: ObservableObject {
             }
             throw NetworkError.httpError(httpResponse.statusCode)
         }
+    }
+    
+    // MARK: - Support
+    
+    func submitSupport(userId: String, subject: String?, message: String) async throws -> SubmitSupportResponse {
+        let url = URL(string: "\(baseURL)/api/v1/support")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body: [String: Any] = [
+            "userId": userId,
+            "subject": subject ?? NSNull(),
+            "message": message
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            if let err = try? JSONDecoder().decode(APIError.self, from: data) {
+                throw NetworkError.apiError(err.message ?? err.error)
+            }
+            throw NetworkError.apiError("Could not reach server. Check backend URL in Settings and that the server is running.")
+        }
+        return try JSONDecoder().decode(SubmitSupportResponse.self, from: data)
+    }
+    
+    // MARK: - Feedback
+    
+    func submitFeedback(userId: String, message: String?, rating: Int?) async throws -> SubmitFeedbackResponse {
+        let url = URL(string: "\(baseURL)/api/v1/feedback")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var body: [String: Any] = ["userId": userId]
+        if let m = message, !m.isEmpty { body["message"] = m }
+        if let r = rating { body["rating"] = r }
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            if let err = try? JSONDecoder().decode(APIError.self, from: data) {
+                throw NetworkError.apiError(err.message ?? err.error)
+            }
+            throw NetworkError.apiError("Could not reach server. Check backend URL in Settings and that the server is running.")
+        }
+        return try JSONDecoder().decode(SubmitFeedbackResponse.self, from: data)
     }
     
     // MARK: - Message Feedback

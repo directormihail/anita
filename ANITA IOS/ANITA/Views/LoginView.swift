@@ -20,6 +20,8 @@ struct LoginView: View {
     @State private var password: String = ""
     @State private var showPassword: Bool = false
     @State private var showForgotPassword: Bool = false
+    @State private var showPrivacySheet: Bool = false
+    @State private var showTermsSheet: Bool = false
     @FocusState private var focusedField: Field?
     
     enum Field {
@@ -332,7 +334,7 @@ struct LoginView: View {
                         
                         HStack(spacing: 4) {
                             Button(AppL10n.t("auth.terms")) {
-                                // TODO: Show terms
+                                showTermsSheet = true
                             }
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(.white.opacity(0.8))
@@ -342,7 +344,7 @@ struct LoginView: View {
                                 .foregroundColor(.white.opacity(0.5))
                             
                             Button(AppL10n.t("auth.privacy")) {
-                                // TODO: Show privacy
+                                showPrivacySheet = true
                             }
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(.white.opacity(0.8))
@@ -363,6 +365,12 @@ struct LoginView: View {
             Button(AppL10n.t("common.cancel"), role: .cancel) {}
         } message: {
             Text(AppL10n.t("login.reset.help"))
+        }
+        .sheet(isPresented: $showPrivacySheet) {
+            LegalDocumentSheetView(mode: .privacy)
+        }
+        .sheet(isPresented: $showTermsSheet) {
+            LegalDocumentSheetView(mode: .terms)
         }
     }
 }

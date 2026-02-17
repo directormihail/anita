@@ -14,7 +14,9 @@ struct SettingsView: View {
     @ObservedObject private var userManager = UserManager.shared
     @ObservedObject private var notificationService = NotificationService.shared
     @State private var showPrivacyPolicy = false
-    @State private var privacyPolicy: PrivacyResponse?
+    @State private var showTermsOfUse = false
+    @State private var showSupportSheet = false
+    @State private var showFeedbackSheet = false
     @State private var showAuthSheet = false
     @State private var authEmail = ""
     @State private var authPassword = ""
@@ -37,9 +39,10 @@ struct SettingsView: View {
     @StateObject private var subscriptionManager = SubscriptionManager.shared
     @State private var showUpgradeView = false
     
-    // Data export/import
+    // Data export
     @State private var showExportSuccess = false
-    @State private var showImportPicker = false
+    @State private var showExporting = false
+    @State private var exportSummaryMessage: String?
     @State private var showClearDataConfirm = false
     
     // Test onboarding
@@ -335,26 +338,6 @@ struct SettingsView: View {
                         VStack(spacing: 0) {
                             HStack {
                                 SettingsRowWithIcon(
-                                    icon: "envelope.badge",
-                                    iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                    title: AppL10n.t("settings.email_notifications"),
-                                    value: nil,
-                                    showChevron: false
-                                ) {
-                                    Toggle("", isOn: Binding(
-                                        get: { emailNotifications },
-                                        set: { saveEmailNotifications($0) }
-                                    ))
-                                    .tint(Color(red: 0.4, green: 0.49, blue: 0.92))
-                                }
-                            }
-                            
-                            Divider()
-                                .background(Color.white.opacity(0.1))
-                                .padding(.leading, 60)
-                            
-                            HStack {
-                                SettingsRowWithIcon(
                                     icon: "bell.badge.fill",
                                     iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
                                     title: AppL10n.t("settings.push_notifications"),
@@ -373,23 +356,6 @@ struct SettingsView: View {
                                     .tint(Color(red: 0.4, green: 0.49, blue: 0.92))
                                 }
                             }
-                            
-                            Divider()
-                                .background(Color.white.opacity(0.1))
-                                .padding(.leading, 60)
-                            
-                            Button(action: {
-                                notificationService.sendTestNotification()
-                            }) {
-                                SettingsRowWithIcon(
-                                    icon: "bell.badge",
-                                    iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                    title: AppL10n.t("settings.test_notification"),
-                                    value: nil,
-                                    showChevron: true
-                                ) {}
-                            }
-                            .buttonStyle(PremiumSettingsButtonStyle())
                         }
                     }
                     
@@ -397,32 +363,24 @@ struct SettingsView: View {
                     SettingsCategorySection(title: AppL10n.t("settings.privacy_data"), icon: "lock.shield.fill") {
                         VStack(spacing: 0) {
                             Button(action: {
-                                exportData()
+                                Task { await exportData() }
                             }) {
-                                SettingsRowWithIcon(
-                                    icon: "arrow.down.circle.fill",
-                                    iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                    title: AppL10n.t("settings.export_data"),
-                                    value: nil,
-                                    showChevron: true
-                                ) {}
+                                HStack {
+                                    SettingsRowWithIcon(
+                                        icon: "arrow.down.circle.fill",
+                                        iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
+                                        title: AppL10n.t("settings.export_data"),
+                                        value: nil,
+                                        showChevron: true
+                                    ) {}
+                                    if showExporting {
+                                        ProgressView()
+                                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                            .scaleEffect(0.8)
+                                    }
+                                }
                             }
-                            
-                            PremiumDivider()
-                                .padding(.leading, 76)
-                            
-                            Button(action: {
-                                showImportPicker = true
-                            }) {
-                                SettingsRowWithIcon(
-                                    icon: "arrow.up.circle.fill",
-                                    iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                    title: AppL10n.t("settings.import_data"),
-                                    value: nil,
-                                    showChevron: true
-                                ) {}
-                            }
-                            .buttonStyle(PremiumSettingsButtonStyle())
+                            .disabled(showExporting)
                             
                             PremiumDivider()
                                 .padding(.leading, 76)
@@ -442,39 +400,11 @@ struct SettingsView: View {
                         }
                     }
                     
-                    // Development Section (Backend URL / Server IP)
-                    SettingsCategorySection(title: AppL10n.t("settings.development"), icon: "network") {
-                        VStack(spacing: 0) {
-                            Button(action: {
-                                backendURLText = UserDefaults.standard.string(forKey: "backendURL") ?? ""
-                                if backendURLText.isEmpty {
-                                    backendURLText = Config.backendURL
-                                }
-                                showBackendURLSheet = true
-                            }) {
-                                HStack {
-                                    SettingsRowWithIcon(
-                                        icon: "server.rack",
-                                        iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                        title: AppL10n.t("settings.backend_url"),
-                                        value: {
-                                            let url = UserDefaults.standard.string(forKey: "backendURL")?.trimmingCharacters(in: .whitespacesAndNewlines)
-                                            if let u = url, !u.isEmpty { return u }
-                                            return Config.backendURL
-                                        }(),
-                                        showChevron: true
-                                    ) {}
-                                }
-                            }
-                            .buttonStyle(PremiumSettingsButtonStyle())
-                        }
-                    }
-                    
                     // Information Section
                     SettingsCategorySection(title: AppL10n.t("settings.information"), icon: "info.circle.fill") {
                         VStack(spacing: 0) {
                             Button(action: {
-                                loadPrivacyPolicy()
+                                showPrivacyPolicy = true
                             }) {
                                 SettingsRowWithIcon(
                                     icon: "doc.text.fill",
@@ -489,60 +419,46 @@ struct SettingsView: View {
                             PremiumDivider()
                                 .padding(.leading, 76)
                             
-                            Link(destination: URL(string: "https://anita.app")!) {
-                                SettingsRowWithIcon(
-                                    icon: "safari.fill",
-                                    iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                    title: AppL10n.t("settings.visit_website"),
-                                    value: nil,
-                                    showChevron: true
-                                ) {}
-                            }
-                            .buttonStyle(PremiumSettingsButtonStyle())
-                            
-                            PremiumDivider()
-                                .padding(.leading, 76)
-                            
                             Button(action: {
-                                if userManager.isAuthenticated {
-                                    showTestOnboardingConfirm = true
-                                } else {
-                                    showTestOnboardingSignInRequired = true
-                                }
+                                showTermsOfUse = true
                             }) {
                                 SettingsRowWithIcon(
-                                    icon: "arrow.counterclockwise.circle.fill",
+                                    icon: "doc.plaintext.fill",
                                     iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                    title: AppL10n.t("settings.test_onboarding"),
+                                    title: AppL10n.t("settings.terms_of_use"),
                                     value: nil,
                                     showChevron: true
                                 ) {}
                             }
                             .buttonStyle(PremiumSettingsButtonStyle())
-                        }
-                    }
-                    
-                    // About Section
-                    SettingsCategorySection(title: AppL10n.t("settings.about"), icon: "app.badge.fill") {
-                        VStack(spacing: 0) {
-                            SettingsRowWithIcon(
-                                icon: "info.circle",
-                                iconColor: .white.opacity(0.6),
-                                title: AppL10n.t("settings.version"),
-                                value: "1.0.0",
-                                showChevron: false
-                            ) {}
                             
                             PremiumDivider()
                                 .padding(.leading, 76)
                             
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(AppL10n.t("settings.about_description"))
-                                    .font(.system(size: 13, weight: .regular, design: .rounded))
-                                    .foregroundColor(.white.opacity(0.5))
-                                    .padding(.horizontal, 20)
-                                    .padding(.vertical, 14)
+                            Button(action: { showSupportSheet = true }) {
+                                SettingsRowWithIcon(
+                                    icon: "questionmark.circle.fill",
+                                    iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
+                                    title: AppL10n.t("settings.support"),
+                                    value: nil,
+                                    showChevron: true
+                                ) {}
                             }
+                            .buttonStyle(PremiumSettingsButtonStyle())
+                            
+                            PremiumDivider()
+                                .padding(.leading, 76)
+                            
+                            Button(action: { showFeedbackSheet = true }) {
+                                SettingsRowWithIcon(
+                                    icon: "bubble.left.and.bubble.right.fill",
+                                    iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
+                                    title: AppL10n.t("settings.feedback"),
+                                    value: nil,
+                                    showChevron: true
+                                ) {}
+                            }
+                            .buttonStyle(PremiumSettingsButtonStyle())
                         }
                     }
                     
@@ -555,9 +471,16 @@ struct SettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .sheet(isPresented: $showPrivacyPolicy) {
-            if let policy = privacyPolicy {
-                PrivacyPolicyView(policy: policy)
-            }
+            LegalDocumentSheetView(mode: .privacy)
+        }
+        .sheet(isPresented: $showTermsOfUse) {
+            LegalDocumentSheetView(mode: .terms)
+        }
+        .sheet(isPresented: $showSupportSheet) {
+            SupportSheet(userId: userManager.currentUser?.id ?? "")
+        }
+        .sheet(isPresented: $showFeedbackSheet) {
+            FeedbackSheet(userId: userManager.currentUser?.id ?? "")
         }
         .sheet(isPresented: $showUpgradeView) {
             UpgradeView()
@@ -658,20 +581,6 @@ struct SettingsView: View {
                 }
             )
         }
-        .fileImporter(
-            isPresented: $showImportPicker,
-            allowedContentTypes: [.json],
-            allowsMultipleSelection: false
-        ) { result in
-            switch result {
-            case .success(let urls):
-                if let url = urls.first {
-                    importData(from: url)
-                }
-            case .failure(let error):
-                print("Import error: \(error.localizedDescription)")
-            }
-        }
         .alert(AppL10n.t("settings.clear_data_title"), isPresented: $showClearDataConfirm) {
             Button(AppL10n.t("common.cancel"), role: .cancel) {}
             Button(AppL10n.t("settings.clear"), role: .destructive) {
@@ -680,10 +589,25 @@ struct SettingsView: View {
         } message: {
             Text(AppL10n.t("settings.clear_data_message"))
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ExportSheetDismissed"))) { notification in
+            if let u = notification.userInfo,
+               let tc = u["transactionCount"] as? Int,
+               let cc = u["conversationCount"] as? Int {
+                exportSummaryMessage = String(format: AppL10n.t("settings.export_success_summary"), tc, cc)
+            } else {
+                exportSummaryMessage = nil
+            }
+            showExportSuccess = true
+        }
         .alert(AppL10n.t("settings.export_successful"), isPresented: $showExportSuccess) {
             Button(AppL10n.t("plans.ok"), role: .cancel) {}
         } message: {
-            Text(AppL10n.t("settings.export_success_message"))
+            let hint = AppL10n.t("settings.export_success_message")
+            if let summary = exportSummaryMessage {
+                Text("\(summary)\n\n\(hint)")
+            } else {
+                Text(hint)
+            }
         }
         .alert(AppL10n.t("settings.test_onboarding_title"), isPresented: $showTestOnboardingConfirm) {
             Button(AppL10n.t("common.cancel"), role: .cancel) {}
@@ -918,121 +842,121 @@ struct SettingsView: View {
     }
     
     func clearAllData() {
-        // Clear current account's local data only (per-account keys)
-        userManager.setProfileName("")
-        UserDefaults.standard.removeObject(forKey: userManager.prefKey("anita_user_currency"))
-        UserDefaults.standard.removeObject(forKey: userManager.prefKey("anita_date_format"))
-        UserDefaults.standard.removeObject(forKey: userManager.prefKey("anita_number_format"))
-        UserDefaults.standard.removeObject(forKey: "anita_email_notifications")
-        
-        selectedCurrency = "EUR"
-        UserDefaults.standard.set("EUR", forKey: userManager.prefKey("anita_user_currency"))
-        UserDefaults.standard.set("EUR", forKey: "anita_user_currency")
-        UserDefaults.standard.set("MM/DD/YYYY", forKey: userManager.prefKey("anita_date_format"))
-        UserDefaults.standard.set("1.234,56", forKey: userManager.prefKey("anita_number_format"))
-        emailNotifications = true
-        
-        // Clear from Supabase if authenticated
-        if userManager.isAuthenticated {
-            Task {
-                // TODO: Implement API call to clear data from Supabase
-                print("Clearing all data from Supabase...")
+        let uid = userManager.userId
+        guard userManager.isAuthenticated, !uid.isEmpty else {
+            if !uid.isEmpty {
+                userManager.clearKeyedStorage(for: uid)
+            }
+            resetLocalUIState()
+            return
+        }
+        Task {
+            do {
+                try await networkService.clearUserData(userId: uid)
+                await MainActor.run {
+                    userManager.clearKeyedStorage(for: uid)
+                    userManager.signOut()
+                    resetLocalUIState()
+                }
+            } catch {
+                await MainActor.run {
+                    userManager.clearKeyedStorage(for: uid)
+                    userManager.signOut()
+                    resetLocalUIState()
+                }
+                print("Error clearing remote data: \(error)")
             }
         }
     }
     
-    func exportData() {
-        // Collect all local data
-        var exportData: [String: Any] = [:]
+    private func resetLocalUIState() {
+        selectedCurrency = "EUR"
+        profileName = ""
+        emailNotifications = false
+    }
+    
+    func exportData() async {
+        await MainActor.run { showExporting = true }
+        defer { Task { @MainActor in showExporting = false } }
         
-        // User preferences (per-account keys)
+        var payload: [String: Any] = [:]
+        
+        // Preferences
         let dateFormat = UserDefaults.standard.string(forKey: userManager.prefKey("anita_date_format")) ?? "MM/DD/YYYY"
         let numberFormat = UserDefaults.standard.string(forKey: userManager.prefKey("anita_number_format")) ?? getNumberFormatForCurrency(selectedCurrency)
-        exportData["preferences"] = [
+        payload["preferences"] = [
             "currency": selectedCurrency,
             "dateFormat": dateFormat,
             "numberFormat": numberFormat,
             "emailNotifications": emailNotifications
         ]
         
-        if let profileName = userManager.getProfileName() {
-            exportData["profile"] = ["name": profileName]
+        if let name = userManager.getProfileName() {
+            payload["profile"] = ["name": name]
         }
         
-        // Convert to JSON
-        if let jsonData = try? JSONSerialization.data(withJSONObject: exportData, options: .prettyPrinted),
-           let jsonString = String(data: jsonData, encoding: .utf8) {
-            
-            // Save to file
-            let fileName = "anita_export_\(Date().timeIntervalSince1970).json"
-            let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-            
+        payload["exportedAt"] = ISO8601DateFormatter().string(from: Date())
+        
+        // Fetch transactions (all) and conversations from backend
+        var transactionCount = 0
+        var conversationCount = 0
+        let uid = userManager.userId
+        if !uid.isEmpty {
             do {
-                try jsonString.write(to: url, atomically: true, encoding: .utf8)
-                
-                // Share the file
+                let txnResponse = try await networkService.getTransactions(userId: uid, month: nil, year: nil)
+                let txns = txnResponse.transactions.map { t in
+                    ["id": t.id, "type": t.type, "amount": t.amount, "category": t.category, "description": t.description, "date": t.date]
+                }
+                payload["transactions"] = txns
+                transactionCount = txns.count
+            } catch {
+                payload["transactionsError"] = error.localizedDescription
+            }
+            do {
+                let convResponse = try await networkService.getConversations(userId: uid)
+                let convs = convResponse.conversations.map { c in
+                    ["id": c.id, "title": c.title ?? "", "updatedAt": c.updated_at]
+                }
+                payload["conversations"] = convs
+                conversationCount = convs.count
+            } catch {
+                payload["conversationsError"] = error.localizedDescription
+            }
+        }
+        
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: payload, options: .prettyPrinted),
+              let jsonString = String(data: jsonData, encoding: .utf8) else {
+            return
+        }
+        
+        // Human-readable filename so it's easy to find in Files app (e.g. anita_export_2025-02-17_14-30.json)
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd_HH-mm"
+        let fileName = "anita_export_\(dateFormatter.string(from: Date())).json"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+        
+        do {
+            try jsonString.write(to: url, atomically: true, encoding: .utf8)
+            print("[Export] File written: \(fileName) — preferences, profile, \(transactionCount) transactions, \(conversationCount) conversations")
+            await MainActor.run {
                 let activityVC = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-                
+                activityVC.completionWithItemsHandler = { _, _, _, _ in
+                    NotificationCenter.default.post(
+                        name: NSNotification.Name("ExportSheetDismissed"),
+                        object: nil,
+                        userInfo: ["transactionCount": transactionCount, "conversationCount": conversationCount]
+                    )
+                }
                 if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
                    let rootViewController = windowScene.windows.first?.rootViewController {
                     rootViewController.present(activityVC, animated: true)
-                    showExportSuccess = true
                 }
-            } catch {
-                print("Error exporting data: \(error)")
-            }
-        }
-    }
-    
-    func importData(from url: URL) {
-        do {
-            let data = try Data(contentsOf: url)
-            if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                // Import preferences
-                if let prefs = json["preferences"] as? [String: Any] {
-                    if let currency = prefs["currency"] as? String {
-                        saveCurrency(currency)
-                    }
-                    if let dateFormat = prefs["dateFormat"] as? String {
-                        UserDefaults.standard.set(dateFormat, forKey: userManager.prefKey("anita_date_format"))
-                        savePreferencesToSupabase(dateFormat: dateFormat)
-                    }
-                    if let numberFormat = prefs["numberFormat"] as? String {
-                        UserDefaults.standard.set(numberFormat, forKey: userManager.prefKey("anita_number_format"))
-                        savePreferencesToSupabase(numberFormat: numberFormat)
-                    }
-                    if let emailNotifications = prefs["emailNotifications"] as? Bool {
-                        saveEmailNotifications(emailNotifications)
-                    }
-                }
-                
-                // Import profile (per-account)
-                if let profile = json["profile"] as? [String: Any],
-                   let name = profile["name"] as? String {
-                    userManager.setProfileName(name)
-                    profileName = name
-                }
-                
-                print("Data imported successfully")
             }
         } catch {
-            print("Error importing data: \(error)")
+            print("Error exporting data: \(error)")
         }
     }
     
-    func loadPrivacyPolicy() {
-        Task {
-            do {
-                let policy = try await networkService.getPrivacyPolicy()
-                await MainActor.run {
-                    privacyPolicy = policy
-                    showPrivacyPolicy = true
-                }
-            } catch {
-                print("Error loading privacy policy: \(error)")
-            }
-        }
-    }
 }
 
 // MARK: - Category Section View
@@ -1223,36 +1147,43 @@ struct PrivacyPolicyView: View {
                 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
-                        Text(AppL10n.t("settings.privacy_policy"))
-                            .font(.title)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                        
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text(AppL10n.t("privacy.data_collection"))
-                                .font(.headline)
-                                .foregroundColor(.white)
-                            Text(policy.dataCollection)
+                        if let full = policy.fullText, !full.isEmpty {
+                            Text(full)
                                 .font(.body)
                                 .foregroundColor(.gray)
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text(AppL10n.t("privacy.data_usage"))
-                                .font(.headline)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        } else {
+                            Text(AppL10n.t("settings.privacy_policy"))
+                                .font(.title)
+                                .fontWeight(.bold)
                                 .foregroundColor(.white)
-                            Text(policy.dataUsage)
-                                .font(.body)
-                                .foregroundColor(.gray)
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text(AppL10n.t("privacy.data_sharing"))
-                                .font(.headline)
-                                .foregroundColor(.white)
-                            Text(policy.dataSharing)
-                                .font(.body)
-                                .foregroundColor(.gray)
+                            
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text(AppL10n.t("privacy.data_collection"))
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                Text(policy.dataCollection)
+                                    .font(.body)
+                                    .foregroundColor(.gray)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text(AppL10n.t("privacy.data_usage"))
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                Text(policy.dataUsage)
+                                    .font(.body)
+                                    .foregroundColor(.gray)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text(AppL10n.t("privacy.data_sharing"))
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                Text(policy.dataSharing)
+                                    .font(.body)
+                                    .foregroundColor(.gray)
+                            }
                         }
                         
                         if let url = URL(string: policy.privacyPolicy) {
@@ -1279,6 +1210,426 @@ struct PrivacyPolicyView: View {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Terms of Use View
+
+struct TermsOfUseView: View {
+    let terms: TermsResponse
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black
+                    .ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        Text(terms.fullText)
+                            .font(.body)
+                            .foregroundColor(.gray)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        
+                        if let url = URL(string: terms.termsOfUseUrl) {
+                            Link(AppL10n.t("terms.full_terms"), destination: url)
+                                .font(.headline)
+                                .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                        }
+                        
+                        Text("\(AppL10n.t("privacy.contact")): \(terms.contact)")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                    .padding()
+                }
+            }
+            .navigationTitle(AppL10n.t("settings.terms_of_use"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.black, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(AppL10n.t("settings.done")) {
+                        dismiss()
+                    }
+                    .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Legal document sheet for Auth (loads from API, fallback to Safari)
+
+struct LegalDocumentSheetView: View {
+    enum Mode { case privacy, terms }
+    let mode: Mode
+    @Environment(\.dismiss) var dismiss
+    @State private var policy: PrivacyResponse?
+    @State private var terms: TermsResponse?
+    @State private var loading = true
+    @State private var loadFailed = false
+    
+    private let basePrivacyURL = "https://anita.app/privacy"
+    private let baseTermsURL = "https://anita.app/terms"
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                if loading {
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .scaleEffect(1.2)
+                        Text(AppL10n.t("common.loading"))
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
+                    }
+                } else if loadFailed {
+                    VStack(spacing: 24) {
+                        Image(systemName: "wifi.exclamationmark")
+                            .font(.system(size: 44))
+                            .foregroundColor(.gray)
+                        Text(mode == .privacy ? "Privacy Policy could not be loaded." : "Terms of Use could not be loaded.")
+                            .font(.body)
+                            .foregroundColor(.gray)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                        Button(action: openInSafari) {
+                            HStack {
+                                Image(systemName: "safari")
+                                Text("Open in Safari")
+                            }
+                            .font(.headline)
+                            .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if mode == .privacy, let p = policy {
+                    ScrollView {
+                        legalContent(privacy: p)
+                    }
+                } else if mode == .terms, let t = terms {
+                    ScrollView {
+                        legalContent(terms: t)
+                    }
+                }
+            }
+            .navigationTitle(mode == .privacy ? AppL10n.t("settings.privacy_policy") : AppL10n.t("settings.terms_of_use"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.black, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(AppL10n.t("settings.done")) { dismiss() }
+                        .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                }
+            }
+            .onAppear { load() }
+        }
+    }
+    
+    private func load() {
+        loading = true
+        loadFailed = false
+        Task {
+            do {
+                if mode == .privacy {
+                    let p = try await NetworkService.shared.getPrivacyPolicy()
+                    await MainActor.run { policy = p; loading = false }
+                } else {
+                    let t = try await NetworkService.shared.getTermsOfUse()
+                    await MainActor.run { terms = t; loading = false }
+                }
+            } catch {
+                await MainActor.run { loadFailed = true; loading = false }
+            }
+        }
+    }
+    
+    private func openInSafari() {
+        let urlString = mode == .privacy ? basePrivacyURL : baseTermsURL
+        guard let url = URL(string: urlString) else { return }
+        UIApplication.shared.open(url)
+    }
+    
+    @ViewBuilder
+    private func legalContent(privacy: PrivacyResponse) -> some View {
+        let text = privacy.fullText ?? [privacy.dataCollection, privacy.dataUsage, privacy.dataSharing].joined(separator: "\n\n")
+        Text(text)
+            .font(.body)
+            .foregroundColor(.gray)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding()
+    }
+    
+    @ViewBuilder
+    private func legalContent(terms: TermsResponse) -> some View {
+        Text(terms.fullText)
+            .font(.body)
+            .foregroundColor(.gray)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding()
+    }
+}
+
+// MARK: - Support Sheet
+
+struct SupportSheet: View {
+    let userId: String
+    @Environment(\.dismiss) var dismiss
+    @State private var subject: String = ""
+    @State private var message: String = ""
+    @State private var sending = false
+    @State private var sent = false
+    @State private var errorMessage: String?
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                if sent {
+                    VStack(spacing: 16) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 50))
+                            .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                        Text(AppL10n.t("support.sent"))
+                            .font(.body)
+                            .foregroundColor(.gray)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            if userId.isEmpty {
+                                Text("Sign in to send a support request.")
+                                    .font(.body)
+                                    .foregroundColor(.gray)
+                            } else {
+                                TextField(AppL10n.t("support.subject_placeholder"), text: $subject)
+                                    .textFieldStyle(.plain)
+                                    .padding(12)
+                                    .background(Color(white: 0.15))
+                                    .cornerRadius(10)
+                                    .foregroundColor(.white)
+                                    .autocapitalization(.sentences)
+                                
+                                ZStack(alignment: .topLeading) {
+                                    if message.isEmpty {
+                                        Text(AppL10n.t("support.message_placeholder"))
+                                            .foregroundColor(.gray.opacity(0.7))
+                                            .padding(16)
+                                    }
+                                    TextEditor(text: $message)
+                                        .padding(12)
+                                        .frame(minHeight: 120)
+                                        .scrollContentBackground(.hidden)
+                                        .background(Color(white: 0.15))
+                                        .cornerRadius(10)
+                                        .foregroundColor(.white)
+                                        .autocapitalization(.sentences)
+                                }
+                                
+                                if let err = errorMessage {
+                                    Text(err)
+                                        .font(.caption)
+                                        .foregroundColor(.red)
+                                }
+                                
+                                Button(action: sendSupport) {
+                                    HStack {
+                                        if sending {
+                                            ProgressView()
+                                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        } else {
+                                            Text(AppL10n.t("support.send"))
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 14)
+                                    .background(message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.gray : Color(red: 0.4, green: 0.49, blue: 0.92))
+                                    .foregroundColor(.white)
+                                    .cornerRadius(10)
+                                }
+                                .disabled(sending || message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            }
+                        }
+                        .padding()
+                    }
+                }
+            }
+            .navigationTitle(AppL10n.t("support.title"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.black, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(AppL10n.t("settings.done")) { dismiss() }
+                        .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                }
+            }
+        }
+    }
+    
+    private func sendSupport() {
+        guard !userId.isEmpty, !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        errorMessage = nil
+        sending = true
+        Task {
+            do {
+                _ = try await NetworkService.shared.submitSupport(
+                    userId: userId,
+                    subject: subject.isEmpty ? nil : subject,
+                    message: message.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+                await MainActor.run { sent = true }
+            } catch {
+                await MainActor.run {
+                    errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    if errorMessage?.isEmpty == true { errorMessage = AppL10n.t("support.error") }
+                    sending = false
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Feedback Sheet
+
+struct FeedbackSheet: View {
+    let userId: String
+    @Environment(\.dismiss) var dismiss
+    @State private var message: String = ""
+    @State private var rating: Int? = nil
+    @State private var sending = false
+    @State private var sent = false
+    @State private var errorMessage: String?
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                if sent {
+                    VStack(spacing: 16) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 50))
+                            .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                        Text(AppL10n.t("feedback.sent"))
+                            .font(.body)
+                            .foregroundColor(.gray)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            if userId.isEmpty {
+                                Text("Sign in to send feedback.")
+                                    .font(.body)
+                                    .foregroundColor(.gray)
+                            } else {
+                                Text(AppL10n.t("feedback.rating_label"))
+                                    .font(.subheadline)
+                                    .foregroundColor(.gray)
+                                HStack(spacing: 12) {
+                                    ForEach(1...5, id: \.self) { value in
+                                        let isFilled = (rating ?? 0) >= value
+                                        Button(action: { rating = rating == value ? nil : value }) {
+                                            Image(systemName: isFilled ? "star.fill" : "star")
+                                                .font(.title2)
+                                                .foregroundColor(isFilled ? Color(red: 0.4, green: 0.49, blue: 0.92) : .gray)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                                
+                                ZStack(alignment: .topLeading) {
+                                    if message.isEmpty {
+                                        Text(AppL10n.t("feedback.message_placeholder"))
+                                            .foregroundColor(.gray.opacity(0.7))
+                                            .padding(16)
+                                    }
+                                    TextEditor(text: $message)
+                                        .padding(12)
+                                        .frame(minHeight: 120)
+                                        .scrollContentBackground(.hidden)
+                                        .background(Color(white: 0.15))
+                                        .cornerRadius(10)
+                                        .foregroundColor(.white)
+                                        .autocapitalization(.sentences)
+                                }
+                                
+                                if let err = errorMessage {
+                                    Text(err)
+                                        .font(.caption)
+                                        .foregroundColor(.red)
+                                }
+                                
+                                Button(action: sendFeedback) {
+                                    HStack {
+                                        if sending {
+                                            ProgressView()
+                                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        } else {
+                                            Text(AppL10n.t("feedback.send"))
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 14)
+                                    .background(Color(red: 0.4, green: 0.49, blue: 0.92))
+                                    .foregroundColor(.white)
+                                    .cornerRadius(10)
+                                }
+                                .disabled(sending)
+                            }
+                        }
+                        .padding()
+                    }
+                }
+            }
+            .navigationTitle(AppL10n.t("feedback.title"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.black, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(AppL10n.t("settings.done")) { dismiss() }
+                        .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                }
+            }
+        }
+    }
+    
+    private func sendFeedback() {
+        guard !userId.isEmpty else { return }
+        errorMessage = nil
+        sending = true
+        Task {
+            do {
+                _ = try await NetworkService.shared.submitFeedback(
+                    userId: userId,
+                    message: message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : message.trimmingCharacters(in: .whitespacesAndNewlines),
+                    rating: rating
+                )
+                await MainActor.run { sent = true }
+            } catch {
+                await MainActor.run {
+                    errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    if errorMessage?.isEmpty == true { errorMessage = AppL10n.t("feedback.error") }
+                    sending = false
                 }
             }
         }

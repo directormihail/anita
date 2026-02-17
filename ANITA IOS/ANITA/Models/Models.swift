@@ -196,6 +196,14 @@ struct PrivacyResponse: Codable {
     let dataUsage: String
     let dataSharing: String
     let contact: String
+    /// Full policy text for in-app display (optional for backward compatibility)
+    let fullText: String?
+}
+
+struct TermsResponse: Codable {
+    let termsOfUseUrl: String
+    let contact: String
+    let fullText: String
 }
 
 // MARK: - Financial Data Models
@@ -640,6 +648,12 @@ struct DeleteTransactionResponse: Codable {
     let requestId: String?
 }
 
+struct ClearUserDataResponse: Codable {
+    let success: Bool
+    let message: String?
+    let requestId: String?
+}
+
 // MARK: - Conversation Management Models
 
 struct CreateConversationRequest: Codable {
@@ -743,5 +757,17 @@ struct MessageFeedback: Codable {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
+}
+
+struct SubmitSupportResponse: Codable {
+    let success: Bool
+    let id: String?
+    let requestId: String?
+}
+
+struct SubmitFeedbackResponse: Codable {
+    let success: Bool
+    let id: String?
+    let requestId: String?
 }
 

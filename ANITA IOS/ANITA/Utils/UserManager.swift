@@ -414,7 +414,7 @@ class UserManager: ObservableObject {
         let keys = [
             profileNameKeyBase, onboardingCompletedKey, onboardingSyncedKey, preferencesSyncedKey,
             postSignupPlansPendingKey, onboardingSurveyKey, preferredLanguageKey,
-            userCurrencyKeyBase, numberFormatKeyBase, "anita_date_format"
+            userCurrencyKeyBase, numberFormatKeyBase, "anita_date_format", "anita_email_notifications"
         ]
         for base in keys {
             UserDefaults.standard.removeObject(forKey: "\(base)_\(userId)")
