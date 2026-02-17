@@ -752,11 +752,14 @@ class ChatViewModel: ObservableObject {
                 let currentUserId = userManager.isAuthenticated ? (userManager.currentUser?.id ?? userId) : userId
                 // User display name for friendly fallback when AI doesn't understand (e.g. Duolingo-style message)
                 let displayName = (OnboardingSurveyResponse.loadFromUserDefaults(userId: userId)?.userName).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                // User's chosen currency (same as Settings/Finance) so the chat uses EUR, CHF, etc.
+                let preferredCurrency = UserDefaults.standard.string(forKey: "anita_user_currency")
                 let response = try await networkService.sendChatMessage(
                     messages: apiMessages,
                     userId: currentUserId,
                     conversationId: conversationId,
-                    userDisplayName: displayName?.isEmpty == false ? displayName : nil
+                    userDisplayName: displayName?.isEmpty == false ? displayName : nil,
+                    userCurrency: preferredCurrency
                 )
                 print("[ChatViewModel] Received response from backend")
                 

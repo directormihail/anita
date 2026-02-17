@@ -751,8 +751,13 @@ struct SettingsView: View {
     }
     
     func loadPreferences() {
-        let saved = UserDefaults.standard.string(forKey: userManager.prefKey("anita_user_currency"))
+        var saved = UserDefaults.standard.string(forKey: userManager.prefKey("anita_user_currency"))
+        if saved == nil, let global = UserDefaults.standard.string(forKey: "anita_user_currency"), (global == "CHF" || global == "EUR") {
+            saved = global
+        }
         selectedCurrency = (saved == "CHF" || saved == "EUR") ? saved! : "EUR"
+        // Keep global key in sync so FinanceView, UpgradeView, Chat, etc. use the same currency
+        UserDefaults.standard.set(selectedCurrency, forKey: "anita_user_currency")
         emailNotifications = UserDefaults.standard.bool(forKey: "anita_email_notifications")
         
         // Sync from Supabase if authenticated
@@ -804,6 +809,7 @@ struct SettingsView: View {
                     await MainActor.run {
                         self.selectedCurrency = currencyCode
                         UserDefaults.standard.set(currencyCode, forKey: self.userManager.prefKey("anita_user_currency"))
+                        UserDefaults.standard.set(currencyCode, forKey: "anita_user_currency")
                         UserDefaults.standard.set("1.234,56", forKey: self.userManager.prefKey("anita_number_format"))
                     }
                 }
@@ -835,6 +841,7 @@ struct SettingsView: View {
     func saveCurrency(_ currency: String) {
         selectedCurrency = currency
         UserDefaults.standard.set(currency, forKey: userManager.prefKey("anita_user_currency"))
+        UserDefaults.standard.set(currency, forKey: "anita_user_currency")
         let newNumberFormat = getNumberFormatForCurrency(currency)
         UserDefaults.standard.set(newNumberFormat, forKey: userManager.prefKey("anita_number_format"))
         savePreferencesToSupabase(currency: currency, numberFormat: newNumberFormat)
@@ -920,6 +927,7 @@ struct SettingsView: View {
         
         selectedCurrency = "EUR"
         UserDefaults.standard.set("EUR", forKey: userManager.prefKey("anita_user_currency"))
+        UserDefaults.standard.set("EUR", forKey: "anita_user_currency")
         UserDefaults.standard.set("MM/DD/YYYY", forKey: userManager.prefKey("anita_date_format"))
         UserDefaults.standard.set("1.234,56", forKey: userManager.prefKey("anita_number_format"))
         emailNotifications = true

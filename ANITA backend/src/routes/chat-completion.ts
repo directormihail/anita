@@ -12,6 +12,30 @@ import { normalizeCategory } from '../utils/categoryNormalizer';
 import { createClient } from '@supabase/supabase-js';
 import * as logger from '../utils/logger';
 
+/** Only these categories are valid for spending limits. Reject AI mistakes like "Any of your spending categories". */
+const VALID_LIMIT_CATEGORIES = new Set([
+  'Groceries', 'Dining Out', 'Gas & Fuel', 'Public Transportation', 'Rideshare & Taxi',
+  'Parking & Tolls', 'Streaming Services', 'Software & Apps', 'Shopping', 'Clothing & Fashion',
+  'Entertainment', 'Fitness & Gym', 'Personal Care', 'Other'
+]);
+
+function isValidLimitCategory(category: string): boolean {
+  if (!category || category.length < 2) return false;
+  const lower = category.toLowerCase();
+  if (/any\s+of|your\s+spending\s+categories|set\s+a\s+limit|which\s+category/i.test(category) || lower.includes('any of')) return false;
+  return VALID_LIMIT_CATEGORIES.has(category);
+}
+
+/** Currency code → symbol for prompts and transaction confirmation. Used so chat respects user's chosen currency (EUR, CHF, etc.). */
+function getCurrencySymbolForCode(currency: string): string {
+  const symbols: { [key: string]: string } = {
+    'USD': '$', 'EUR': '€', 'GBP': '£', 'JPY': '¥', 'CAD': 'C$', 'AUD': 'A$',
+    'CHF': 'CHF', 'CNY': '¥', 'INR': '₹', 'BRL': 'R$', 'MXN': 'MX$', 'SGD': 'S$',
+    'HKD': 'HK$', 'NZD': 'NZ$', 'ZAR': 'R'
+  };
+  return symbols[currency] ?? '€';
+}
+
 // Lazy-load environment variables to ensure they're loaded after dotenv.config()
 function getOpenAIConfig() {
   return {
@@ -93,7 +117,7 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
       return;
     }
 
-    const { messages, maxTokens = 1200, temperature = 0.8, userId, conversationId, userDisplayName: bodyDisplayName } = body;
+    const { messages, maxTokens = 1200, temperature = 0.8, userId, conversationId, userDisplayName: bodyDisplayName, userCurrency: bodyUserCurrency, currencyCode: bodyCurrencyCode } = body;
 
     // Validate messages array
     if (!Array.isArray(messages) || messages.length === 0) {
@@ -126,14 +150,19 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
     // This ensures the AI has access to user's financial data and strict pattern rules on every request
     let systemPrompt: string | null = null;
     const supabase = getSupabaseClient();
+    const clientCurrency = (typeof bodyUserCurrency === 'string' && bodyUserCurrency) ? bodyUserCurrency : (typeof bodyCurrencyCode === 'string' && bodyCurrencyCode) ? bodyCurrencyCode : undefined;
     let transactionAddedInPreCall = false;
     if (userId && supabase) {
       try {
-        // Use conversationId if provided, otherwise use empty string (will still fetch transactions)
-        systemPrompt = await buildSystemPrompt(userId, conversationId || '');
+        // Build prompt; use profile currency from DB, fallback to client-sent currency so chat always respects user's choice (EUR, CHF, etc.)
+        const systemResult = await buildSystemPrompt(userId, conversationId || '', { clientCurrency });
+        systemPrompt = systemResult.prompt;
+        const resolvedUserCurrency = systemResult.userCurrency;
         // If we can extract a full transaction from the conversation, add it to the DB first and verify;
         // then tell the AI to confirm. This way we only confirm after the backend has actually added it.
-        const txFromConversation = extractTransactionFromConversation(sanitizedMessages);
+        // Never treat limit-flow messages (e.g. user confirming "87.52" or "Dining Out") as a new transaction.
+        const conversationIsAboutLimit = conversationContextSuggestLimitFlow(sanitizedMessages);
+        const txFromConversation = !conversationIsAboutLimit ? extractTransactionFromConversation(sanitizedMessages) : null;
         if (txFromConversation && systemPrompt) {
           const messageId = `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
           const transactionData: any = {
@@ -162,7 +191,7 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
               .maybeSingle();
             if (verified) {
               transactionAddedInPreCall = true;
-              const currencySymbol = systemPrompt.includes('€') ? '€' : systemPrompt.includes('£') ? '£' : '$';
+              const currencySymbol = getCurrencySymbolForCode(resolvedUserCurrency);
               systemPrompt += `\n\n[BACKEND INSTRUCTION - FOLLOW EXACTLY] The following transaction was just successfully added to the database by the system: ${txFromConversation.type} ${currencySymbol}${txFromConversation.amount} in category "${txFromConversation.category}" (${txFromConversation.description}). Confirm this to the user in a short, friendly message with ✅. Do NOT say you are about to add it or will add it — it is already saved.`;
               logger.info('Pre-call transaction added and verified', { requestId, userId, type: txFromConversation.type, amount: txFromConversation.amount });
               await supabase.from('xp_rules').upsert(
@@ -290,7 +319,8 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
 
     // When AI confirms it added an expense/income, we MUST persist and verify in DB before showing success.
     // Never show a confirmation (✅) to the user unless the transaction is actually in the database.
-    if (userId && supabase && !transactionAddedInPreCall) {
+    // CRITICAL: Never treat limit/goal confirmations as transactions — they go only to targets, not anita_data.
+    if (userId && supabase && !transactionAddedInPreCall && !isLimitOrGoalConfirmation(aiResponse)) {
       try {
         let tx = parseTransactionFromAiResponse(sanitizedMessages, aiResponse);
         if (!tx && looksLikeTransactionConfirmation(aiResponse)) {
@@ -370,7 +400,20 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
     // Automatically create target if detected in conversation
     if (userId && supabase) {
       try {
-        const targetInfo = parseTargetFromConversation(sanitizedMessages, aiResponse);
+        // Get user currency preference first so we can pass it to parsing and use for target
+        let userCurrencyForTarget = 'EUR';
+        try {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('currency_code')
+            .eq('id', userId)
+            .single();
+          if (profileData?.currency_code) {
+            userCurrencyForTarget = profileData.currency_code;
+          }
+        } catch (_) { /* use default */ }
+
+        const targetInfo = parseTargetFromConversation(sanitizedMessages, aiResponse, userCurrencyForTarget);
         if (targetInfo) {
           logger.info('Target detected in conversation, creating automatically', { 
             requestId, 
@@ -379,22 +422,6 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
             amount: targetInfo.amount,
             currency: targetInfo.currency
           });
-          
-          // Get user currency preference
-          let userCurrency = 'EUR';
-          try {
-            const { data: profileData } = await supabase
-              .from('profiles')
-              .select('currency_code')
-              .eq('id', userId)
-              .single();
-            
-            if (profileData?.currency_code) {
-              userCurrency = profileData.currency_code;
-            }
-          } catch (error) {
-            // Use default currency if profile fetch fails
-          }
 
           const targetData: any = {
             account_id: userId,
@@ -402,7 +429,7 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
             description: targetInfo.description || null,
             target_amount: targetInfo.amount,
             current_amount: 0,
-            currency: targetInfo.currency || userCurrency,
+            currency: targetInfo.currency || userCurrencyForTarget,
             status: 'active',
             target_type: 'savings',
             priority: 'medium',
@@ -507,20 +534,25 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
           let budgetRecommendations: Array<{ category: string; amount: number; currency?: string }> | null =
             limitConfirmation ? [limitConfirmation] : parseBudgetRecommendations(aiResponse);
 
-          // Fallback: user confirmed with "Do it" / "Yes" but AI didn't output the exact phrase — get suggestion from previous AI message
+          // Fallback: user confirmed with "Do it" / "Yes" but AI didn't output the exact phrase — get suggestion from previous AI message.
+          // Only use when previous message was a SPECIFIC suggestion (e.g. "Dining Out" and "target of €50"), not the generic offer ("Would you like me to help you set a limit for any of your spending categories?").
           let createdLimitFromFallback = false;
           const isUserConfirmation = /^(do it|yes|sure|set it|create it|proceed|please|sounds good|go ahead|ok|okay)$/i.test(lastUserMessage.trim());
           if (!budgetRecommendations?.length && isUserConfirmation) {
             const prevAssistantMessage = [...sanitizedMessages].reverse().find((m: { role: string }) => m.role === 'assistant')?.content || '';
-            const suggestion = parseLimitSuggestionFromMessage(prevAssistantMessage);
-            if (suggestion) {
-              budgetRecommendations = [suggestion];
-              createdLimitFromFallback = true;
-              logger.info('Limit suggestion parsed from previous message (user confirmed)', {
-                requestId,
-                category: suggestion.category,
-                amount: suggestion.amount
-              });
+            const isGenericOffer = /would you like (me to )?help you set a limit (for )?any of your spending categories/i.test(prevAssistantMessage) ||
+              /set a limit for any of (these )?(your )?spending categories/i.test(prevAssistantMessage);
+            if (!isGenericOffer) {
+              const suggestion = parseLimitSuggestionFromMessage(prevAssistantMessage);
+              if (suggestion && isValidLimitCategory(suggestion.category)) {
+                budgetRecommendations = [suggestion];
+                createdLimitFromFallback = true;
+                logger.info('Limit suggestion parsed from previous message (user confirmed)', {
+                  requestId,
+                  category: suggestion.category,
+                  amount: suggestion.amount
+                });
+              }
             }
           }
 
@@ -579,12 +611,14 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
             recommendationCount: budgetRecommendations?.length || 0
           });
           
-          if (budgetRecommendations && budgetRecommendations.length > 0) {
+          // Only create limits for valid spending categories (reject AI mistakes like "Any of your spending categories")
+          const validRecommendations = budgetRecommendations?.filter(r => isValidLimitCategory(r.category)) ?? [];
+          if (validRecommendations.length > 0) {
             logger.info('Budget recommendations detected, creating automatically', { 
               requestId, 
               userId, 
-              count: budgetRecommendations.length,
-              recommendations: budgetRecommendations.map(r => `${r.category}: ${r.amount}`)
+              count: validRecommendations.length,
+              recommendations: validRecommendations.map(r => `${r.category}: ${r.amount}`)
             });
             
             // Get user currency preference
@@ -619,7 +653,7 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
 
             const createdTargetIds: string[] = [];
             
-            for (const recommendation of budgetRecommendations) {
+            for (const recommendation of validRecommendations) {
               // Skip if budget target already exists for this category
               if (recommendation.category && existingCategories.has(recommendation.category.toLowerCase())) {
                 logger.info('Budget target already exists for category', { 
@@ -673,17 +707,18 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
               (res as any).createdTargetId = createdTargetIds[0];
               (res as any).createdTargetType = 'budget';
               // Store category from first recommendation
-              if (budgetRecommendations.length > 0) {
-                (res as any).createdTargetCategory = budgetRecommendations[0].category;
+              if (validRecommendations.length > 0) {
+                (res as any).createdTargetCategory = validRecommendations[0].category;
               }
             } else if (hadLimitConfirmation) {
               // AI said "I've set a limit" but we didn't actually create it — don't show false confirmation
               finalResponse = "I couldn't set that limit. Please try again or add it from the Finance page.";
             }
             // When we created from fallback (user said "Do it"), ensure we show the confirmation message
-            if (createdLimitFromFallback && createdTargetIds.length > 0 && budgetRecommendations?.length > 0) {
-              const rec = budgetRecommendations[0];
-              const sym = rec.currency === 'USD' ? '$' : rec.currency === 'GBP' ? '£' : rec.currency === 'JPY' ? '¥' : '€';
+            if (createdLimitFromFallback && createdTargetIds.length > 0 && validRecommendations.length > 0) {
+              const rec = validRecommendations[0];
+              const effectiveCurrency = rec.currency || userCurrency;
+              const sym = effectiveCurrency === 'USD' ? '$' : effectiveCurrency === 'GBP' ? '£' : effectiveCurrency === 'JPY' ? '¥' : effectiveCurrency === 'CHF' ? 'CHF' : '€';
               finalResponse = `I've set a limit for ${rec.category} at target ${sym}${rec.amount.toFixed(2)}. ✅ You can review your limit now.`;
             }
           }
@@ -914,10 +949,27 @@ function shortifyDescription(userMessage: string, category: string): string {
 }
 
 /**
+ * Detect if the AI response is confirming a LIMIT or GOAL (savings target), NOT a transaction.
+ * We must never persist these as transactions — they belong only in the targets table.
+ */
+function isLimitOrGoalConfirmation(aiResponse: string): boolean {
+  const r = aiResponse.trim().toLowerCase();
+  return (
+    /(?:I've set|I have set|set|created)\s+(?:a )?limit\s+for\s+/i.test(aiResponse) ||
+    /limit\s+for\s+[^.]+?\s+at\s+target\s*[$€£¥]?\s*\d/i.test(aiResponse) ||
+    /(?:savings\s+)?goal\s+(?:is\s+)?set\s+for|goal\s+for\s+.+?\s+by|target\s+amount\s+of/i.test(aiResponse) ||
+    r.includes('monthly limit:') ||
+    r.includes('spending limit')
+  );
+}
+
+/**
  * Detect if the AI response looks like a transaction confirmation (e.g. "Got it — $7.26 for groceries. Yum! ✅")
  * even when it doesn't use the exact "I've added your expense" phrasing. Used so we never show ✅ without verifying DB.
+ * Returns false for limit/goal confirmations so we never treat them as transactions.
  */
 function looksLikeTransactionConfirmation(aiResponse: string): boolean {
+  if (isLimitOrGoalConfirmation(aiResponse)) return false;
   const r = aiResponse.trim();
   if (!r.includes('✅')) return false;
   const hasAmount = /[$€£¥]\s*\d+(?:[.,]\d{2})?|\d+(?:[.,]\d{2})?\s*(?:€|eur|\$|usd|dollars?)/i.test(r);
@@ -933,6 +985,7 @@ function parseTransactionFromConfirmationFallback(
   messages: Array<{ role: string; content: string }>,
   aiResponse: string
 ): { type: 'expense' | 'income'; amount: number; category: string; description: string } | null {
+  if (isLimitOrGoalConfirmation(aiResponse)) return null;
   if (!looksLikeTransactionConfirmation(aiResponse)) return null;
   const r = aiResponse.trim();
   const lastUserMessage = messages.filter(m => m.role === 'user').pop()?.content?.trim() || '';
@@ -957,6 +1010,20 @@ function parseTransactionFromConfirmationFallback(
   const parenMatch = r.match(/\(([^)]+)\)/);
   const description = (parenMatch ? parenMatch[1].trim() : null) || shortifyDescription(lastUserMessage, category) || `${type} ${amount} ${category}`;
   return { type, amount, category, description };
+}
+
+/**
+ * Returns true if the conversation context suggests the user is in a limit-setting flow
+ * (e.g. AI asked "set a limit for X" or "target of Y", user replying with amount or category).
+ * When true, we must NOT treat the user's message as a new expense/income transaction.
+ */
+function conversationContextSuggestLimitFlow(messages: Array<{ role: string; content: string }>): boolean {
+  const recent = messages.slice(-4).map(m => (m.content || '').toLowerCase());
+  const text = recent.join(' ');
+  return (
+    /(?:set\s+)?(?:a\s+)?limit\s+for\s+|limit\s+for\s+.+?\s+at\s+target|would you like to set the limit|target\s+of\s+[$€£¥]?\s*\d|monthly limit:|spending limit/i.test(text) ||
+    /(?:yourself|with my help)\s*[.?]?\s*$/im.test(text)
+  );
 }
 
 /**
@@ -1088,7 +1155,7 @@ function extractCategoryFromMessage(message: string): string | null {
  * Parse target information from conversation messages
  * Looks for patterns like "I want to save X for Y by Z" or "For X" then "Y" (amount)
  */
-function parseTargetFromConversation(messages: Array<{ role: string; content: string }>, aiResponse: string): { title: string; amount: number; currency?: string; date?: string; description?: string } | null {
+function parseTargetFromConversation(messages: Array<{ role: string; content: string }>, aiResponse: string, userCurrency: string = 'EUR'): { title: string; amount: number; currency?: string; date?: string; description?: string } | null {
   // Check if AI response confirms a target/goal was set (indicates we should create one)
   // Updated to also match "goal" in addition to "target"
   const aiConfirmsTarget = /(?:got it|noted|saved|created|set|great|perfect|done).*?(?:target|goal|savings goal)/i.test(aiResponse);
@@ -1119,11 +1186,15 @@ function parseTargetFromConversation(messages: Array<{ role: string; content: st
     if (match1[3]) {
       date = parseTargetDate(match1[3]);
     }
-    // Detect currency
+    // Detect currency from user message
     if (match1[0].toLowerCase().includes('dollar') || match1[0].toLowerCase().includes('usd') || match1[0].includes('$')) {
       currency = 'USD';
     } else if (match1[0].toLowerCase().includes('euro') || match1[0].toLowerCase().includes('eur') || match1[0].includes('€')) {
       currency = 'EUR';
+    } else if (match1[0].toLowerCase().includes('chf') || match1[0].includes('CHF')) {
+      currency = 'CHF';
+    } else if (!currency) {
+      currency = userCurrency;
     }
   } else {
     // Pattern 2: "For X" (description) in one message, then "Y" (amount) in next
@@ -1197,6 +1268,10 @@ function parseTargetFromConversation(messages: Array<{ role: string; content: st
         currency = 'USD';
       } else if (aiResponse.includes('€') || aiResponse.toLowerCase().includes('euro') || aiResponse.toLowerCase().includes('eur')) {
         currency = 'EUR';
+      } else if (aiResponse.includes('CHF') || aiResponse.toLowerCase().includes('chf')) {
+        currency = 'CHF';
+      } else if (!currency) {
+        currency = userCurrency;
       }
     }
   }
@@ -1241,7 +1316,7 @@ function parseTargetFromConversation(messages: Array<{ role: string; content: st
         title = 'Retirement Fund';
       } else {
         // Default to a descriptive name based on amount
-        title = `Savings Goal (${amount} ${currency || 'EUR'})`;
+        title = `Savings Goal (${amount} ${currency || userCurrency})`;
       }
     } else {
       // Clean and format the title properly
@@ -1272,7 +1347,7 @@ function parseTargetFromConversation(messages: Array<{ role: string; content: st
       amount,
       currency: currency || undefined,
       date,
-      description: `Save ${amount} ${currency || 'EUR'} for ${title}${date ? ` by ${date}` : ''}`
+      description: `Save ${amount} ${currency || userCurrency} for ${title}${date ? ` by ${date}` : ''}`
     };
   }
 
@@ -1285,8 +1360,8 @@ function parseTargetFromConversation(messages: Array<{ role: string; content: st
  */
 function parseLimitConfirmationFromAiResponse(aiResponse: string): { category: string; amount: number; currency?: string } | null {
   const r = aiResponse.trim();
-  // Match: "I've set a limit for X at target $Y" / "set a limit for X at target €Y" / "limit for X at target $Y"
-  const pattern = /(?:I've set|I have set|I've created|set|created)\s+(?:a )?limit for\s+([^.✓!]+?)\s+at target\s*([$€£¥]|USD|EUR|GBP|JPY)?\s*(\d+(?:\.\d{1,2})?)/i;
+  // Match: "I've set a limit for X at target $Y" / "set a limit for X at target €Y" / "limit for X at target CHF Y"
+  const pattern = /(?:I've set|I have set|I've created|set|created)\s+(?:a )?limit for\s+([^.✓!]+?)\s+at target\s*([$€£¥]|USD|EUR|GBP|JPY|CHF)?\s*(\d+(?:\.\d{1,2})?)/i;
   const match = r.match(pattern);
   if (!match) return null;
   const categoryRaw = match[1].trim();
@@ -1294,12 +1369,16 @@ function parseLimitConfirmationFromAiResponse(aiResponse: string): { category: s
   const amountStr = match[3];
   const amount = parseFloat(amountStr);
   if (!categoryRaw || !Number.isFinite(amount) || amount <= 0) return null;
+  // Reject AI misunderstanding: "Any of your spending categories" is not a real category
+  if (!isValidLimitCategory(categoryRaw)) return null;
   let currency: string | undefined;
   if (currencySymbol.includes('$') || currencySymbol.toUpperCase() === 'USD') currency = 'USD';
   else if (currencySymbol.includes('€') || currencySymbol.toUpperCase() === 'EUR') currency = 'EUR';
   else if (currencySymbol.includes('£') || currencySymbol.toUpperCase() === 'GBP') currency = 'GBP';
   else if (currencySymbol.includes('¥') || currencySymbol.toUpperCase() === 'JPY') currency = 'JPY';
+  else if (currencySymbol.toUpperCase() === 'CHF') currency = 'CHF';
   const category = normalizeCategory(categoryRaw);
+  if (!isValidLimitCategory(category)) return null;
   return { category, amount: Math.round(amount * 100) / 100, currency };
 }
 
@@ -1310,20 +1389,21 @@ function parseLimitConfirmationFromAiResponse(aiResponse: string): { category: s
 function parseLimitSuggestionFromMessage(text: string): { category: string; amount: number; currency?: string } | null {
   if (!text || !text.trim()) return null;
   const r = text.trim();
-  // Amount: "target of $59.22" / "target $59.22" / "about $59.22" / "$59.22"
-  const withSym = r.match(/(?:target\s+(?:of\s+)?|about\s+)?([$€£¥])\s*(\d+(?:\.\d{1,2})?)/i);
+  // Amount: "target of $59.22" / "target CHF 59.22" / "about €59.22" / "$59.22"
+  const withSym = r.match(/(?:target\s+(?:of\s+)?|about\s+)?([$€£¥]|CHF)\s*(\d+(?:\.\d{1,2})?)/i);
   const noSym = r.match(/(?:target\s+(?:of\s+)?)(\d+(?:\.\d{1,2})?)/);
   const amountMatch = withSym || noSym;
   if (!amountMatch) return null;
   const amountStr = amountMatch[2] || amountMatch[1];
   const amount = parseFloat(amountStr);
   if (!Number.isFinite(amount) || amount <= 0) return null;
-  const sym = withSym ? (withSym[1] || '').trim() : '';
+  const sym = withSym ? (withSym[1] || '').trim().toUpperCase() : '';
   let currency: string | undefined;
   if (sym === '$') currency = 'USD';
   else if (sym === '€') currency = 'EUR';
   else if (sym === '£') currency = 'GBP';
   else if (sym === '¥') currency = 'JPY';
+  else if (sym === 'CHF') currency = 'CHF';
   // Category: "limit for Dining Out" / "for Dining Out" / "set a limit for Dining Out"
   const categoryMatch = r.match(/(?:limit for|set a limit for)\s+([A-Za-z][A-Za-z\s&]+?)(?:\s*\.|,|\?|$|\s+How|\s+Would|\s+about)/i) ||
     r.match(/(?:^|\.|\n)\s*(?:Let's set a limit for)\s+([A-Za-z][A-Za-z\s&]+?)(?:\s*\.|,|\?)/i);
@@ -1354,7 +1434,7 @@ function parseBudgetRecommendations(aiResponse: string): Array<{ category: strin
   // Pattern 1: Match "1. **Category Name** — target $X" with markdown bold
   // Also match without numbering: "**Category Name** — target $X"
   // Updated to capture decimal amounts more precisely (e.g., 21.60, 21.6, 20)
-  const pattern1 = /(?:^\d+\.\s*)?\*\*([^*]+?)\*\*\s*[—–-]\s*target\s*([$€£¥]|USD|EUR|GBP|JPY)?\s*(\d+(?:\.\d{1,2})?)/gmi;
+  const pattern1 = /(?:^\d+\.\s*)?\*\*([^*]+?)\*\*\s*[—–-]\s*target\s*([$€£¥]|USD|EUR|GBP|JPY|CHF)?\s*(\d+(?:\.\d{1,2})?)/gmi;
   
   let match;
   while ((match = pattern1.exec(recommendationsSection)) !== null) {
@@ -1371,6 +1451,8 @@ function parseBudgetRecommendations(aiResponse: string): Array<{ category: strin
       currency = 'GBP';
     } else if (currencySymbol.includes('¥') || currencySymbol.toUpperCase() === 'JPY') {
       currency = 'JPY';
+    } else if (currencySymbol.toUpperCase() === 'CHF') {
+      currency = 'CHF';
     }
     
     // Parse amount with full precision (preserve decimals)
@@ -1395,7 +1477,7 @@ function parseBudgetRecommendations(aiResponse: string): Array<{ category: strin
   
   // Pattern 2: Match "1. Category Name — target $X" without markdown (fallback)
   if (recommendations.length === 0) {
-    const pattern2 = /^\d+\.\s*([A-Za-z\s&]+?)\s*[—–-]\s*target\s*([$€£¥]|USD|EUR|GBP|JPY)?\s*(\d+(?:\.\d{1,2})?)/gmi;
+    const pattern2 = /^\d+\.\s*([A-Za-z\s&]+?)\s*[—–-]\s*target\s*([$€£¥]|USD|EUR|GBP|JPY|CHF)?\s*(\d+(?:\.\d{1,2})?)/gmi;
     let match2;
     while ((match2 = pattern2.exec(recommendationsSection)) !== null) {
       const category = match2[1].trim();
@@ -1411,6 +1493,8 @@ function parseBudgetRecommendations(aiResponse: string): Array<{ category: strin
         currency = 'GBP';
       } else if (currencySymbol.includes('¥') || currencySymbol.toUpperCase() === 'JPY') {
         currency = 'JPY';
+      } else if (currencySymbol.toUpperCase() === 'CHF') {
+        currency = 'CHF';
       }
       
       const amount = parseFloat(amountStr);
@@ -1434,12 +1518,12 @@ function parseBudgetRecommendations(aiResponse: string): Array<{ category: strin
     const lines = recommendationsSection.split('\n');
     for (const line of lines) {
       // Look for pattern: "Category" followed by "target" and amount (with or without dashes)
-      const pattern3 = /([A-Za-z\s&]+?)\s+[—–-]\s+target\s+([$€£¥]|USD|EUR|GBP|JPY)?\s*(\d+(?:\.\d{1,2})?)/i;
+      const pattern3 = /([A-Za-z\s&]+?)\s+[—–-]\s+target\s+([$€£¥]|USD|EUR|GBP|JPY|CHF)?\s*(\d+(?:\.\d{1,2})?)/i;
       const match3 = line.match(pattern3);
       
       // Also try pattern without dashes: "Category target $X"
       if (!match3) {
-        const pattern3b = /([A-Za-z\s&]+?)\s+target\s+([$€£¥]|USD|EUR|GBP|JPY)?\s*(\d+(?:\.\d{1,2})?)/i;
+        const pattern3b = /([A-Za-z\s&]+?)\s+target\s+([$€£¥]|USD|EUR|GBP|JPY|CHF)?\s*(\d+(?:\.\d{1,2})?)/i;
         const match3b = line.match(pattern3b);
         if (match3b) {
           const category = match3b[1].trim();
@@ -1459,6 +1543,8 @@ function parseBudgetRecommendations(aiResponse: string): Array<{ category: strin
                 currency = 'GBP';
               } else if (currencySymbol.includes('¥') || currencySymbol.toUpperCase() === 'JPY') {
                 currency = 'JPY';
+              } else if (currencySymbol.toUpperCase() === 'CHF') {
+                currency = 'CHF';
               }
               
               const amount = parseFloat(amountStr);
@@ -1501,6 +1587,8 @@ function parseBudgetRecommendations(aiResponse: string): Array<{ category: strin
           currency = 'GBP';
         } else if (currencySymbol.includes('¥') || currencySymbol.toUpperCase() === 'JPY') {
           currency = 'JPY';
+        } else if (currencySymbol.toUpperCase() === 'CHF') {
+          currency = 'CHF';
         }
         
         const amount = parseFloat(amountStr);
@@ -1568,14 +1656,15 @@ function parseTargetDate(dateStr: string): string | undefined {
 /**
  * Build context-aware system prompt similar to webapp
  */
-async function buildSystemPrompt(userId: string, conversationId: string): Promise<string> {
+async function buildSystemPrompt(userId: string, conversationId: string, options?: { clientCurrency?: string }): Promise<{ prompt: string; userCurrency: string }> {
   const supabase = getSupabaseClient();
+  const fallbackPrompt = 'No financial data available. Use conversation context only.';
   if (!supabase) {
-    return 'No financial data available. Use conversation context only.';
+    return { prompt: fallbackPrompt, userCurrency: options?.clientCurrency || 'EUR' };
   }
 
-  // Fetch user preferences (currency) and display name so AI can address the user
-  let userCurrency = 'USD';
+  // Fetch user preferences (currency) and display name so AI can address the user. Use DB first, then client-sent currency.
+  let userCurrency = options?.clientCurrency || 'EUR';
   let userNameFromDb: string | null = null;
   try {
     const { data: profileData, error: profileError } = await supabase
@@ -1586,6 +1675,7 @@ async function buildSystemPrompt(userId: string, conversationId: string): Promis
     
     if (!profileError && profileData) {
       if (profileData.currency_code) userCurrency = profileData.currency_code;
+      else if (options?.clientCurrency) userCurrency = options.clientCurrency;
       const name = (profileData.display_name ?? profileData.name ?? profileData.full_name) as string | undefined;
       if (name && typeof name === 'string' && name.trim()) userNameFromDb = name.trim();
     }
@@ -1593,29 +1683,10 @@ async function buildSystemPrompt(userId: string, conversationId: string): Promis
     logger.warn('Failed to fetch user preferences', { error: error instanceof Error ? error.message : 'Unknown' });
   }
 
-  // Get currency symbol for formatting
-  const getCurrencySymbol = (currency: string): string => {
-    const symbols: { [key: string]: string } = {
-      'USD': '$',
-      'EUR': '€',
-      'GBP': '£',
-      'JPY': '¥',
-      'CAD': 'C$',
-      'AUD': 'A$',
-      'CHF': 'CHF',
-      'CNY': '¥',
-      'INR': '₹',
-      'BRL': 'R$',
-      'MXN': 'MX$',
-      'SGD': 'S$',
-      'HKD': 'HK$',
-      'NZD': 'NZ$',
-      'ZAR': 'R'
-    };
-    return symbols[currency] || '$';
-  };
+  const currencySymbol = getCurrencySymbolForCode(userCurrency);
 
-  const currencySymbol = getCurrencySymbol(userCurrency);
+  // Explicit instruction so AI uses only the user's chosen currency (never default to dollars)
+  const currencyInstruction = `CURRENCY — CRITICAL: Always use the user's currency in every reply: ${currencySymbol} (${userCurrency}). Never use $ or USD unless the user's currency is USD. All amounts, limits, and goals must be shown in ${userCurrency} only.\n\n`;
 
   // Fetch ALL transactions (no limit) to get complete financial picture
   const { data: transactionsData, error: transactionsError } = await supabase
@@ -1776,13 +1847,20 @@ async function buildSystemPrompt(userId: string, conversationId: string): Promis
   const userNameLine = userNameFromDb
     ? `The user's name is ${userNameFromDb}. You may address them by name when appropriate.\n\n`
     : '';
-  return `${userNameLine}FINANCIAL SNAPSHOT:
-- Total Income: ${currencySymbol}${totalIncome.toFixed(2)}
-- Total Expenses: ${currencySymbol}${totalExpenses.toFixed(2)}
-- Net Balance: ${currencySymbol}${netBalance.toFixed(2)}
+  const fullPrompt = `${userNameLine}${currencyInstruction}FINANCIAL DATA — RULES:
+- DEFAULT: Always show CURRENT MONTH only (monthly income, monthly expenses, monthly balance). Do not show "Total Income" or "Total Expenses" (all-time) unless the user explicitly asks for overall/total/all-time figures.
+- MAIN SNAPSHOT: Present the current month summary in TEXT form (full sentences), e.g. "This month you've earned ${currencySymbol}X, spent ${currencySymbol}Y, and your balance is ${currencySymbol}Z." Do NOT use bullet points for income, expenses, or balance.
+- BULLET POINTS: Use bullet points ONLY when listing spending categories (e.g. "Your top spending categories this month: • Dining Out ${currencySymbol}X • Groceries ${currencySymbol}Y"). Never use bullets for the main financial numbers.
+
+CURRENT MONTH (always use this for the default snapshot):
 - Monthly Income: ${currencySymbol}${monthlyIncome.toFixed(2)}
 - Monthly Expenses: ${currencySymbol}${monthlyExpenses.toFixed(2)}
 - Monthly Balance: ${currencySymbol}${financialInsights.monthlyBalance.toFixed(2)}
+
+ALL-TIME (only mention when user explicitly asks for total/overall):
+- Total Income: ${currencySymbol}${totalIncome.toFixed(2)}
+- Total Expenses: ${currencySymbol}${totalExpenses.toFixed(2)}
+- Net Balance: ${currencySymbol}${netBalance.toFixed(2)}
 
 ${recentTransactionSummary ? `Recent Transactions: ${recentTransactionSummary}` : ''}
 
@@ -1854,15 +1932,15 @@ P3 — Set a Target:
 - Limit — with help: Use only VARIABLE spending categories from monthlyCategoryBreakdown (current month) in the backend; skip fixed costs. In your reply do NOT say "variable" — say "spending categories" or "your top spending categories". Present as a short markdown list with category and amount only (e.g. "1. **Groceries** · ${currencySymbol}180.51" — no "Variable" in the list). Let user choose one. When they confirm, include: "I've set a limit for [Category] at target ${currencySymbol}[amount]." Then ✅ and button to review limit. Use suggested amount 10–20% below current monthly spending for that category.
 
 P4 — Analyse Budget:
-- Step 1: Check health from FINANCIAL SNAPSHOT / DETAILED FINANCIAL DATA. Send a short message if budget is OK or not.
-- Step 2: Ask if user would like to set a limit (e.g. "Would you like me to help you set a limit for any of your spending categories?"). Do NOT say "variable" — we only offer spending categories. If user says no: "All the best with your financial journey! Come back anytime 😄" If user says yes (e.g. "Yes", "Limit", "Sure"): ask one follow-up only: "Would you like to set the limit yourself (you tell me category and amount) or with my help? (I can suggest categories and amounts.)" Then based on their next reply go to Limit — alone or Limit — with help; do not ask "goal or limit".
+- Step 1: Check health from CURRENT MONTH data (monthly income, monthly expenses, monthly balance). Send a short message in TEXT form (e.g. "This month you've earned X, spent Y, and your balance is Z — looking good!" or "Uh-oh, you've spent more than you earned this month."). Do NOT use bullet points for the main snapshot. If you list spending categories, use bullet points only for that list. Only show total/all-time income and expenses if the user explicitly asked for them.
+- Step 2: Ask if user would like to set a limit (e.g. "Would you like me to help you set a limit for any of your spending categories?"). If user says no: "All the best with your financial journey! Come back anytime 😄" If user says yes (e.g. "Yes", "Sure", "OK", "Limit"): do NOT create or confirm a limit — they only accepted your offer to help. Ask exactly one follow-up: "Would you like to set the limit yourself (you tell me category and amount) or with my help? (I can suggest categories and amounts.)" Wait for their reply. Only after they choose "yourself" or "with help" AND give a specific category (e.g. Dining Out) and amount may you say "I've set a limit for [Category] at target [amount]." Never use "any of your spending categories" as a category; never invent a limit from income/expense numbers when user just said Sure/Yes.
 
 P5 — Explain Who Anita Is:
 - Step 1: Short explanation of what Anita does. Ask if user wants to analyse budget. If yes: follow P4. If no: "All the best with your financial journey! Come back anytime 😄"
 
 P6 — Explain Where Money Goes:
-- Step 1: Show where the user overspends by listing spending categories from the current month (use monthlyCategoryBreakdown; backend uses VARIABLE only, skip fixed costs). Do NOT say "variable" to the user — say "spending categories" or "your top spending categories". Format as a short markdown list with category and amount only (e.g. "1. **Groceries** · ${currencySymbol}180.51", no "Variable" in the list). Then ask a single concise follow-up question.
-- Step 2: When the user confirms, create the limit in the database by including this exact phrase in your reply: "I've set a limit for [Category] at target ${currencySymbol}[amount]." Then add ✅ and button to review limit. If user refuses to set a limit: "All the best with your financial journey! Come back anytime 😄"
+- Step 1: Show CURRENT MONTH only. First give the main summary in TEXT form (e.g. "This month you've spent ${currencySymbol}X in your main spending categories."). Then list spending categories using BULLET POINTS only for the category list (monthlyCategoryBreakdown; VARIABLE only, skip fixed costs). E.g. "Your top spending categories: • Groceries ${currencySymbol}180.51 • Dining Out ${currencySymbol}109.40". Do NOT use bullet points for income/expense/balance — only for the category list. Then ask a single concise follow-up question.
+- Step 2: When the user confirms, create the limit in the database by including this exact phrase in your reply: "I've set a limit for [Category] at target ${currencySymbol}[amount]." Then add ✅. If user refuses to set a limit: "All the best with your financial journey! Come back anytime 😄"
 
 Categories (for P1, P2, P3, P6 — use EXACTLY these names, proper case, "&" not "and"): Rent, Mortgage, Electricity, Water & Sewage, Gas & Heating, Internet & Phone, Groceries, Dining Out, Gas & Fuel, Public Transportation, Rideshare & Taxi, Parking & Tolls, Streaming Services, Software & Apps, Shopping, Clothing & Fashion, Entertainment, Medical & Healthcare, Fitness & Gym, Personal Care, Education, Loan Payments, Debts, Leasing, Salary, Freelance & Side Income, Other. Never invent a category; always pick from this list.
 
@@ -1875,10 +1953,11 @@ Context → category (recognize from what the user says and use the canonical na
 - Gas & Fuel: gas station, gasoline, fuel (car). Gas & Heating: gas bill, heating (home).
 - Internet & Phone: internet, phone bill, mobile, radio tax, TV tax, Rundfunkbeitrag.
 - Income only (P1): Salary (salary, paycheck, wage), Freelance & Side Income (freelance, gig, side income, bonus).
-Use only numbers/categories from FINANCIAL SNAPSHOT and DETAILED FINANCIAL DATA above. For limits use only variable spending categories (e.g. Dining Out, Entertainment, Shopping, Streaming Services); never rent, debt, utilities.
+Use only numbers/categories from CURRENT MONTH / DETAILED FINANCIAL DATA above. Default to current month; use all-time totals only when user explicitly asks. For limits use only variable spending categories (e.g. Dining Out, Entertainment, Shopping, Streaming Services); never rent, debt, utilities.
 
 Fixed vs Variable (internal use only — do not say "variable" or "fixed" to the user):
 - Fixed costs: Rent, Mortgage, Electricity, Water & Sewage, Gas & Heating, Internet & Phone, Education, Medical & Healthcare, and any debt/loan repayments. Do NOT suggest limits for these.
 - Variable costs: Groceries, Dining Out, Gas & Fuel, Public Transportation, Rideshare & Taxi, Parking & Tolls, Streaming Services, Software & Apps, Shopping, Clothing & Fashion, Entertainment, Fitness & Gym, Personal Care, Other (suggest limits only for these). When presenting to the user, say "spending categories" and show lists as "**Category** · ${currencySymbol}amount" with no "Variable" label.`;
+  return { prompt: fullPrompt, userCurrency };
 }
 

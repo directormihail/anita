@@ -31,6 +31,25 @@ struct UpgradeView: View {
         return "free"
     }
     
+    /// User's currency from database (profiles.currency_code), synced to UserDefaults.
+    private var userCurrency: String {
+        UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+    }
+    
+    /// Format a subscription price in the user's chosen currency (same as rest of app).
+    private func formatSubscriptionPrice(_ amount: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = userCurrency
+        formatter.maximumFractionDigits = 2
+        formatter.minimumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: amount)) ?? "\(amount)"
+    }
+    
+    /// Premium price in user's chosen currency (same as database / rest of app).
+    private var premiumPriceString: String {
+        formatSubscriptionPrice(4.99)
+    }
     
     var body: some View {
         ZStack {
@@ -93,15 +112,15 @@ struct UpgradeView: View {
                         
                         // Subscription Plans - Always show all plans (Apple In-App Purchase)
                         VStack(spacing: 24) {
-                            // Free Plan - Always visible
-                            FreePlanCard(isCurrentPlan: currentPlan == "free")
+                            // Free Plan - Always visible (price in user's currency)
+                            FreePlanCard(isCurrentPlan: currentPlan == "free", price: formatSubscriptionPrice(0))
                             
-                            // Pro Plan (€4.99/month)
+                            // Pro Plan (price in user's currency when StoreKit unavailable)
                             SubscriptionPlanCard(
                                 planType: .pro,
                                 isCurrentPlan: currentPlan == "pro",
                                 isCreatingCheckout: storeKitService.isLoading,
-                                price: storeKitService.getProduct("com.anita.pro.monthly")?.displayPrice ?? "€4.99",
+                                price: premiumPriceString,
                                 onCheckout: {
                                     Task { await purchasePlan(productId: "com.anita.pro.monthly") }
                                 }
@@ -267,6 +286,8 @@ enum PlanType {
 
 struct FreePlanCard: View {
     let isCurrentPlan: Bool
+    /// Price string in user's currency (e.g. "$0", "€0")
+    var price: String = "$0"
     
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -314,7 +335,7 @@ struct FreePlanCard: View {
                     }
                     
                     HStack(alignment: .firstTextBaseline, spacing: 5) {
-                        Text("$0")
+                        Text(price)
                             .font(.system(size: 22, weight: .semibold, design: .rounded))
                             .foregroundColor(.white.opacity(0.85))
                             .digit3D(baseColor: .white.opacity(0.85))
@@ -725,6 +746,20 @@ struct SubscriptionPlanPlaceholder: View {
     let isCurrentPlan: Bool
     let isLoading: Bool
     
+    /// User's currency from database (same as UpgradeView / FinanceView).
+    private var userCurrency: String {
+        UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+    }
+    
+    private func formatSubscriptionPrice(_ amount: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = userCurrency
+        formatter.maximumFractionDigits = 2
+        formatter.minimumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: amount)) ?? "\(amount)"
+    }
+    
     var planName: String {
         switch planType {
         case .pro:
@@ -737,9 +772,9 @@ struct SubscriptionPlanPlaceholder: View {
     var placeholderPrice: String {
         switch planType {
         case .pro:
-            return "€4.99"
+            return formatSubscriptionPrice(4.99)
         case .free:
-            return "$0"
+            return formatSubscriptionPrice(0)
         }
     }
     

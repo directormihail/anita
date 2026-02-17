@@ -39,6 +39,8 @@ struct ChatCompletionRequest: Codable {
     let userId: String?
     let conversationId: String?
     let userDisplayName: String?
+    /// User's chosen currency (e.g. EUR, CHF) so the chat uses it for amounts and confirmations
+    let userCurrency: String?
     
     enum CodingKeys: String, CodingKey {
         case messages
@@ -47,6 +49,7 @@ struct ChatCompletionRequest: Codable {
         case userId
         case conversationId
         case userDisplayName
+        case userCurrency
     }
 }
 

@@ -25,6 +25,20 @@ struct PostSignupPlansView: View {
         return "free"
     }
     
+    /// User's currency from database (profiles.currency_code), synced to UserDefaults.
+    private var userCurrency: String {
+        UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+    }
+    
+    private func formatSubscriptionPrice(_ amount: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = userCurrency
+        formatter.maximumFractionDigits = 2
+        formatter.minimumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: amount)) ?? "\(amount)"
+    }
+    
     private var cancelAnytimeSubtitle: String {
         let lang = AppL10n.currentLanguageCode()
         switch lang {
@@ -74,13 +88,13 @@ struct PostSignupPlansView: View {
                 ScrollView {
                     VStack(spacing: 24) {
                         VStack(spacing: 18) {
-                            FreePlanCard(isCurrentPlan: currentPlan == "free")
+                            FreePlanCard(isCurrentPlan: currentPlan == "free", price: formatSubscriptionPrice(0))
                             
                             SubscriptionPlanCard(
                                 planType: .pro,
                                 isCurrentPlan: currentPlan == "pro",
                                 isCreatingCheckout: storeKitService.isLoading,
-                                price: storeKitService.getProduct("com.anita.pro.monthly")?.displayPrice ?? "€4.99",
+                                price: formatSubscriptionPrice(4.99),
                                 onCheckout: { Task { await purchasePlan(productId: "com.anita.pro.monthly") } }
                             )
                         }
