@@ -750,15 +750,17 @@ class ChatViewModel: ObservableObject {
                 print("[ChatViewModel] Sending chat message to backend...")
                 // Always use authenticated user ID if available
                 let currentUserId = userManager.isAuthenticated ? (userManager.currentUser?.id ?? userId) : userId
-                // User display name for friendly fallback when AI doesn't understand (e.g. Duolingo-style message)
-                let displayName = (OnboardingSurveyResponse.loadFromUserDefaults(userId: userId)?.userName).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                // User display name: source of truth is profile (DB / UserManager), then onboarding
+                let profileName = userManager.getProfileName()?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let onboardingName = OnboardingSurveyResponse.loadFromUserDefaults(userId: userId)?.userName.trimmingCharacters(in: .whitespacesAndNewlines)
+                let displayName = (profileName?.isEmpty == false ? profileName : nil) ?? (onboardingName?.isEmpty == false ? onboardingName : nil)
                 // User's chosen currency (same as Settings/Finance) so the chat uses EUR, CHF, etc.
                 let preferredCurrency = UserDefaults.standard.string(forKey: "anita_user_currency")
                 let response = try await networkService.sendChatMessage(
                     messages: apiMessages,
                     userId: currentUserId,
                     conversationId: conversationId,
-                    userDisplayName: displayName?.isEmpty == false ? displayName : nil,
+                    userDisplayName: displayName,
                     userCurrency: preferredCurrency
                 )
                 print("[ChatViewModel] Received response from backend")
@@ -855,7 +857,10 @@ class ChatViewModel: ObservableObject {
         lines.append("You are ANITA, a personal finance assistant.")
         lines.append("Always reply in \(languageName), unless the user explicitly asks for another language.")
         
-        if let name = survey?.userName, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        let profileName = userManager.getProfileName()?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let onboardingName = survey?.userName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let userName = (profileName?.isEmpty == false ? profileName : nil) ?? (onboardingName?.isEmpty == false ? onboardingName : nil)
+        if let name = userName {
             lines.append("The user's name is \(name). You may address them by name when appropriate.")
         }
         

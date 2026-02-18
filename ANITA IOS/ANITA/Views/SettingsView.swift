@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 import AuthenticationServices
 
 struct SettingsView: View {
+    @Binding var selectedTab: Int
     @ObservedObject private var userManager = UserManager.shared
     @ObservedObject private var notificationService = NotificationService.shared
     @State private var showPrivacyPolicy = false
@@ -27,6 +28,7 @@ struct SettingsView: View {
     @State private var profileName: String = ""
     @State private var isSavingName = false
     @State private var nameSaveSuccess = false
+    @State private var nameSaveTask: Task<Void, Never>?
     @FocusState private var isNameFieldFocused: Bool
     
     // Preferences
@@ -132,7 +134,7 @@ struct SettingsView: View {
                                     }
                                     
                                     VStack(alignment: .leading, spacing: 6) {
-                                        Text(profileName.isEmpty ? (user.email ?? AppL10n.t("settings.name")) : profileName)
+                                        Text(displayNameForHeader)
                                             .font(.system(size: 19, weight: .semibold, design: .rounded))
                                             .foregroundColor(.white.opacity(0.95))
                                         
@@ -168,10 +170,10 @@ struct SettingsView: View {
                                             .foregroundColor(.white.opacity(0.9))
                                             .focused($isNameFieldFocused)
                                             .onChange(of: profileName) { _, newValue in
-                                                saveNameLocallyOnly(newValue)
+                                                saveNameImmediatelyAndDebounceToDatabase(newValue)
                                             }
                                             .onSubmit {
-                                                saveNameToServerImmediately(profileName)
+                                                flushNameSaveAndPersistToDatabase()
                                             }
                                             .submitLabel(.done)
                                         
@@ -182,7 +184,7 @@ struct SettingsView: View {
                                         } else if isNameFieldFocused && userManager.isAuthenticated {
                                             Spacer(minLength: 4)
                                             Button(action: {
-                                                saveNameToServerImmediately(profileName)
+                                                flushNameSaveAndPersistToDatabase()
                                             }) {
                                                 Image(systemName: nameSaveSuccess ? "checkmark.circle.fill" : "arrow.down.circle.fill")
                                                     .font(.system(size: 18))
@@ -240,6 +242,15 @@ struct SettingsView: View {
                         loadProfile()
                         loadPreferences()
                         Task { await subscriptionManager.refresh() }
+                    }
+                    .onDisappear {
+                        if userManager.isAuthenticated { flushNameSaveAndPersistToDatabase() }
+                    }
+                    .onChange(of: selectedTab) { _, newTab in
+                        if newTab != 2, userManager.isAuthenticated { flushNameSaveAndPersistToDatabase() }
+                    }
+                    .onChange(of: isNameFieldFocused) { _, focused in
+                        if !focused, userManager.isAuthenticated { flushNameSaveAndPersistToDatabase() }
                     }
                     
                     // Preferences Section
@@ -634,21 +645,57 @@ struct SettingsView: View {
     
     // MARK: - Helper Functions
     
+    /// Display name for profile header: use UserManager so it updates everywhere at once (no re-login).
+    private var displayNameForHeader: String {
+        // Depend on profileDisplayName so this view re-renders as soon as name is set
+        let name = (userManager.profileDisplayName.isEmpty ? (userManager.getProfileName() ?? profileName) : userManager.profileDisplayName).trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? (userManager.currentUser?.email ?? AppL10n.t("settings.name")) : name
+    }
+    
     func loadProfile() {
         guard userManager.currentUser != nil else { return }
-        // Per-account name so it doesn't flow between accounts
+        // Source of truth: name set in Settings (UserManager) overrides onboarding. Never overwrite with stale onboarding "Misha".
+        let fromPrefs = userManager.getProfileName()?.trimmingCharacters(in: .whitespacesAndNewlines)
         let fromOnboarding = userManager.getOnboardingSurvey()?.userName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let fromPrefs = userManager.getProfileName()
-        profileName = (fromOnboarding?.isEmpty == false ? fromOnboarding : nil) ?? fromPrefs ?? ""
+        profileName = (fromPrefs?.isEmpty == false ? fromPrefs : nil) ?? (fromOnboarding?.isEmpty == false ? fromOnboarding : nil) ?? ""
     }
     
-    /// Only update local storage when typing (no server). Use the Save button to persist to database.
-    func saveNameLocallyOnly(_ name: String) {
+    /// Update UserManager immediately (so name shows everywhere) and schedule a debounced save to the database.
+    func saveNameImmediatelyAndDebounceToDatabase(_ name: String) {
         userManager.setProfileName(name)
+        guard userManager.isAuthenticated else { return }
+        nameSaveTask?.cancel()
+        nameSaveTask = Task {
+            do { try await Task.sleep(nanoseconds: 400_000_000) } catch { return }
+            await MainActor.run {
+                let current = userManager.getProfileName() ?? profileName
+                saveNameToServerImmediately(current)
+            }
+        }
     }
     
-    /// Saves name to database when user taps the Save (arrow) button. After success, name persists and shows when scrolling between pages; AI will use it from DB.
-    func saveNameToServerImmediately(_ name: String) {
+    /// Cancel any pending debounced save and persist current name to database right now.
+    func flushNameSaveAndPersistToDatabase() {
+        nameSaveTask?.cancel()
+        nameSaveTask = nil
+        let current = (userManager.getProfileName() ?? profileName).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard userManager.isAuthenticated else { return }
+        userManager.setProfileName(current)
+        Task {
+            do {
+                try await userManager.saveProfileNameToSupabase(current)
+                await MainActor.run { nameSaveSuccess = true; isSavingName = false }
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                await MainActor.run { nameSaveSuccess = false }
+            } catch {
+                print("[SettingsView] Failed to save name to DB: \(error)")
+                await MainActor.run { isSavingName = false }
+            }
+        }
+    }
+    
+    /// Persists name to database (and keeps UserManager in sync). Used by debounce and flush.
+    private func saveNameToServerImmediately(_ name: String) {
         guard userManager.isAuthenticated else { return }
         userManager.setProfileName(name)
         Task {
@@ -718,15 +765,23 @@ struct SettingsView: View {
             if let json = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
                let profile = json.first {
                 
-                // Profile name from database (so Settings shows same name across devices)
+                // Profile name: never overwrite what the user just typed with stale DB value
                 let dbName = (profile["display_name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
                     ?? (profile["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
                     ?? (profile["full_name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-                if let name = dbName, !name.isEmpty {
-                    await MainActor.run {
-                        self.userManager.setProfileName(name)
-                        self.profileName = name
+                let localName = await MainActor.run { self.userManager.getProfileName() ?? self.profileName }
+                if let db = dbName, !db.isEmpty {
+                    if !localName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && localName.trimmingCharacters(in: .whitespacesAndNewlines) != db {
+                        await MainActor.run { self.profileName = localName }
+                        try? await self.userManager.saveProfileNameToSupabase(localName.trimmingCharacters(in: .whitespacesAndNewlines))
+                    } else {
+                        await MainActor.run {
+                            self.userManager.setProfileName(db)
+                            self.profileName = db
+                        }
                     }
+                } else if !localName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    await MainActor.run { self.profileName = localName }
                 }
                 
                 if let currencyCode = profile["currency_code"] as? String, (currencyCode == "EUR" || currencyCode == "CHF") {
@@ -1820,5 +1875,5 @@ struct BackendURLSheet: View {
 // Using PlanType, FreePlanCard, SubscriptionPlanCard, and FeatureRow from UpgradeView
 
 #Preview("Settings") {
-    SettingsView()
+    SettingsView(selectedTab: .constant(2))
 }

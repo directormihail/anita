@@ -26,6 +26,7 @@ class UserManager: ObservableObject {
     @Published var currentUser: User?
     @Published var hasCompletedOnboarding = false
     @Published var shouldShowPostSignupPlans = false
+    @Published var profileDisplayName: String = ""
     
     /// UserDefaults key scoped to current account so profile name and onboarding don't leak between accounts.
     func prefKey(_ base: String) -> String {
@@ -37,6 +38,8 @@ class UserManager: ObservableObject {
         migrateLegacyUnkeyedStorageIfNeeded()
         hasCompletedOnboarding = UserDefaults.standard.bool(forKey: prefKey(onboardingCompletedKey))
         shouldShowPostSignupPlans = UserDefaults.standard.bool(forKey: prefKey(postSignupPlansPendingKey))
+        // Hydrate display name so @Published is in sync and all UI updates without re-login
+        profileDisplayName = UserDefaults.standard.string(forKey: prefKey(profileNameKeyBase))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         Task {
             await checkAuthStatus()
         }
@@ -194,6 +197,7 @@ class UserManager: ObservableObject {
                     self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: prefKey(onboardingCompletedKey))
                 }
                 await syncSavedOnboardingToSupabaseIfNeeded()
+                await syncProfileNameFromSupabase()
             } else {
                 await MainActor.run {
                     self.isAuthenticated = false
@@ -210,11 +214,14 @@ class UserManager: ObservableObject {
     // MARK: - Per-account profile (so name doesn't flow between accounts)
     
     func getProfileName() -> String? {
-        UserDefaults.standard.string(forKey: prefKey(profileNameKeyBase))?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fromUd = UserDefaults.standard.string(forKey: prefKey(profileNameKeyBase))?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let s = fromUd, !s.isEmpty { return s }
+        return profileDisplayName.isEmpty ? nil : profileDisplayName
     }
     
     func setProfileName(_ name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        profileDisplayName = trimmed
         if trimmed.isEmpty {
             UserDefaults.standard.removeObject(forKey: prefKey(profileNameKeyBase))
         } else {
@@ -291,6 +298,38 @@ class UserManager: ObservableObject {
             } catch {
                 print("[UserManager] ⚠️ Failed to sync preferences to profiles: \(error)")
             }
+        }
+        await syncProfileNameFromSupabase()
+    }
+    
+    /// Fetches display_name from Supabase profiles and updates local storage so the app shows the correct name everywhere.
+    func syncProfileNameFromSupabase() async {
+        guard supabaseService.isAuthenticated else { return }
+        let uid = userId
+        let baseUrl = Config.supabaseURL.hasSuffix("/") ? String(Config.supabaseURL.dropLast()) : Config.supabaseURL
+        guard let url = URL(string: "\(baseUrl)/rest/v1/profiles?id=eq.\(uid)&select=display_name,name,full_name") else { return }
+        var request = URLRequest(url: url)
+        request.setValue(Config.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = supabaseService.getAccessToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
+                  let profile = json.first else { return }
+            let a = (profile["display_name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let b = (profile["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let c = (profile["full_name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let name = (a?.isEmpty == false ? a : nil) ?? (b?.isEmpty == false ? b : nil) ?? (c?.isEmpty == false ? c : nil)
+            let local = await MainActor.run { getProfileName()?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            if let name = name, (local?.isEmpty ?? true) {
+                await MainActor.run { setProfileName(name) }
+                print("[UserManager] ✅ Loaded profile name from database: \(name)")
+            }
+        } catch {
+            print("[UserManager] ⚠️ Failed to load profile name from Supabase: \(error)")
         }
     }
     

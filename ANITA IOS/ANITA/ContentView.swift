@@ -72,7 +72,7 @@ struct ContentView: View {
                     }
                     .tag(1)
                 
-                SettingsView()
+                SettingsView(selectedTab: $selectedTab)
                     .tabItem {
                         Label(AppL10n.t("tab.settings"), systemImage: "gearshape.fill")
                     }
