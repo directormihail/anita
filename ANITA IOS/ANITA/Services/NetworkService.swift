@@ -187,7 +187,7 @@ class NetworkService: ObservableObject {
         }
         
         var request = URLRequest(url: url)
-        request.timeoutInterval = 10.0 // 10 second timeout
+        request.timeoutInterval = Self.requestTimeout
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         
         print("[NetworkService] 🔍 Health check request to: \(url.absoluteString)")
@@ -475,7 +475,7 @@ class NetworkService: ObservableObject {
         }
         
         var request = URLRequest(url: url)
-        request.timeoutInterval = 10.0 // 10 second timeout
+        request.timeoutInterval = Self.requestTimeout
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         
         print("[NetworkService] Getting conversations from: \(url.absoluteString)")
@@ -538,7 +538,7 @@ class NetworkService: ObservableObject {
         }
         
         var request = URLRequest(url: url)
-        request.timeoutInterval = 10.0
+        request.timeoutInterval = Self.requestTimeout
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         
         do {
@@ -587,7 +587,7 @@ class NetworkService: ObservableObject {
         }
         
         var request = URLRequest(url: url)
-        request.timeoutInterval = 10.0
+        request.timeoutInterval = Self.requestTimeout
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         
         do {
@@ -630,7 +630,7 @@ class NetworkService: ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 10.0
+        request.timeoutInterval = Self.requestTimeout
         let body: [String: Any] = [
             "userId": userId,
             "ruleId": ruleId,
@@ -654,7 +654,7 @@ class NetworkService: ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 10.0
+        request.timeoutInterval = Self.requestTimeout
         request.httpBody = try JSONEncoder().encode(AppOpenRequest(userId: userId))
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else { throw NetworkError.invalidResponse }

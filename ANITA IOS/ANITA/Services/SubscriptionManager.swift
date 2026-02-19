@@ -16,12 +16,12 @@ class SubscriptionManager: ObservableObject {
     @Published private(set) var isPremium: Bool = false
     @Published private(set) var isLoading: Bool = false
     
-    /// Normalized plan: "free" or "pro" only. Backend may still return "ultimate" for legacy users — we store "pro".
+    /// Normalized plan: "free" or "premium".
     @Published private(set) var subscriptionPlan: String = "free"
     
     /// Localized display name for the current plan ("Free" or "Premium"). Always reflects database when available.
     var subscriptionDisplayName: String {
-        subscriptionPlan == "pro" ? AppL10n.t("plans.premium") : AppL10n.t("plans.free")
+        subscriptionPlan == "premium" ? AppL10n.t("plans.premium") : AppL10n.t("plans.free")
     }
     
     private let networkService = NetworkService.shared
@@ -48,13 +48,12 @@ class SubscriptionManager: ObservableObject {
             let response = try await networkService.getSubscription(userId: uid)
             let sub = response.subscription
             isPremium = (sub.plan != "free" && sub.status == "active")
-            // Only Premium now; treat legacy "ultimate" as "pro" so UI shows "Premium" everywhere
-            subscriptionPlan = (sub.plan == "pro" || sub.plan == "ultimate") ? "pro" : "free"
+            subscriptionPlan = (sub.plan == "premium" || sub.plan == "pro" || sub.plan == "ultimate") ? "premium" : "free"
         } catch {
             // Offline or backend error: use StoreKit as fallback
             let purchased = storeKitService.isPurchased("com.anita.pro.monthly")
             isPremium = purchased
-            subscriptionPlan = purchased ? "pro" : "free"
+            subscriptionPlan = purchased ? "premium" : "free"
         }
     }
 }

@@ -20,13 +20,13 @@ struct UpgradeView: View {
     
     private let networkService = NetworkService.shared
     
-    // Determine current plan - prioritize database subscription over StoreKit. Only Free/Premium now; legacy "ultimate" → "pro".
+    // Determine current plan - prioritize database subscription over StoreKit. Free or Premium.
     private var currentPlan: String {
         if let subscription = databaseSubscription, subscription.status == "active" {
-            return (subscription.plan == "pro" || subscription.plan == "ultimate") ? "pro" : "free"
+            return (subscription.plan == "premium" || subscription.plan == "pro" || subscription.plan == "ultimate") ? "premium" : "free"
         }
         if storeKitService.isPurchased("com.anita.pro.monthly") {
-            return "pro"
+            return "premium"
         }
         return "free"
     }
@@ -118,7 +118,7 @@ struct UpgradeView: View {
                             // Pro Plan (price in user's currency when StoreKit unavailable)
                             SubscriptionPlanCard(
                                 planType: .pro,
-                                isCurrentPlan: currentPlan == "pro",
+                                isCurrentPlan: currentPlan == "premium",
                                 isCreatingCheckout: storeKitService.isLoading,
                                 price: premiumPriceString,
                                 onCheckout: {

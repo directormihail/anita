@@ -128,7 +128,7 @@ struct AnalyzeFileResponse: Codable {
 // MARK: - Checkout Models
 
 struct CreateCheckoutRequest: Codable {
-    let plan: String // "pro" or "ultimate"
+    let plan: String // "free" or "premium"
     let userId: String
     let userEmail: String?
 }
@@ -144,7 +144,7 @@ struct CreateCheckoutResponse: Codable {
 
 struct Subscription: Codable {
     let userId: String
-    let plan: String // "free", "pro", or "ultimate"
+    let plan: String // "free" or "premium"
     let status: String
     let transactionId: String?
     let updatedAt: String?

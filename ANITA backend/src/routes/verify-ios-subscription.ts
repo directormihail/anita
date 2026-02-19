@@ -44,14 +44,12 @@ function validateSubscriptionRequest(body: any): { valid: boolean; error?: strin
     return { valid: false, error: 'Missing or invalid productId' };
   }
 
-  // Determine plan from productId
+  // Determine plan from productId (only free and premium now)
   let plan: string;
-  if (body.productId.includes('ultimate')) {
-    plan = 'ultimate';
-  } else if (body.productId.includes('pro')) {
-    plan = 'pro';
+  if (body.productId.includes('pro') || body.productId.includes('premium')) {
+    plan = 'premium';
   } else {
-    return { valid: false, error: 'Invalid productId. Must contain "pro" or "ultimate"' };
+    return { valid: false, error: 'Invalid productId. Must contain "pro" or "premium"' };
   }
 
   // Validate userId format (should be a UUID)

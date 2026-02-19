@@ -14,13 +14,13 @@ struct PostSignupPlansView: View {
     private let networkService = NetworkService.shared
     let onContinue: () -> Void
     
-    // Determine current plan - prioritize database subscription over StoreKit. Only Free/Premium now; legacy "ultimate" → "pro".
+    // Determine current plan - prioritize database subscription over StoreKit. Free or Premium.
     private var currentPlan: String {
         if let subscription = databaseSubscription, subscription.status == "active" {
-            return (subscription.plan == "pro" || subscription.plan == "ultimate") ? "pro" : "free"
+            return (subscription.plan == "premium" || subscription.plan == "pro" || subscription.plan == "ultimate") ? "premium" : "free"
         }
         if storeKitService.isPurchased("com.anita.pro.monthly") {
-            return "pro"
+            return "premium"
         }
         return "free"
     }
@@ -92,7 +92,7 @@ struct PostSignupPlansView: View {
                             
                             SubscriptionPlanCard(
                                 planType: .pro,
-                                isCurrentPlan: currentPlan == "pro",
+                                isCurrentPlan: currentPlan == "premium",
                                 isCreatingCheckout: storeKitService.isLoading,
                                 price: formatSubscriptionPrice(4.99),
                                 onCheckout: { Task { await purchasePlan(productId: "com.anita.pro.monthly") } }

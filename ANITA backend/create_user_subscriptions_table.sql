@@ -3,7 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS public.user_subscriptions (
   user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  plan TEXT NOT NULL DEFAULT 'free' CHECK (plan IN ('free', 'pro', 'ultimate')),
+  plan TEXT NOT NULL DEFAULT 'free' CHECK (plan IN ('free', 'premium')),
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'cancelled', 'expired')),
   transaction_id TEXT,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

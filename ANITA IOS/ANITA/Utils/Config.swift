@@ -46,9 +46,8 @@ struct Config {
         if let url = ProcessInfo.processInfo.environment["PRODUCTION_BACKEND_URL"] {
             return url
         }
-        // Default: Railway deployment (update this to your actual backend URL)
-        // This is just a placeholder - you MUST deploy your backend and update this URL
-        return "https://anita-backend.railway.app"
+        // Railway deployment — your public backend URL
+        return "https://anita-production-bb9a.up.railway.app"
     }()
     
     static let backendURL: String = {
@@ -56,14 +55,8 @@ struct Config {
         if let url = ProcessInfo.processInfo.environment["BACKEND_URL"] {
             return url
         }
-        
-        #if DEBUG
-        // Debug builds: Use localhost for development
-        return "http://localhost:3001"
-        #else
-        // Release builds (TestFlight/App Store): Use production URL
+        // Use production Railway URL for all builds (test). For local dev, set Backend URL in Settings to http://localhost:3001 or your Mac IP.
         return productionBackendURL
-        #endif
     }()
     
     // Google Sign-In Configuration

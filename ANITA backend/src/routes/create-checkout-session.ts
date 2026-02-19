@@ -21,17 +21,12 @@ const stripe = stripeSecretKey
     })
   : null;
 
-// Subscription plan prices in cents
-const SUBSCRIPTION_PLANS = {
-  pro: {
-    priceId: process.env.STRIPE_PRO_PRICE_ID || 'price_pro_monthly',
+// Subscription plan prices in cents (only free and premium)
+const SUBSCRIPTION_PLANS: Record<string, { priceId: string; amount: number; name: string }> = {
+  premium: {
+    priceId: process.env.STRIPE_PRO_PRICE_ID || process.env.STRIPE_PREMIUM_PRICE_ID || 'price_pro_monthly',
     amount: 499, // $4.99 in cents
-    name: 'Pro Plan',
-  },
-  ultimate: {
-    priceId: process.env.STRIPE_ULTIMATE_PRICE_ID || 'price_ultimate_monthly',
-    amount: 999, // $9.99 in cents
-    name: 'Ultimate Plan',
+    name: 'Premium',
   },
 };
 
@@ -43,8 +38,8 @@ function validateCheckoutRequest(body: any): { valid: boolean; error?: string; d
     return { valid: false, error: 'Request body must be an object' };
   }
 
-  if (!body.plan || typeof body.plan !== 'string' || !['pro', 'ultimate'].includes(body.plan)) {
-    return { valid: false, error: 'Invalid plan. Must be "pro" or "ultimate"' };
+  if (!body.plan || typeof body.plan !== 'string' || body.plan !== 'premium') {
+    return { valid: false, error: 'Invalid plan. Must be "premium"' };
   }
 
   if (!body.userId || typeof body.userId !== 'string' || body.userId.trim().length === 0) {

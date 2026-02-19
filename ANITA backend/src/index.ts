@@ -47,13 +47,8 @@ import { requestIdMiddleware } from './middleware/requestId';
 import { getPrivacyPayload, getTermsPayload } from './legal/content';
 import * as logger from './utils/logger';
 
-// #region agent log
-const debugSupabaseUrl = process.env.SUPABASE_URL;
-const debugSupabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-fetch('http://127.0.0.1:7242/ingest/60703aac-129d-4ef4-8e2a-73410ca29b0a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.ts:27',message:'dotenv.config() called - checking loaded env vars',data:{hasUrl:!!debugSupabaseUrl,urlLength:debugSupabaseUrl?.length||0,urlPreview:debugSupabaseUrl?.substring(0,50)||'null',hasServiceKey:!!debugSupabaseServiceKey,serviceKeyLength:debugSupabaseServiceKey?.length||0,serviceKeyPreview:debugSupabaseServiceKey?.substring(0,30)||'null',serviceKeyIsPlaceholder:debugSupabaseServiceKey?.includes('YOUR_')||debugSupabaseServiceKey?.includes('your_')||false},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-// #endregion
-
 const app = express();
+// Use PORT from environment (Railway sets this at runtime, usually 8080). Do not set a custom port in Railway dashboard unless you also set the PORT variable to match.
 const PORT = Number(process.env.PORT) || 3001;
 
 // Trust proxy for accurate IP addresses
