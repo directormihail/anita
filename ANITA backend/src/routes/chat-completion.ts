@@ -36,6 +36,191 @@ function getCurrencySymbolForCode(currency: string): string {
   return symbols[currency] ?? '€';
 }
 
+/** Freemium: check if user has an active premium subscription (plan is premium/pro/ultimate). */
+async function getIsPremium(supabase: { from: (table: string) => any }, userId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('user_subscriptions')
+    .select('plan')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .maybeSingle();
+  if (error || !data) return false;
+  const plan = ((data as { plan?: string }).plan || '').toLowerCase();
+  return plan === 'premium' || plan === 'pro' || plan === 'ultimate';
+}
+
+/**
+ * Freemium: detect if the user is asking for analytics, insights, limits, goals, or other premium-only features.
+ * Returns true for: analytics, spending summary, breakdown, insights, reports, setting limits, setting goals, etc.
+ * Returns false for: adding income/expense only, generic app questions ("what is ANITA", "what can you do"), greetings.
+ */
+function isAnalyticsOrPremiumIntent(userMessage: string): boolean {
+  if (!userMessage || typeof userMessage !== 'string') return false;
+  const text = userMessage.trim();
+  if (text.length < 2) return false;
+  const lower = text.toLowerCase();
+
+  // Bulletproof: any mention of setting a limit/goal in request form (impossible to miss)
+  if (/\bset\s+a\s+limit\b/i.test(text)) return true;
+  if (/\bset\s+a\s+goal\b/i.test(text)) return true;
+  if (/\bwanna\s+set\b/i.test(text) && /\blimit|goal\b/i.test(text)) return true;
+  if (/\bwant\s+to\s+set\s+(a\s+)?(limit|goal)\b/i.test(text)) return true;
+  if (/\bcreate\s+(a\s+)?(limit|goal)\b/i.test(text)) return true;
+  if (lower.includes('set a limit') || lower.includes('set a goal')) return true;
+
+  // Allow: clearly adding income or expense only (freemium can do this)
+  const addIncomeExpense = /\b(add|record|log|track|input|enter|put)\s+(income|expense|earning|spending|transaction)\b/i.test(text)
+    || /\b(income|expense)\s+(of|:)\s*\d/i.test(text)
+    || /\b(spent|paid|earned|received)\s+\d/i.test(text)
+    || /\d+\s*(euro|eur|usd|dollar|chf)\s*(for|on)\s+/i.test(text)
+    || /^(add|record|log)\s+/i.test(text) && (/\b(income|expense|salary|groceries|rent)\b/i.test(text) || /\d+/.test(text));
+  if (addIncomeExpense) return false;
+
+  // Allow: generic app / what can you do / what is ANITA (short generic only) — never allow "my finance" or "my spending"
+  const genericApp = /\b(what\s+is\s+anita|who\s+are\s+you|what\s+can\s+you\s+do|how\s+does\s+(this\s+)?app\s+work|what\s+is\s+this\s+app|help\s*$|hi\s*$|hello\s*$|hey\s*$)/i.test(text)
+    || (/^(what|how|who|why)\s+(is|are|can|does)\s+/i.test(text) && text.length < 80 && !/\b(spend|spent|spending|expense|budget|saving|savings|money|category|categories|limit|goal|analys|finance)\b/i.test(text));
+  if (genericApp) return false;
+
+  // "Ask about my finance/spending" or "limit for my spendings" = premium
+  if (/\b(my\s+finance|my\s+spending|my\s+money|about\s+my\s+finance)\b/i.test(text)) return true;
+  if (/\b(top\s+spending|spending\s+categories|which\s+category)\b/i.test(text)) return true;
+  if (/\b(limit|set\s+a?\s*limit)\s+(for\s+)?(my\s+)?(spendings?|expenses?)\b/i.test(text)) return true;
+  if (/\b(my\s+)?spendings?\s*[?.]?\s*$/.test(text) && /\b(limit|set)\b/i.test(text)) return true;
+
+  // Premium: analytics (include British "analyse" and German "analysieren")
+  const analyticsPatterns = [
+    /\b(analytics?|insights?|breakdown|summary|overview|report|analysis|analyze|analyse|summarize|analysieren)\b/i,
+    /\b(how\s+much\s+(did\s+i\s+)?(spend|spent)|where\s+(did\s+my\s+)?money\s+go|spending\s+pattern)\b/i,
+    /\b(show|tell|give)\s+(me\s+)?(an?\s+)?(overview|breakdown|summary|report)\b/i,
+    /\b(category|categories)\s+(spend|breakdown|analysis|spending)\b/i,
+    /\b(biggest|largest|top|main)\s+(expense|spending|category)\b/i,
+    /\b(month|week|year|period)\s+(summary|review|analysis|spending)\b/i,
+    /\b(compare|versus|vs\.?|comparison)\s+(month|period|time|spending)\b/i,
+    /\b(trend|pattern|habit)\s+(in\s+)?(spending|expense|money)\b/i,
+    /\bwhat\s+(did\s+i\s+)?(spend|spent)\s+(on|this)\b/i,
+    /\b(spending|expense)\s+(by\s+)?(category|categories)\b/i,
+    /\b(how\s+am\s+i\s+doing|financial\s+health|money\s+overview)\b/i,
+    /\b(save|saving|savings)\s+(rate|progress|goal)\b/i,
+    /\b(budget\s+review|spending\s+review)\b/i,
+    /\banalys(e|ing|ed)?\s+(it|my|the)?/i,
+  ];
+
+  // Premium: setting spending limits or savings goals (English + German: Limit, Ziel, mach ein Limit, etc.)
+  const limitGoalPatterns = [
+    /\b(set|create|make|add|put)\s+(a\s+)?(spending\s+)?limit\b/i,
+    /\b(spending|budget)\s+limit\b/i,
+    /\b(set|create|make|add)\s+(a\s+)?(savings?\s+)?goal\b/i,
+    /\b(savings?|financial)\s+goal\b/i,
+    /\blimit\s+(for|on)\s+(category|categories|my\s+spendings?|spendings?)\b/i,
+    /\b(mach|setze|erstelle|füge|lege)\s+(ein\s+)?(limit|ziel)\b/i,
+    /\b(ein\s+)?(limit|ziel)\s+(setzen|erstellen|machen|festlegen)\b/i,
+    /\b(limit|ziel|budget)\s+(für|für eine)\s+/i,
+    /^(limit|ziel)\s*$/i,
+    /\b(mach|create|set)\s+(ein\s+)?limit\b/i,
+    /\b(i\s+wanna|i\s+want(?:\s+to)?|i\'d\s+like)\s+(set|create|have)\s+(a\s+)?(limit|goal)\b/i,
+    /\b(help\s+me\s+)?(set|create)\s+(a\s+)?(limit|goal)\b/i,
+    /\b(can\s+you|kannst\s+du|van\s+you)\s+(set|create|make|setze|erstelle)\s+(a\s+)?(limit|ziel)\b/i,
+    /\b(show|give)\s+me\s+(a\s+)?(limit|goal|breakdown|summary)\b/i,
+    /\b(you\s+offer|your\s+offer)\b/i,
+  ];
+
+  return analyticsPatterns.some((re) => re.test(text)) || limitGoalPatterns.some((re) => re.test(text));
+}
+
+/**
+ * Freemium: detect if the conversation is already in a premium flow (AI offered limits, goals, analytics, or showed totals).
+ * When the last ASSISTANT message contains such content, the user's next message (e.g. "yes", "groceries", "the first one")
+ * is a follow-up in that flow — we must paywall instead of calling the AI.
+ */
+function isPremiumFlowInProgress(messages: Array<{ role: string; content?: string }>): boolean {
+  const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant' || (m.role && m.role.toLowerCase()) === 'anita');
+  const content = (lastAssistant && typeof (lastAssistant as any).content === 'string' ? (lastAssistant as any).content : '') || '';
+  const text = content.trim().toLowerCase();
+  if (text.length < 10) return false;
+
+  // Assistant is offering or doing: limits, goals, category list, earned/spent/balance, analytics, suggestions (EN + DE)
+  const premiumOfferPatterns = [
+    /\b(got\s+it!?\s*)?(would\s+you\s+like\s+to\s+set\s+(the\s+)?limit)\b/i,
+    /\b(limit|ziel|goal)\s+(for|für|setzen|erstellen|festlegen|suggest|vorschlagen)\b/i,
+    /\b(set|create|make|mach|setze|erstelle)\s+(a\s+)?(limit|ziel|goal)\b/i,
+    /\b(you\s+tell\s+me\s+category\s+and\s+amount|i\s+can\s+suggest\s+categories)\b/i,
+    /\b(wähle|choose|pick)\s+(eine?\s+)?(kategorie|category)\b/i,
+    /\b(kategorie|category)\s+(aus|wählen|choose|select)\b/i,
+    /\b(earned|spent|balance|verdient|ausgegeben|kontostand)\s*[:\s]*€?\s*\d/i,
+    /\b(this\s+month|diesen\s+monat)\s+(you\s+have|hast\s+du)\s+(earned|spent|verdient|ausgegeben)/i,
+    /\b(here\s+are|hier\s+sind)\s+(some\s+)?(your\s+)?(categories|kategorien)/i,
+    /\b(top\s+spending\s+categories|spending\s+categories\s+this\s+month)\b/i,
+    /\b(groceries|dining\s+out|entertainment|streaming)\s*[•·]\s*€/i,
+    /\b(suggest|vorschlagen|vorschlag)\s+(categories|kategorien|amount|betrag)/i,
+    /\b(do\s+you\s+want|would\s+you\s+like|möchtest\s+du)\s+(to\s+)?(set|ein\s+limit|limit)/i,
+    /\b(which\s+one\s+would\s+you\s+like\s+to\s+set\s+a\s+limit)\b/i,
+    /\b(would\s+you\s+like\s+to\s+set\s+the\s+limit\s+(yourself|with\s+my\s+help))/i,
+    /\b(möchtest\s+du|möchten\s+sie)\s+(ein\s+)?(limit|ziel)\s+(für|für eine)/i,
+    /\b(limit|ziel)\s+(für|für eine)\s+(ausgabenkategorie|expense\s+category)/i,
+    /\b(analys(e|ing)|breakdown|overview|summary|insight)/i,
+    /\b(€0\.00|0\.00\s*€)\s*(so\s+far|bisher)/i,
+    /\balles\s+klar!?\s+.*(kategorien|categories)/i,
+    /\b(ich\s+kann|i\s+can)\s+(dir|you)\s+(einige\s+)?(kategorien|categories)/i,
+    /\b(i\'ve\s+set\s+a\s+limit|i\'ve\s+set\s+a\s+limit\s+for)/i,
+  ];
+  return premiumOfferPatterns.some((re) => re.test(content));
+}
+
+/** Freemium: fallback message when AI paywall reply fails. */
+function getFreemiumPaywallMessage(): string {
+  return "This function is not available on the free tier. You need a subscription to complete this and other steps. Upgrade to Premium to access analytics, limits, goals, and more. 🦉";
+}
+
+/**
+ * Freemium: AI-generated contextual paywall reply (not fixed text). Uses the same pattern structure as premium:
+ * understand what the user asked for, then reply in a short, friendly way that it's a subscription feature.
+ */
+async function getContextualPaywallReply(userMessage: string, context: 'premium_intent' | 'premium_flow', requestId: string): Promise<string> {
+  const openaiConfig = getOpenAIConfig();
+  const apiKey = openaiConfig.apiKey;
+  const model = openaiConfig.model;
+  if (!apiKey) return getFreemiumPaywallMessage();
+
+  const contextHint = context === 'premium_flow' ? 'They were in the middle of a conversation about limits/goals/analytics.' : 'They asked for something that needs Premium.';
+  const systemPrompt = `You are ANITA, a warm financial assistant. The user is on the FREE tier. ${contextHint}
+
+Your ONLY job: reply in 1–2 short sentences. Acknowledge what they asked for, then say clearly that this function needs a subscription and they can upgrade to Premium to use it. Be friendly and a bit playful (one emoji is fine). Do NOT perform any action. Do NOT list categories, suggest amounts, or offer to set a limit. Do NOT say "Got it!" or "Would you like to set the limit yourself". Only say that this is a Premium feature and they need a subscription to complete this and similar steps.`;
+
+  const userPrompt = `The user (free tier) said: "${userMessage.replace(/"/g, '\\"')}"
+
+Reply with your short paywall message only (no other text):`;
+
+  try {
+    const response = await fetchWithTimeout(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          max_tokens: 120,
+          temperature: 0.7,
+        }),
+      },
+      TIMEOUTS.CHAT_COMPLETION
+    );
+    if (!response.ok) throw new Error(`OpenAI ${response.status}`);
+    const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const content = data.choices?.[0]?.message?.content?.trim();
+    if (content && content.length > 10 && content.length < 400) return content;
+  } catch (err) {
+    logger.warn('getContextualPaywallReply failed', { requestId, error: err instanceof Error ? err.message : 'Unknown' });
+  }
+  return getFreemiumPaywallMessage();
+}
+
 // Lazy-load environment variables to ensure they're loaded after dotenv.config()
 function getOpenAIConfig() {
   return {
@@ -117,7 +302,7 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
       return;
     }
 
-    const { messages, maxTokens = 1200, temperature = 0.8, userId, conversationId, userDisplayName: bodyDisplayName, userCurrency: bodyUserCurrency, currencyCode: bodyCurrencyCode } = body;
+    const { messages, maxTokens = 1200, temperature = 0.8, userId, conversationId, userDisplayName: bodyDisplayName, userCurrency: bodyUserCurrency, currencyCode: bodyCurrencyCode, isPremium: clientIsPremium } = body;
 
     // Validate messages array
     if (!Array.isArray(messages) || messages.length === 0) {
@@ -146,6 +331,56 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
       });
     }
 
+    // Freemium paywall: use client-sent subscription when available so "Free" in the app = paywall on backend. Otherwise verify via DB.
+    const supabaseForPaywall = getSupabaseClient();
+    let isPremium = false;
+    if (clientIsPremium === false) {
+      // Client explicitly says free (app shows "Free") — trust it so paywall always applies
+      isPremium = false;
+      logger.info('Chat completion: client sent isPremium=false — enforcing freemium paywall', { requestId, userId: userId || 'none' });
+    } else if (userId && supabaseForPaywall) {
+      try {
+        isPremium = await getIsPremium(supabaseForPaywall, userId);
+      } catch (e) {
+        logger.warn('getIsPremium failed — treating as free', { requestId, error: e instanceof Error ? e.message : 'Unknown' });
+        isPremium = false;
+      }
+    }
+    if (!userId) logger.warn('Chat completion: no userId — treating as free for paywall', { requestId });
+    if (!supabaseForPaywall && clientIsPremium !== false) logger.warn('Chat completion: no Supabase — treating as free for paywall', { requestId });
+
+    if (!isPremium) {
+      const lastUserMessage = [...sanitizedMessages].reverse().find((m: { role: string }) => m.role === 'user');
+      const lastContent = lastUserMessage && typeof (lastUserMessage as any).content === 'string' ? (lastUserMessage as any).content : '';
+      const lastLower = lastContent.toLowerCase();
+      // Bulletproof: raw substring check so we never let "set a limit" / "wanna set a limit" through
+      const rawPremiumHint = lastLower.includes('set a limit') || lastLower.includes('set a goal') || lastLower.includes('wanna set') || (lastLower.includes('limit') && (lastLower.includes('set') || lastLower.includes('want')));
+      const currentMessageIsPremium = rawPremiumHint || isAnalyticsOrPremiumIntent(lastContent);
+      const conversationInPremiumFlow = isPremiumFlowInProgress(sanitizedMessages);
+
+      if (currentMessageIsPremium || conversationInPremiumFlow) {
+        let paywallResponse: string;
+        try {
+          paywallResponse = await getContextualPaywallReply(lastContent, currentMessageIsPremium ? 'premium_intent' : 'premium_flow', requestId);
+        } catch (e) {
+          paywallResponse = getFreemiumPaywallMessage();
+          logger.warn('Contextual paywall reply failed, using fallback', { requestId, error: e instanceof Error ? e.message : 'Unknown' });
+        }
+        logger.info('Freemium paywall: blocking premium', {
+          requestId,
+          userId: userId || 'none',
+          reason: currentMessageIsPremium ? 'current_message_premium_intent' : 'conversation_in_premium_flow',
+          lastUserPreview: lastContent.slice(0, 80)
+        });
+        res.status(200).json({
+          response: paywallResponse,
+          requestId,
+          requiresUpgrade: true
+        });
+        return;
+      }
+    }
+
     // Build context-aware system prompt if userId is provided (conversationId is optional)
     // This ensures the AI has access to user's financial data and strict pattern rules on every request
     let systemPrompt: string | null = null;
@@ -154,10 +389,20 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
     let transactionAddedInPreCall = false;
     if (userId && supabase) {
       try {
-        // Build prompt; use profile currency from DB, fallback to client-sent currency so chat always respects user's choice (EUR, CHF, etc.)
-        const systemResult = await buildSystemPrompt(userId, conversationId || '', { clientCurrency });
-        systemPrompt = systemResult.prompt;
-        const resolvedUserCurrency = systemResult.userCurrency;
+        // Use same isPremium we already computed (respects client isPremium: false) so freemium always gets P1/P2-only prompt
+        let resolvedUserCurrency: string;
+        if (!isPremium) {
+          // Freemium: use P1/P2-only prompt. No financial data, no P3–P6. AI cannot show totals or offer limits/goals.
+          const freemiumResult = await buildFreemiumSystemPrompt(userId, { clientCurrency });
+          systemPrompt = freemiumResult.prompt;
+          resolvedUserCurrency = freemiumResult.userCurrency;
+        } else {
+          // Premium: full system prompt with financial data and all patterns P1–P6
+          const systemResult = await buildSystemPrompt(userId, conversationId || '', { clientCurrency });
+          systemPrompt = systemResult.prompt;
+          resolvedUserCurrency = systemResult.userCurrency;
+        }
+
         // If we can extract a full transaction from the conversation, add it to the DB first and verify;
         // then tell the AI to confirm. This way we only confirm after the backend has actually added it.
         // Never treat limit-flow messages (e.g. user confirming "87.52" or "Dining Out") as a new transaction.
@@ -227,6 +472,27 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
         hasUserId: !!userId,
         hasSupabase: !!supabase
       });
+    }
+
+    // Second paywall gate for free users: right before calling OpenAI, re-check (bulletproof + contextual reply).
+    if (!isPremium && userId) {
+      const lastUserMsg = [...sanitizedMessages].reverse().find((m: { role: string }) => m.role === 'user');
+      const lastUserContent = lastUserMsg && typeof (lastUserMsg as any).content === 'string' ? (lastUserMsg as any).content : '';
+      const lastLower = lastUserContent.toLowerCase();
+      const rawPremium = lastLower.includes('set a limit') || lastLower.includes('set a goal') || lastLower.includes('wanna set') || (lastLower.includes('limit') && (lastLower.includes('set') || lastLower.includes('want')));
+      const againPremiumIntent = rawPremium || isAnalyticsOrPremiumIntent(lastUserContent);
+      const againInFlow = isPremiumFlowInProgress(sanitizedMessages);
+      if (againPremiumIntent || againInFlow) {
+        let paywallResponse: string;
+        try {
+          paywallResponse = await getContextualPaywallReply(lastUserContent, againPremiumIntent ? 'premium_intent' : 'premium_flow', requestId);
+        } catch {
+          paywallResponse = getFreemiumPaywallMessage();
+        }
+        logger.info('Freemium paywall (second gate): blocking before OpenAI', { requestId, userId, lastUserPreview: lastUserContent.slice(0, 60) });
+        res.status(200).json({ response: paywallResponse, requestId, requiresUpgrade: true });
+        return;
+      }
     }
 
     // Call OpenAI API with timeout (prevents hanging requests)
@@ -397,9 +663,14 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
       }
     }
 
-    // Automatically create target if detected in conversation
+    // Automatically create target if detected in conversation — ONLY for premium users (freemium cannot create limits/goals)
     if (userId && supabase) {
       try {
+        const userIsPremiumForTarget = await getIsPremium(supabase, userId);
+        if (!userIsPremiumForTarget) {
+          // Free user: do not create any target (savings or budget) even if AI said it did
+          logger.info('Skipping target creation: user is on free plan', { requestId, userId });
+        } else {
         // Get user currency preference first so we can pass it to parsing and use for target
         let userCurrencyForTarget = 'EUR';
         try {
@@ -467,15 +738,20 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
             });
           }
         }
+        } // end else (userIsPremiumForTarget — only create targets for premium)
       } catch (error) {
         logger.warn('Error in auto-target creation', { error: error instanceof Error ? error.message : 'Unknown', requestId });
         // Don't fail the request if target parsing/creation fails
       }
     }
 
-    // Automatically create budget targets (spending limits) when analytics are requested
+    // Automatically create budget targets (spending limits) when analytics are requested — ONLY for premium users
     if (userId && supabase) {
       try {
+        const userIsPremiumForBudget = await getIsPremium(supabase, userId);
+        if (!userIsPremiumForBudget) {
+          logger.info('Skipping budget target creation: user is on free plan', { requestId, userId });
+        } else {
         // Check if this is an analytics request or limit setting request
         const userMessages = sanitizedMessages.filter(msg => msg.role === 'user').map(msg => msg.content.toLowerCase());
         const lastUserMessage = userMessages[userMessages.length - 1] || '';
@@ -723,6 +999,7 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
             }
           }
         }
+        } // end else (userIsPremiumForBudget — only create budget targets for premium)
       } catch (error) {
         logger.warn('Error in auto-budget target creation', { 
           error: error instanceof Error ? error.message : 'Unknown', 
@@ -1651,6 +1928,45 @@ function parseTargetDate(dateStr: string): string | undefined {
   }
 
   return undefined;
+}
+
+/**
+ * Build FREEMIUM-ONLY system prompt: P1 (Add Income) and P2 (Add Expense) only. No financial data, no P3–P6.
+ * Free users must never see earned/spent/balance or be offered limits/goals/analytics.
+ */
+async function buildFreemiumSystemPrompt(userId: string, options?: { clientCurrency?: string }): Promise<{ prompt: string; userCurrency: string }> {
+  const supabase = getSupabaseClient();
+  const userCurrency = options?.clientCurrency || 'EUR';
+  const currencySymbol = getCurrencySymbolForCode(userCurrency);
+  let userNameLine = '';
+  if (supabase) {
+    try {
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('currency_code, display_name, name, full_name')
+        .eq('id', userId)
+        .single();
+      if (profileData?.display_name || profileData?.name || profileData?.full_name) {
+        const name = (profileData.display_name ?? profileData.name ?? profileData.full_name) as string;
+        if (typeof name === 'string' && name.trim()) userNameLine = `The user's name is ${name.trim()}. You may use it when appropriate.\n\n`;
+      }
+    } catch (_) { /* ignore */ }
+  }
+  const prompt = `${userNameLine}CURRENCY: Use ${currencySymbol} (${userCurrency}) for amounts.\n\n
+FREE TIER — ONLY TWO PATTERNS ALLOWED. You have exactly two functions: (1) Add Income, (2) Add Expense. No metrics, no totals, no limits, no goals, no analytics.
+
+ALLOWED:
+- P1 Add Income: ask for category (Salary, Freelance & Side Income, Other), amount, optional description. When you have both, confirm with ✅. Backend saves it.
+- P2 Add Expense: ask for category (Groceries, Dining Out, Rent, etc.), amount, optional description. When you have both, confirm with ✅. Backend saves it.
+- No-metrics questions only: "What is ANITA?", "What does this app do?", "What can you do?", "Hi", "Hello". Reply in one short sentence. You may ONLY say you help with adding income and adding expenses. Do NOT mention "analyzing budget", "setting spending limits", "limits", "goals", "analytics", or "dive into your budget". Do NOT offer to set a limit or analyze budget.
+
+EVERYTHING ELSE = SUBSCRIPTION MESSAGE:
+- Limits, goals, targets, analytics, budget analysis, spending summary, "how am I doing", "set a limit", "I wanna set a limit", category lists with amounts, suggesting categories for limits, "yourself or with my help", any follow-up to setting a limit or goal — you must reply with EXACTLY this text and nothing else: "This function is not available on the free tier. You need a subscription to complete this and other steps. Upgrade to Premium to access analytics, limits, goals, and more."
+- If the user says "yes", "your help", "groceries 100", or similar in a context where the previous message was about setting a limit or goal, reply ONLY with the subscription message above.
+- Do not offer to set a limit. Do not ask "would you like to set the limit yourself or with my help". Do not list categories with amounts. Do not say "I've set a limit for". You cannot perform these on the free tier; only respond with the subscription message.
+
+Categories for P1/P2 only: Rent, Groceries, Dining Out, Entertainment, Streaming Services, Shopping, Personal Care, Internet & Phone, Salary, Freelance & Side Income, Other.`;
+  return { prompt, userCurrency };
 }
 
 /**

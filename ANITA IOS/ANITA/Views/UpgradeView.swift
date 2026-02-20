@@ -128,53 +128,85 @@ struct UpgradeView: View {
                         }
                         .padding(.horizontal, 20)
                         
-                        // Restore Purchases
-                        Button(action: {
-                            Task { await restorePurchases() }
-                        }) {
-                            HStack(spacing: 8) {
-                                if isRestoring {
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: .white.opacity(0.8)))
-                                } else {
-                                    Image(systemName: "arrow.clockwise")
-                                        .font(.system(size: 14, weight: .medium))
-                                }
-                                Text(AppL10n.t("plans.restore_purchases"))
-                                    .font(.system(size: 15, weight: .medium, design: .rounded))
-                            }
-                            .frame(maxWidth: .infinity)
-                            .contentShape(Rectangle())
-                            .foregroundColor(.white.opacity(0.7))
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(storeKitService.isLoading || isRestoring)
-                        .padding(.top, 8)
-                        
-                        // Cancel subscription (opens Apple subscription management) — only for subscribers
-                        if currentPlan != "free" {
-                            Button(action: openSubscriptionManagement) {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "xmark.circle")
-                                        .font(.system(size: 14, weight: .medium))
-                                    Text(AppL10n.t("settings.cancel_subscription"))
+                        // Subscription management — soft card so it feels part of the flow
+                        VStack(spacing: 0) {
+                            Button(action: {
+                                Task { await restorePurchases() }
+                            }) {
+                                HStack(spacing: 10) {
+                                    if isRestoring {
+                                        ProgressView()
+                                            .progressViewStyle(CircularProgressViewStyle(tint: .white.opacity(0.8)))
+                                    } else {
+                                        Image(systemName: "arrow.clockwise")
+                                            .font(.system(size: 15, weight: .medium))
+                                    }
+                                    Text(AppL10n.t("plans.restore_purchases"))
                                         .font(.system(size: 15, weight: .medium, design: .rounded))
                                 }
                                 .frame(maxWidth: .infinity)
+                                .frame(height: 50)
                                 .contentShape(Rectangle())
-                                .foregroundColor(.white.opacity(0.6))
+                                .foregroundColor(.white.opacity(0.78))
                             }
                             .buttonStyle(.plain)
-                            .padding(.top, 4)
+                            .disabled(storeKitService.isLoading || isRestoring)
+                            
+                            if currentPlan != "free" {
+                                Rectangle()
+                                    .fill(Color.white.opacity(0.08))
+                                    .frame(height: 1)
+                                    .padding(.horizontal, 20)
+                                
+                                Button(action: openSubscriptionManagement) {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: "gearshape")
+                                            .font(.system(size: 15, weight: .medium))
+                                        Text(AppL10n.t("settings.cancel_subscription"))
+                                            .font(.system(size: 15, weight: .medium, design: .rounded))
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 50)
+                                    .contentShape(Rectangle())
+                                    .foregroundColor(.white.opacity(0.68))
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color.white.opacity(0.04))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                                )
+                        )
+                        .padding(.horizontal, 20)
+                        .padding(.top, 20)
                         
-                        Text(AppL10n.t("plans.cancel_subscription_hint"))
-                            .font(.system(size: 12, weight: .regular, design: .rounded))
-                            .foregroundColor(.white.opacity(0.45))
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 24)
-                            .padding(.top, 4)
-                            .padding(.bottom, 16)
+                        // Legal & subscription terms — natural footer
+                        VStack(spacing: 10) {
+                            Text(AppL10n.t("plans.cancel_subscription_hint"))
+                                .font(.system(size: 12, weight: .regular, design: .rounded))
+                                .foregroundColor(.white.opacity(0.48))
+                                .multilineTextAlignment(.center)
+                                .lineSpacing(3)
+                            
+                            Text(AppL10n.t("plans.subscription_terms"))
+                                .font(.system(size: 11, weight: .regular, design: .rounded))
+                                .foregroundColor(.white.opacity(0.38))
+                                .multilineTextAlignment(.center)
+                                .lineSpacing(2)
+                            
+                            Text(AppL10n.t("plans.disclaimer_financial"))
+                                .font(.system(size: 11, weight: .regular, design: .rounded))
+                                .foregroundColor(.white.opacity(0.38))
+                                .multilineTextAlignment(.center)
+                                .lineSpacing(2)
+                        }
+                        .padding(.horizontal, 28)
+                        .padding(.top, 18)
+                        .padding(.bottom, 20)
                         
                         // Error message
                         if let error = storeKitService.errorMessage {

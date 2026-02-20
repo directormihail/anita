@@ -13,12 +13,9 @@ struct ANITAApp: App {
     @AppStorage("anita_preferred_language_code") private var preferredLanguageCode: String = "en"
     
     init() {
-        // Initialize notification service and request permissions
+        // Initialize notification service (permission is requested on welcome chat screen after registration)
         Task { @MainActor in
             NotificationService.shared.checkAuthorizationStatus()
-            if NotificationService.shared.pushNotificationsEnabled {
-                NotificationService.shared.requestAuthorization()
-            }
         }
         
         // Configure navigation bar appearance globally for transparent glassy effect

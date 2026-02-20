@@ -45,6 +45,7 @@
 		A1000091 /* XPStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000090 /* XPStore.swift */; };
 		A1000093 /* AmountParsing.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000092 /* AmountParsing.swift */; };
 		A1000095 /* SubscriptionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000094 /* SubscriptionManager.swift */; };
+		A1000097 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000096 /* KeychainHelper.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -89,6 +90,7 @@
 		A1000090 /* XPStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XPStore.swift; sourceTree = "<group>"; };
 		A1000092 /* AmountParsing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmountParsing.swift; sourceTree = "<group>"; };
 		A1000094 /* SubscriptionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionManager.swift; sourceTree = "<group>"; };
+		A1000096 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -205,6 +207,7 @@
 			children = (
 				A1000092 /* AmountParsing.swift */,
 				A1000041 /* UserManager.swift */,
+				A1000096 /* KeychainHelper.swift */,
 				A1000080 /* AppL10n.swift */,
 				A1000048 /* LiquidGlassModifier.swift */,
 				A1000052 /* Config.swift */,
@@ -325,6 +328,7 @@
 				A1000076 /* NotificationPreviewView.swift in Sources */,
 				A1000093 /* AmountParsing.swift in Sources */,
 				A1000095 /* SubscriptionManager.swift in Sources */,
+				A1000097 /* KeychainHelper.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

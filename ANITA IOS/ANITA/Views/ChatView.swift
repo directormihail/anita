@@ -7,6 +7,8 @@
 
 import SwiftUI
 
+private let hasRequestedNotificationFromWelcomeChatKey = "anita_has_requested_notification_from_welcome_chat"
+
 struct ChatView: View {
     @StateObject private var viewModel = ChatViewModel()
     @StateObject private var subscriptionManager = SubscriptionManager.shared
@@ -17,6 +19,14 @@ struct ChatView: View {
     // Check if we should show the welcome screen (no messages yet)
     private var showWelcomeScreen: Bool {
         viewModel.messages.isEmpty
+    }
+    
+    /// Shows the standard Apple notification permission dialog once when user first sees the welcome chat after registration.
+    private func requestNotificationPermissionIfNeeded() {
+        guard !UserDefaults.standard.bool(forKey: hasRequestedNotificationFromWelcomeChatKey) else { return }
+        UserDefaults.standard.set(true, forKey: hasRequestedNotificationFromWelcomeChatKey)
+        NotificationService.shared.pushNotificationsEnabled = true
+        // requestAuthorization() is invoked by pushNotificationsEnabled didSet → system dialog appears
     }
     
     var body: some View {
@@ -87,6 +97,10 @@ struct ChatView: View {
                     print("[ChatView] onAppear: Loading messages for conversation: \(conversationId)")
                     await viewModel.loadMessages(conversationId: conversationId)
                 }
+            }
+            // First time on welcome chat after registration: show system notification permission dialog
+            if showWelcomeScreen {
+                requestNotificationPermissionIfNeeded()
             }
         }
         .sheet(isPresented: $showUpgradeView) {
@@ -274,8 +288,12 @@ struct ChatView: View {
                                                 iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
                                                 title: AppL10n.t("chat.set_target"),
                                                 action: {
-                                                    viewModel.inputText = AppL10n.t("chat.set_target")
-                                                    viewModel.sendMessage()
+                                                    if !subscriptionManager.isPremium {
+                                                        showUpgradeView = true
+                                                    } else {
+                                                        viewModel.inputText = AppL10n.t("chat.set_target")
+                                                        viewModel.sendMessage()
+                                                    }
                                                 }
                                             )
                                             
@@ -284,8 +302,12 @@ struct ChatView: View {
                                                 iconColor: Color.orange,
                                                 title: AppL10n.t("chat.analytics"),
                                                 action: {
-                                                    viewModel.inputText = AppL10n.t("chat.analytics")
-                                                    viewModel.sendMessage()
+                                                    if !subscriptionManager.isPremium {
+                                                        showUpgradeView = true
+                                                    } else {
+                                                        viewModel.inputText = AppL10n.t("chat.analytics")
+                                                        viewModel.sendMessage()
+                                                    }
                                                 }
                                             )
                                         }

@@ -11,8 +11,7 @@ struct SidebarMenu: View {
     @Binding var isPresented: Bool
     @StateObject private var viewModel = SidebarViewModel()
     @ObservedObject private var xpStore = XPStore.shared
-    @State private var showXPInfoSheet = false
-    
+
     var body: some View {
         ZStack {
             // Dark background
@@ -40,10 +39,10 @@ struct SidebarMenu: View {
                 .padding(.top, 16)
                 .padding(.bottom, 12)
                 
-                // XP / Level card — compact variant; info (i) inside card next to XP (from shared store)
+                // XP / Level card — compact variant (from shared store)
                 Group {
                     if let xpStats = xpStore.xpStats {
-                        XPLevelWidget(xpStats: xpStats, compact: true, onInfoTap: { showXPInfoSheet = true })
+                        XPLevelWidget(xpStats: xpStats, compact: true)
                     } else {
                         // Loading placeholder: compact card shape
                         VStack(spacing: 14) {
@@ -168,9 +167,6 @@ struct SidebarMenu: View {
                 }
                 .padding(.bottom, 12)
             }
-        }
-        .sheet(isPresented: $showXPInfoSheet) {
-            XPInfoSheet()
         }
         .onAppear {
             viewModel.loadData()

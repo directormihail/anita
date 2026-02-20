@@ -41,6 +41,8 @@ struct ChatCompletionRequest: Codable {
     let userDisplayName: String?
     /// User's chosen currency (e.g. EUR, CHF) so the chat uses it for amounts and confirmations
     let userCurrency: String?
+    /// When false, backend MUST treat as free tier and enforce paywall for limits/analytics/goals. Sourced from SubscriptionManager.
+    let isPremium: Bool?
     
     enum CodingKeys: String, CodingKey {
         case messages
@@ -50,6 +52,7 @@ struct ChatCompletionRequest: Codable {
         case conversationId
         case userDisplayName
         case userCurrency
+        case isPremium
     }
 }
 
@@ -65,6 +68,8 @@ struct ChatCompletionResponse: Codable {
     let targetType: String? // "savings" or "budget" - type of target created
     let budgetTargetIds: [String]? // Array of budget target IDs if multiple limits were created
     let category: String? // Category for budget targets (spending limits)
+    /// When true, backend returned a freemium paywall (e.g. user asked for analytics on free tier). Show UpgradeView.
+    let requiresUpgrade: Bool?
 }
 
 struct APIError: Codable {

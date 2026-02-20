@@ -10,6 +10,7 @@ import SwiftUI
 struct PostSignupPlansView: View {
     @StateObject private var storeKitService = StoreKitService.shared
     @State private var databaseSubscription: Subscription?
+    @State private var isRestoring = false
     
     private let networkService = NetworkService.shared
     let onContinue: () -> Void
@@ -100,6 +101,51 @@ struct PostSignupPlansView: View {
                         }
                         .padding(.horizontal, 20)
                         
+                        // Restore Purchases (required for App Store review)
+                        Button(action: {
+                            Task { await restorePurchases() }
+                        }) {
+                            HStack(spacing: 8) {
+                                if isRestoring {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white.opacity(0.8)))
+                                } else {
+                                    Image(systemName: "arrow.clockwise")
+                                        .font(.system(size: 14, weight: .medium))
+                                }
+                                Text(AppL10n.t("plans.restore_purchases"))
+                                    .font(.system(size: 15, weight: .medium, design: .rounded))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
+                            .foregroundColor(.white.opacity(0.7))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(storeKitService.isLoading || isRestoring)
+                        .padding(.top, 8)
+                        
+                        Text(AppL10n.t("plans.cancel_subscription_hint"))
+                            .font(.system(size: 12, weight: .regular, design: .rounded))
+                            .foregroundColor(.white.opacity(0.45))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 24)
+                            .padding(.top, 4)
+                        
+                        Text(AppL10n.t("plans.subscription_terms"))
+                            .font(.system(size: 11, weight: .regular, design: .rounded))
+                            .foregroundColor(.white.opacity(0.4))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 24)
+                            .padding(.top, 2)
+                        
+                        Text(AppL10n.t("plans.disclaimer_financial"))
+                            .font(.system(size: 11, weight: .regular, design: .rounded))
+                            .foregroundColor(.white.opacity(0.4))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 24)
+                            .padding(.top, 6)
+                            .padding(.bottom, 8)
+                        
                         if let error = storeKitService.errorMessage {
                             Text(error)
                                 .font(.system(size: 14, weight: .medium, design: .rounded))
@@ -173,6 +219,17 @@ struct PostSignupPlansView: View {
                 storeKitService.errorMessage = error.localizedDescription
             }
         }
+    }
+    
+    /// Restore previous Apple purchases and sync with backend
+    private func restorePurchases() async {
+        await MainActor.run {
+            isRestoring = true
+            storeKitService.errorMessage = nil
+        }
+        await storeKitService.restorePurchases()
+        await loadSubscriptionFromDatabase()
+        await MainActor.run { isRestoring = false }
     }
 }
 

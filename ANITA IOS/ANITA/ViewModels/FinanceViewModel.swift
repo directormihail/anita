@@ -39,6 +39,8 @@ class FinanceViewModel: ObservableObject {
     @Published var comparisonPeriod: ComparisonPeriod = .oneMonth
     @Published var comparisonData: [ComparisonPeriodData] = []
     @Published var isHistoricalDataLoading = false
+    /// True after historical data has been loaded at least once (e.g. when user first opens Insights).
+    var hasLoadedHistoricalDataOnce = false
     
     private let networkService = NetworkService.shared
     let userId: String
@@ -125,8 +127,7 @@ class FinanceViewModel: ObservableObject {
                     self.previousMonthIncome = previousMonthMetrics?.metrics.monthlyIncome ?? 0.0
                     self.previousMonthExpenses = previousMonthMetrics?.metrics.monthlyExpenses ?? 0.0
                     
-                    // Load balance and income/expense history
-                    self.loadHistoricalData()
+                    // Historical/Insights data loads only when user first opens Insights (see loadHistoricalDataIfNeeded)
                     
                     self.isLoading = false
                 }
@@ -192,11 +193,7 @@ class FinanceViewModel: ObservableObject {
     
     func changeComparisonPeriod(to period: ComparisonPeriod) {
         comparisonPeriod = period
-        // Don't reload data immediately - data is already loaded for 12 months
-        // Only reload if we don't have enough data
-        if comparisonData.count < period.rawValue {
-            loadHistoricalData()
-        }
+        // Data is already loaded once when Insights was first opened; slider only filters that data.
     }
     
     // Calculate spending for a specific category in the selected period
@@ -589,9 +586,19 @@ class FinanceViewModel: ObservableObject {
                 self.monthlyIncomeExpenseHistory = finalIncomeExpenseHistory
                 self.monthlyNetWorthHistory = netWorthHistory
                 self.comparisonData = finalComparisonData
+                let maxMonths = max(1, finalComparisonData.count)
+                if self.comparisonPeriod.rawValue > maxMonths {
+                    self.comparisonPeriod = ComparisonPeriod(rawValue: maxMonths) ?? .oneMonth
+                }
+                self.hasLoadedHistoricalDataOnce = true
                 self.isHistoricalDataLoading = false
             }
         }
+    }
+    
+    /// Maximum number of months available for comparison (based on loaded data). At least 1.
+    var maxAvailableComparisonMonths: Int {
+        max(1, comparisonData.count)
     }
     
     // Get comparison data for selected period

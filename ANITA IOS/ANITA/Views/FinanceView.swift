@@ -713,8 +713,7 @@ struct FinanceView: View {
             Button(action: {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.75, blendDuration: 0.25)) {
                     isTrendsAndComparisonsExpanded.toggle()
-                    if isTrendsAndComparisonsExpanded {
-                        // Load historical data when expanded
+                    if isTrendsAndComparisonsExpanded, !viewModel.hasLoadedHistoricalDataOnce {
                         viewModel.loadHistoricalData()
                     }
                 }
@@ -783,25 +782,34 @@ struct FinanceView: View {
             if isTrendsAndComparisonsExpanded {
                 if subscriptionManager.isPremium {
                     VStack(spacing: 20) {
-                        // Period Selector
-                        ComparisonPeriodSelectorView(viewModel: viewModel)
-                            .padding(.horizontal, 20)
+                        if viewModel.isHistoricalDataLoading {
+                            VStack(spacing: 8) {
+                                Text(AppL10n.t("finance.loading"))
+                                    .font(.system(size: 15, weight: .medium, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.5))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 36)
                             .transition(.expandSection)
-                        
-                        // Income vs Expenses Bar Chart
-                        VStack(alignment: .leading, spacing: 16) {
-                            let chartData = viewModel.getComparisonData(for: viewModel.comparisonPeriod)
-                            EnhancedIncomeExpenseBarChart(
-                                data: chartData,
-                                currency: userCurrency,
-                                isExpanded: isTrendsAndComparisonsExpanded
-                            )
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 20)
-                            .liquidGlass(cornerRadius: 20)
-                            .padding(.horizontal, 20)
+                        } else {
+                            ComparisonPeriodSelectorView(viewModel: viewModel)
+                                .padding(.horizontal, 20)
+                                .transition(.expandSection)
+                            
+                            VStack(alignment: .leading, spacing: 16) {
+                                let chartData = viewModel.getComparisonData(for: viewModel.comparisonPeriod)
+                                EnhancedIncomeExpenseBarChart(
+                                    data: chartData,
+                                    currency: userCurrency,
+                                    isExpanded: isTrendsAndComparisonsExpanded
+                                )
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 20)
+                                .liquidGlass(cornerRadius: 20)
+                                .padding(.horizontal, 20)
+                            }
+                            .transition(.expandSection)
                         }
-                        .transition(.expandSection)
                     }
                     .padding(.top, 8)
                 } else {
@@ -5892,9 +5900,7 @@ struct XPLevelWidget: View {
     let xpStats: XPStats
     /// When true, uses smaller fonts and padding for sidebar / narrow contexts.
     var compact: Bool = false
-    /// When set, shows an info (i) button on the progress row; tap opens XP explanation.
-    var onInfoTap: (() -> Void)? = nil
-    
+
     private var emojiSize: CGFloat { compact ? 32 : 40 }
     private var levelFontSize: CGFloat { compact ? 17 : 20 }
     private var titleFontSize: CGFloat { compact ? 12 : 14 }
@@ -5946,7 +5952,7 @@ struct XPLevelWidget: View {
                 }
             }
             
-            // Progress bar + info (i) on same row — "how XP works" next to progress
+            // Progress bar row
             VStack(alignment: .leading, spacing: progressSpacing) {
                 HStack(spacing: 8) {
                     Text(xpStats.xp_to_next_level == 0 ? AppL10n.t("finance.xp_max_level") : "\(xpStats.xp_to_next_level) \(AppL10n.t("finance.xp_to_next_level"))")
@@ -5960,15 +5966,6 @@ struct XPLevelWidget: View {
                         .font(.system(size: progressLabelSize, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
                         .digit3D(baseColor: .white)
-                    
-                    if onInfoTap != nil {
-                        Button(action: { onInfoTap?() }) {
-                            Image(systemName: "info.circle")
-                                .font(.system(size: compact ? 14 : 16))
-                                .foregroundColor(.white.opacity(0.5))
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
                 }
                 
                 GeometryReader { geometry in
@@ -6044,34 +6041,36 @@ struct FinanceCategoryRow: View {
                     .foregroundColor(.white)
                     .lineLimit(1)
                 
-                // Both percentages on the same line
+                // Category share and trend vs last month
                 HStack(spacing: 8) {
-                    // Category percentage
+                    // Share of total spending
                     Text(String(format: "%.1f%%", category.percentage))
                         .font(.system(size: 13, weight: .medium, design: .rounded))
                         .foregroundColor(.white.opacity(0.6))
                     
-                    // Trend percentage vs last year
+                    // Trend vs last month: growth (more spending) = red, decrease = green
                     if let trend = trend {
+                        let isGrowth = trend.isPositive
+                        let trendColor = isGrowth ? Color(red: 0.9, green: 0.3, blue: 0.3) : Color(red: 0.2, green: 0.8, blue: 0.4)
                         HStack(spacing: 4) {
-                            Image(systemName: trend.isPositive ? "arrow.up" : "arrow.down")
+                            Image(systemName: isGrowth ? "arrow.up" : "arrow.down")
                                 .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(trend.isPositive ? Color(red: 0.2, green: 0.8, blue: 0.4) : Color(red: 0.9, green: 0.3, blue: 0.3))
+                                .foregroundColor(trendColor)
                             
                             Text(String(format: "%.1f%%", abs(trend.percentageChange)))
                                 .font(.system(size: 13, weight: .medium, design: .rounded))
-                                .foregroundColor(trend.isPositive ? Color(red: 0.2, green: 0.8, blue: 0.4) : Color(red: 0.9, green: 0.3, blue: 0.3))
+                                .foregroundColor(trendColor)
                         }
                     } else {
-                        // Default trend if no data
+                        // Default trend if no data (new category = treat as growth, red)
                         HStack(spacing: 4) {
                             Image(systemName: "arrow.up")
                                 .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
+                                .foregroundColor(Color(red: 0.9, green: 0.3, blue: 0.3))
                             
-                            Text("100.0%")
+                            Text("—")
                                 .font(.system(size: 13, weight: .medium, design: .rounded))
-                                .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
+                                .foregroundColor(Color.white.opacity(0.5))
                         }
                     }
                 }
@@ -8175,7 +8174,7 @@ struct BalanceLineChart: View {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: AppL10n.localeIdentifier(for: AppL10n.currentLanguageCode()))
         formatter.dateFormat = "MMM"
-        return formatter.string(from: date)
+        return formatter.string(from: date).uppercased()
     }
     
     var body: some View {
@@ -8285,7 +8284,7 @@ struct IncomeExpenseBarChart: View {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: AppL10n.localeIdentifier(for: AppL10n.currentLanguageCode()))
         formatter.dateFormat = "MMM"
-        return formatter.string(from: date)
+        return formatter.string(from: date).uppercased()
     }
     
     var body: some View {
@@ -8515,10 +8514,12 @@ struct ComparisonPeriodSelectorView: View {
     @State private var isDragging: Bool = false
     @State private var currentSliderValue: Double = 1.0 // Track current slider position for magnification
     
-    // Convert slider value to ComparisonPeriod
+    private var maxMonths: Int { viewModel.maxAvailableComparisonMonths }
+    
+    // Convert slider value to ComparisonPeriod (clamped to available data months)
     private func valueToPeriod(_ value: Double) -> ComparisonPeriod {
         let rounded = Int(value.rounded())
-        let clamped = max(1, min(12, rounded))
+        let clamped = max(1, min(maxMonths, rounded))
         return ComparisonPeriod(rawValue: clamped) ?? .oneMonth
     }
     
@@ -8554,9 +8555,9 @@ struct ComparisonPeriodSelectorView: View {
                     let availableWidth = width - sliderPadding * 2
                     
                     ZStack(alignment: .leading) {
-                        // Draw ruler marks for all months 1-12
-                        ForEach(1...12, id: \.self) { month in
-                            let normalizedPosition = (Double(month - 1) / Double(12 - 1))
+                        // Draw ruler marks for months 1 through max available (based on user data)
+                        ForEach(1...maxMonths, id: \.self) { month in
+                            let normalizedPosition = maxMonths > 1 ? (Double(month - 1) / Double(maxMonths - 1)) : 0
                             let position = sliderPadding + normalizedPosition * availableWidth
                             
                             // Calculate distance from slider position
@@ -8626,7 +8627,7 @@ struct ComparisonPeriodSelectorView: View {
                                 }
                             }
                         ),
-                        in: 1...12,
+                        in: 1...Double(max(2, maxMonths)),
                         step: 1
                     )
                     .tint(
@@ -8651,18 +8652,24 @@ struct ComparisonPeriodSelectorView: View {
                         DragGesture(minimumDistance: 0)
                             .onEnded { _ in
                                 isDragging = false
-                                // Reload data when drag ends to ensure graphs have correct data
-                                // But don't show loading state if we already have data
-                                viewModel.loadHistoricalData()
                             }
                     )
                     .onAppear {
-                        // Initialize slider value
                         currentSliderValue = periodToValue(viewModel.comparisonPeriod)
-                        // Ensure default is 1 month
-                        if viewModel.comparisonPeriod != .oneMonth {
+                        let maxM = viewModel.maxAvailableComparisonMonths
+                        let period = viewModel.comparisonPeriod
+                        if period.rawValue > maxM {
+                            viewModel.comparisonPeriod = ComparisonPeriod(rawValue: maxM) ?? .oneMonth
+                            currentSliderValue = periodToValue(viewModel.comparisonPeriod)
+                        } else if period != .oneMonth && maxM == 1 {
                             viewModel.comparisonPeriod = .oneMonth
-                            currentSliderValue = periodToValue(.oneMonth)
+                            currentSliderValue = 1
+                        }
+                    }
+                    .onChange(of: viewModel.maxAvailableComparisonMonths) { _, newMax in
+                        if viewModel.comparisonPeriod.rawValue > newMax {
+                            viewModel.comparisonPeriod = ComparisonPeriod(rawValue: newMax) ?? .oneMonth
+                            currentSliderValue = periodToValue(viewModel.comparisonPeriod)
                         }
                     }
                 }
@@ -8871,7 +8878,7 @@ struct EnhancedInteractiveBalanceChart: View {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: AppL10n.localeIdentifier(for: AppL10n.currentLanguageCode()))
         formatter.dateFormat = "MMM"
-        return formatter.string(from: date)
+        return formatter.string(from: date).uppercased()
     }
     
     // Calculate cumulative cash available for each month
@@ -9177,7 +9184,7 @@ struct EnhancedNetWorthChart: View {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: AppL10n.localeIdentifier(for: AppL10n.currentLanguageCode()))
         formatter.dateFormat = "MMM"
-        return formatter.string(from: date)
+        return formatter.string(from: date).uppercased()
     }
     
     // Get total assets value (including goals and targets)
@@ -9810,7 +9817,7 @@ struct EnhancedIncomeExpenseBarChart: View {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: AppL10n.localeIdentifier(for: AppL10n.currentLanguageCode()))
         formatter.dateFormat = "MMM"
-        return formatter.string(from: date)
+        return formatter.string(from: date).uppercased()
     }
     
     private func formatFullMonth(_ date: Date) -> String {
@@ -10010,25 +10017,31 @@ struct EnhancedIncomeExpenseBarChart: View {
                         // Bars - Clean and professional, perfectly centered and separated
                         let totalBarsWidth = barGroupWidth * CGFloat(sortedData.count) + barSpacing * CGFloat(max(0, sortedData.count - 1))
                         
-                        // Background grid lines - start from baseline (top of month labels) and extend upward
-                        let numberOfGridLines: Int = 5 // Number of horizontal grid lines
-                        let lineSpacing = chartHeight / CGFloat(numberOfGridLines - 1)
+                        // Grid lines: first grey line at the 0 point (start of bars). Offset so baseline aligns with bar baseline.
+                        let barAreaHeight = chartHeight * 0.85
+                        let numberOfGridLines: Int = 5
+                        let gridLineSpacing = barAreaHeight / CGFloat(numberOfGridLines - 1)
+                        let gridBaselineOffset: CGFloat = 10
                         
-                        // Grid lines: aligned with bars width, baseline at bottom (top of month labels), extending upward
-                        HStack {
-                            Spacer()
-                            ZStack(alignment: .bottom) {
-                                ForEach(0..<numberOfGridLines, id: \.self) { index in
-                                    Rectangle()
-                                        .fill(index == 0 ? Color.white.opacity(0.1) : Color.white.opacity(0.06))
-                                        .frame(width: totalBarsWidth, height: 1)
-                                        .offset(y: -CGFloat(index) * lineSpacing)
+                        VStack(spacing: 0) {
+                            HStack {
+                                Spacer()
+                                ZStack(alignment: .bottom) {
+                                    ForEach(0..<numberOfGridLines, id: \.self) { index in
+                                        Rectangle()
+                                            .fill(index == 0 ? Color.white.opacity(0.12) : Color.white.opacity(0.06))
+                                            .frame(width: totalBarsWidth, height: 1)
+                                            .offset(y: -CGFloat(index) * gridLineSpacing)
+                                    }
                                 }
+                                .frame(height: chartHeight, alignment: .bottom)
+                                .offset(y: gridBaselineOffset)
+                                Spacer()
                             }
-                            .frame(height: chartHeight, alignment: .bottom)
-                            Spacer()
+                            .padding(.horizontal, horizontalPadding)
+                            Spacer().frame(height: monthLabelHeight)
                         }
-                        .padding(.horizontal, horizontalPadding)
+                        .frame(height: chartHeight + monthLabelHeight, alignment: .bottom)
                         
                         // Calculate the total width of the three bars group (3 bars + 2 gaps)
                         let threeBarsGroupWidth = (barWidth * 3) + (gapBetweenBars * 2)

@@ -134,7 +134,7 @@ class StoreKitService: ObservableObject {
         }
     }
     
-    /// Restore purchases
+    /// Restore purchases (Apple) and sync subscription state to backend
     func restorePurchases() async {
         isLoading = true
         errorMessage = nil
@@ -142,6 +142,7 @@ class StoreKitService: ObservableObject {
         do {
             try await AppStore.sync()
             await updatePurchasedProducts()
+            await verifyCurrentEntitlementsWithBackend()
             isLoading = false
         } catch {
             errorMessage = "Failed to restore purchases: \(error.localizedDescription)"
@@ -150,7 +151,7 @@ class StoreKitService: ObservableObject {
         }
     }
     
-    /// Update the list of purchased products
+    /// Update the list of purchased products from App Store
     func updatePurchasedProducts() async {
         var purchasedIDs: Set<String> = []
         
@@ -164,6 +165,25 @@ class StoreKitService: ObservableObject {
         }
         
         purchasedProductIDs = purchasedIDs
+    }
+    
+    /// After restore, sync each current entitlement to backend so subscription status is correct
+    private func verifyCurrentEntitlementsWithBackend() async {
+        let userId = UserManager.shared.userId
+        guard !userId.isEmpty else { return }
+        
+        for await result in StoreKit.Transaction.currentEntitlements {
+            do {
+                let transaction = try checkVerified(result)
+                await verifySubscriptionWithBackend(
+                    userId: userId,
+                    transactionId: String(transaction.id),
+                    productId: transaction.productID
+                )
+            } catch {
+                print("[StoreKit] Error verifying entitlement for backend: \(error)")
+            }
+        }
     }
     
     /// Check if a product is purchased

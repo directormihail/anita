@@ -761,7 +761,8 @@ class ChatViewModel: ObservableObject {
                     userId: currentUserId,
                     conversationId: conversationId,
                     userDisplayName: displayName,
-                    userCurrency: preferredCurrency
+                    userCurrency: preferredCurrency,
+                    isPremium: subscriptionManager.isPremium
                 )
                 print("[ChatViewModel] Received response from backend")
                 
@@ -793,6 +794,10 @@ class ChatViewModel: ObservableObject {
                 await MainActor.run {
                     messages.append(assistantMessage)
                     isLoading = false
+                    // Freemium: backend returned paywall (e.g. user asked for analytics) — show upgrade sheet
+                    if response.requiresUpgrade == true {
+                        showPaywallForLimitReached = true
+                    }
                 }
                 
                 // Save assistant message

@@ -13,12 +13,17 @@ import UIKit
 import GoogleSignIn
 #endif
 
+private let keychainAccessTokenKey = "supabase_access_token"
+private let keychainRefreshTokenKey = "supabase_refresh_token"
+private let userDefaultsTokenKey = "supabase_access_token"
+
 class SupabaseService {
     static let shared = SupabaseService()
     
     private var supabaseUrl: String
     private var supabaseAnonKey: String
     private var accessToken: String?
+    private var refreshToken: String?
     
     // Track OAuth progress
     private var isOAuthInProgress = false
@@ -53,12 +58,25 @@ class SupabaseService {
         }
     }
     
+    /// Persist full session (e.g. after login/signup). Uses Keychain so it survives app restarts and TestFlight updates.
+    private func setSession(accessToken: String, refreshToken: String) {
+        self.accessToken = accessToken
+        self.refreshToken = refreshToken
+        KeychainHelper.set(accessToken, forKey: keychainAccessTokenKey)
+        KeychainHelper.set(refreshToken, forKey: keychainRefreshTokenKey)
+        UserDefaults.standard.set(accessToken, forKey: userDefaultsTokenKey)
+    }
+    
     func setAccessToken(_ token: String?) {
         self.accessToken = token
         if let token = token {
-            UserDefaults.standard.set(token, forKey: "supabase_access_token")
+            KeychainHelper.set(token, forKey: keychainAccessTokenKey)
+            UserDefaults.standard.set(token, forKey: userDefaultsTokenKey)
         } else {
-            UserDefaults.standard.removeObject(forKey: "supabase_access_token")
+            self.refreshToken = nil
+            KeychainHelper.delete(forKey: keychainAccessTokenKey)
+            KeychainHelper.delete(forKey: keychainRefreshTokenKey)
+            UserDefaults.standard.removeObject(forKey: userDefaultsTokenKey)
         }
     }
     
@@ -72,9 +90,22 @@ class SupabaseService {
         return accessToken != nil
     }
     
-    // Load saved token on init
+    /// Load saved session from Keychain (primary) or UserDefaults (migration). Keychain persists on TestFlight.
     func loadSavedToken() {
-        self.accessToken = UserDefaults.standard.string(forKey: "supabase_access_token")
+        if let access = KeychainHelper.get(forKey: keychainAccessTokenKey),
+           let refresh = KeychainHelper.get(forKey: keychainRefreshTokenKey) {
+            self.accessToken = access
+            self.refreshToken = refresh
+            UserDefaults.standard.set(access, forKey: userDefaultsTokenKey)
+            return
+        }
+        if let access = UserDefaults.standard.string(forKey: userDefaultsTokenKey) {
+            self.accessToken = access
+            KeychainHelper.set(access, forKey: keychainAccessTokenKey)
+            if let refresh = KeychainHelper.get(forKey: keychainRefreshTokenKey) {
+                self.refreshToken = refresh
+            }
+        }
     }
     
     // Test Supabase connection
@@ -145,7 +176,7 @@ class SupabaseService {
             let decoder = JSONDecoder()
             do {
                 let authResponse = try decoder.decode(AuthResponse.self, from: data)
-                setAccessToken(authResponse.accessToken)
+                setSession(accessToken: authResponse.accessToken, refreshToken: authResponse.refreshToken)
                 print("[Supabase] Sign in successful, user ID: \(authResponse.user.id)")
                 return authResponse
             } catch {
@@ -207,7 +238,7 @@ class SupabaseService {
             let decoder = JSONDecoder()
             do {
                 let authResponse = try decoder.decode(AuthResponse.self, from: data)
-                setAccessToken(authResponse.accessToken)
+                setSession(accessToken: authResponse.accessToken, refreshToken: authResponse.refreshToken)
                 print("[Supabase] Sign up successful, user ID: \(authResponse.user.id)")
                 return authResponse
             } catch {
@@ -229,6 +260,35 @@ class SupabaseService {
     
     func signOut() {
         setAccessToken(nil)
+    }
+    
+    /// Refresh access token using refresh token. Call when access token is expired or getCurrentUser returns 401.
+    private func refreshSession() async throws -> Bool {
+        guard let refresh = refreshToken, !refresh.isEmpty else { return false }
+        guard !supabaseUrl.isEmpty, !supabaseAnonKey.isEmpty else { return false }
+        
+        let baseUrl = supabaseUrl.hasSuffix("/") ? String(supabaseUrl.dropLast()) : supabaseUrl
+        let url = URL(string: "\(baseUrl)/auth/v1/token?grant_type=refresh_token")!
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        
+        let body: [String: String] = ["refresh_token": refresh]
+        request.httpBody = try JSONEncoder().encode(body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else { return false }
+        
+        if httpResponse.statusCode == 200 {
+            let decoder = JSONDecoder()
+            let authResponse = try decoder.decode(AuthResponse.self, from: data)
+            setSession(accessToken: authResponse.accessToken, refreshToken: authResponse.refreshToken)
+            print("[Supabase] Session refreshed successfully")
+            return true
+        }
+        return false
     }
     
     // MARK: - OAuth Authentication (Native Google Sign-In)
@@ -343,7 +403,7 @@ class SupabaseService {
             let decoder = JSONDecoder()
             do {
                 let authResponse = try decoder.decode(AuthResponse.self, from: data)
-                setAccessToken(authResponse.accessToken)
+                setSession(accessToken: authResponse.accessToken, refreshToken: authResponse.refreshToken)
                 print("[Supabase] ✅ Google sign-in successful, user ID: \(authResponse.user.id)")
                 return authResponse
             } catch {
@@ -426,7 +486,7 @@ class SupabaseService {
             let decoder = JSONDecoder()
             do {
                 let authResponse = try decoder.decode(AuthResponse.self, from: data)
-                setAccessToken(authResponse.accessToken)
+                setSession(accessToken: authResponse.accessToken, refreshToken: authResponse.refreshToken)
                 print("[Supabase] ✅ Apple sign-in successful, user ID: \(authResponse.user.id)")
                 return authResponse
             } catch {
@@ -482,10 +542,12 @@ class SupabaseService {
         if httpResponse.statusCode == 200 {
             let decoder = JSONDecoder()
             return try? decoder.decode(User.self, from: data)
-        } else {
-            print("[Supabase] Get user failed with status: \(httpResponse.statusCode)")
-            return nil
         }
+        if httpResponse.statusCode == 401, (try? await refreshSession()) == true {
+            return try await getCurrentUser()
+        }
+        print("[Supabase] Get user failed with status: \(httpResponse.statusCode)")
+        return nil
     }
     
     // MARK: - User Metadata

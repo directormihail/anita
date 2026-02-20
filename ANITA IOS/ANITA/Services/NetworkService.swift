@@ -10,6 +10,15 @@ import Foundation
 class NetworkService: ObservableObject {
     static let shared = NetworkService()
     
+    /// Request timeout. Longer in release so Railway cold starts don't cause timeouts.
+    private static var requestTimeout: TimeInterval {
+        #if DEBUG
+        return 10.0
+        #else
+        return 30.0
+        #endif
+    }
+    
     // Base URL - Always reads from UserDefaults to stay in sync with Settings
     private var baseURL: String {
         // Always read from UserDefaults first (to get latest value from Settings)
@@ -39,7 +48,7 @@ class NetworkService: ObservableObject {
     
     // MARK: - Chat Completion
     
-    func sendChatMessage(messages: [ChatMessageRequest], maxTokens: Int = 800, temperature: Double = 0.7, userId: String? = nil, conversationId: String? = nil, userDisplayName: String? = nil, userCurrency: String? = nil) async throws -> ChatCompletionResponse {
+    func sendChatMessage(messages: [ChatMessageRequest], maxTokens: Int = 800, temperature: Double = 0.7, userId: String? = nil, conversationId: String? = nil, userDisplayName: String? = nil, userCurrency: String? = nil, isPremium: Bool? = nil) async throws -> ChatCompletionResponse {
         let url = URL(string: "\(baseURL)/api/v1/chat-completion")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -52,7 +61,8 @@ class NetworkService: ObservableObject {
             userId: userId,
             conversationId: conversationId,
             userDisplayName: userDisplayName,
-            userCurrency: userCurrency
+            userCurrency: userCurrency,
+            isPremium: isPremium
         )
         
         request.httpBody = try JSONEncoder().encode(requestBody)

@@ -19,7 +19,7 @@ class NotificationService: NSObject, ObservableObject {
             UserDefaults.standard.set(pushNotificationsEnabled, forKey: "anita_push_notifications_enabled")
             if pushNotificationsEnabled {
                 requestAuthorization()
-                scheduleDailyTransactionReminder()
+                // Schedule only from requestAuthorization completion to avoid double-scheduling
             }
         }
     }
@@ -81,6 +81,8 @@ class NotificationService: NSObject, ObservableObject {
     /// UserDefaults keys for storing the single daily reminder time (one notification per day, same time every day).
     private static let dailyReminderHourKey = "anita_daily_reminder_hour"
     private static let dailyReminderMinuteKey = "anita_daily_reminder_minute"
+    /// Debounce: avoid scheduling more than once per minute (e.g. from multiple onAppear calls).
+    private static let lastScheduledAtKey = "anita_daily_reminder_last_scheduled_at"
     
     private static func randomDailyReminderTitle() -> String {
         let index = Int.random(in: 1...Self.dailyReminderTitleCount)
@@ -92,7 +94,7 @@ class NotificationService: NSObject, ObservableObject {
         return AppL10n.t("notif.daily.body.\(index)")
     }
     
-    /// Picks and persists a random time between 6 PM and 8 PM (local). Used so we schedule only one time per day, once.
+    /// Picks and persists a random time between 6 PM and 8 PM (local). One notification per day at that time.
     private static func getOrCreateDailyReminderTime() -> (hour: Int, minute: Int) {
         let defaults = UserDefaults.standard
         if defaults.object(forKey: dailyReminderHourKey) != nil,
@@ -103,6 +105,7 @@ class NotificationService: NSObject, ObservableObject {
                 return (h, m)
             }
         }
+        // Random time in 6–8 PM: 18:00–18:59, 19:00–19:59, or 20:00 (8 PM)
         let hour: Int
         let minute: Int
         switch Int.random(in: 0...2) {
@@ -114,7 +117,7 @@ class NotificationService: NSObject, ObservableObject {
             minute = Int.random(in: 0...59)
         default:
             hour = 20
-            minute = 0
+            minute = Int.random(in: 0...59)
         }
         defaults.set(hour, forKey: dailyReminderHourKey)
         defaults.set(minute, forKey: dailyReminderMinuteKey)
@@ -122,8 +125,16 @@ class NotificationService: NSObject, ObservableObject {
     }
     
     /// Schedules a single daily transaction reminder: one notification per day at a random time between 6 PM and 8 PM (local), using one repeating trigger.
+    /// Debounced so rapid calls (e.g. multiple onAppear) only result in one schedule per minute.
     func scheduleDailyTransactionReminder() {
         guard pushNotificationsEnabled && isAuthorized else { return }
+        
+        let defaults = UserDefaults.standard
+        let now = Date().timeIntervalSince1970
+        if let last = defaults.object(forKey: Self.lastScheduledAtKey) as? TimeInterval, now - last < 60 {
+            return
+        }
+        defaults.set(now, forKey: Self.lastScheduledAtKey)
         
         let timeZone = TimeZone.current
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [Self.dailyReminderIdentifier])

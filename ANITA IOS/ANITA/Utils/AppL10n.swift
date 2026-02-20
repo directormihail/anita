@@ -149,7 +149,9 @@ enum AppL10n {
             "plans.checkout_error": "Failed to load or complete purchase. Please try again.",
             "plans.restore_purchases": "Restore Purchases",
             "plans.pending": "Purchase is pending approval.",
-            "plans.cancel_subscription_hint": "You can cancel your subscription anytime in your Apple ID subscription settings."
+            "plans.cancel_subscription_hint": "You can cancel your subscription anytime in your Apple ID subscription settings.",
+            "plans.subscription_terms": "Payment will be charged to your Apple ID at confirmation. Subscription automatically renews unless cancelled at least 24 hours before the end of the current period.",
+            "plans.disclaimer_financial": "ANITA is for informational use only and does not provide financial, legal, or tax advice."
             ,
             // Plan features (match actual subscription limits)
             "plans.feature.replies_20": "10 messages per month",
@@ -290,7 +292,7 @@ enum AppL10n {
             "finance.transactions_plural": "transactions",
             "finance.no_data_available": "No data available",
             "finance.month_to_month": "Month to Month",
-            "finance.months": "months",
+            "finance.months": "Months",
             "finance.financial_overview": "Financial Overview",
             "finance.monthly_balance": "Monthly Balance",
             "finance.cash_available": "Cash Available",
@@ -583,7 +585,9 @@ enum AppL10n {
             "plans.checkout_error": "Kauf konnte nicht abgeschlossen werden. Bitte versuche es erneut.",
             "plans.restore_purchases": "Käufe wiederherstellen",
             "plans.pending": "Kauf wartet auf Freigabe.",
-            "plans.cancel_subscription_hint": "Du kannst dein Abo jederzeit in den Abo-Einstellungen deiner Apple-ID kündigen."
+            "plans.cancel_subscription_hint": "Du kannst dein Abo jederzeit in den Abo-Einstellungen deiner Apple-ID kündigen.",
+            "plans.subscription_terms": "Die Zahlung wird bei Bestätigung deiner Apple ID belastet. Das Abo verlängert sich automatisch, sofern es nicht mindestens 24 Stunden vor Ende des aktuellen Zeitraums gekündigt wird.",
+            "plans.disclaimer_financial": "ANITA dient nur zu Informationszwecken und bietet keine Finanz-, Rechts- oder Steuerberatung."
             ,
             "plans.feature.replies_20": "10 Nachrichten pro Monat",
             "plans.feature.basic_expense": "Einnahmen & Ausgaben erfassen",
@@ -706,7 +710,7 @@ enum AppL10n {
             "finance.current_amount_optional": "Aktueller Betrag (Optional)",
             "finance.delete_transaction": "Transaktion löschen",
             "finance.delete_transaction_confirm": "Möchtest du diese Transaktion wirklich löschen?",
-            "finance.months": "monate",
+            "finance.months": "Monate",
             "finance.expense": "ausgabe",
             "finance.balance_label": "Saldo",
             
