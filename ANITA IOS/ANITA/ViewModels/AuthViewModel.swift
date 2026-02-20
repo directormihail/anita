@@ -14,6 +14,8 @@ class AuthViewModel: ObservableObject {
     @Published var isAuthenticated = false
     @Published var isLoading = false
     @Published var errorMessage: String?
+    /// True after the first auth check has completed. Prevents showing login screen before we've tried restoring session.
+    @Published var hasCompletedInitialAuthCheck = false
     
     private let userManager = UserManager.shared
     private var cancellables = Set<AnyCancellable>()
@@ -27,7 +29,7 @@ class AuthViewModel: ObservableObject {
             }
             .store(in: &cancellables)
         
-        // Check initial auth status
+        // Check initial auth status (session restore from Keychain)
         Task {
             await checkAuthStatus()
         }
@@ -36,6 +38,7 @@ class AuthViewModel: ObservableObject {
     func checkAuthStatus() async {
         await userManager.checkAuthStatus()
         isAuthenticated = userManager.isAuthenticated
+        hasCompletedInitialAuthCheck = true
     }
     
     func signIn(email: String, password: String) async {

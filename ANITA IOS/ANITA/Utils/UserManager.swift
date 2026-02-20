@@ -45,6 +45,14 @@ class UserManager: ObservableObject {
         }
     }
     
+    /// Ensures the global "anita_user_currency" matches the current account's preference so subscription/upgrade screens show the correct symbol (e.g. € not $).
+    private func syncGlobalCurrencyFromPerUser() {
+        let perUser = UserDefaults.standard.string(forKey: prefKey(userCurrencyKeyBase))
+        if let c = perUser, (c == "USD" || c == "EUR" || c == "CHF") {
+            UserDefaults.standard.set(c, forKey: "anita_user_currency")
+        }
+    }
+    
     /// One-time: copy legacy global keys into keyed keys for current user so existing users keep their data.
     private func migrateLegacyUnkeyedStorageIfNeeded() {
         let keyedProfile = prefKey(profileNameKeyBase)
@@ -126,6 +134,7 @@ class UserManager: ObservableObject {
             self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: prefKey(onboardingCompletedKey))
         }
         await syncSavedOnboardingToSupabaseIfNeeded()
+        syncGlobalCurrencyFromPerUser()
         Task { @MainActor in await SubscriptionManager.shared.refresh() }
     }
     
@@ -145,6 +154,7 @@ class UserManager: ObservableObject {
             self.shouldShowPostSignupPlans = true
         }
         await syncSavedOnboardingToSupabaseIfNeeded()
+        syncGlobalCurrencyFromPerUser()
         Task { @MainActor in await SubscriptionManager.shared.refresh() }
     }
     
@@ -159,6 +169,7 @@ class UserManager: ObservableObject {
             self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: prefKey(onboardingCompletedKey))
         }
         await syncSavedOnboardingToSupabaseIfNeeded()
+        syncGlobalCurrencyFromPerUser()
         Task { @MainActor in await SubscriptionManager.shared.refresh() }
     }
     
@@ -173,6 +184,7 @@ class UserManager: ObservableObject {
             self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: prefKey(onboardingCompletedKey))
         }
         await syncSavedOnboardingToSupabaseIfNeeded()
+        syncGlobalCurrencyFromPerUser()
         Task { @MainActor in await SubscriptionManager.shared.refresh() }
     }
     
@@ -196,6 +208,7 @@ class UserManager: ObservableObject {
                     self.isAuthenticated = true
                     self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: prefKey(onboardingCompletedKey))
                 }
+                syncGlobalCurrencyFromPerUser()
                 await syncSavedOnboardingToSupabaseIfNeeded()
                 await syncProfileNameFromSupabase()
             } else {
@@ -243,6 +256,7 @@ class UserManager: ObservableObject {
         survey.saveToUserDefaults(userId: uid)
         AppL10n.setLanguageCode(survey.languageCode)
         UserDefaults.standard.set(survey.currencyCode, forKey: prefKey(userCurrencyKeyBase))
+        UserDefaults.standard.set(survey.currencyCode, forKey: "anita_user_currency") // So UpgradeView/subscription shows same currency
         UserDefaults.standard.set(numberFormatForCurrency(survey.currencyCode), forKey: prefKey(numberFormatKeyBase))
         setProfileName(survey.userName)
         hasCompletedOnboarding = true
@@ -261,6 +275,7 @@ class UserManager: ObservableObject {
         survey.saveToUserDefaults(userId: uid)
         AppL10n.setLanguageCode(survey.languageCode)
         UserDefaults.standard.set(survey.currencyCode, forKey: prefKey(userCurrencyKeyBase))
+        UserDefaults.standard.set(survey.currencyCode, forKey: "anita_user_currency") // So UpgradeView/subscription shows same currency
         UserDefaults.standard.set(numberFormatForCurrency(survey.currencyCode), forKey: prefKey(numberFormatKeyBase))
         setProfileName(survey.userName)
         hasCompletedOnboarding = true
@@ -420,14 +435,15 @@ class UserManager: ObservableObject {
     }
     
     private func numberFormatForCurrency(_ currency: String) -> String {
-        (currency == "CHF" || currency == "EUR") ? "1.234,56" : "1.234,56"
+        (currency == "CHF" || currency == "EUR") ? "1.234,56" : "1,234.56" // USD and others: US format
     }
     
     private func currencySymbol(_ currency: String) -> String {
         switch currency {
+        case "USD": return "$"
         case "EUR": return "€"
         case "CHF": return "CHF"
-        default: return "€"
+        default: return "$"
         }
     }
 

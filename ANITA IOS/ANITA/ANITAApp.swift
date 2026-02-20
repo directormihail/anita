@@ -7,12 +7,17 @@
 
 import SwiftUI
 import UserNotifications
+import PostHog
 
 @main
 struct ANITAApp: App {
     @AppStorage("anita_preferred_language_code") private var preferredLanguageCode: String = "en"
     
     init() {
+        // PostHog analytics (US cloud)
+        let posthogConfig = PostHogConfig(apiKey: Config.posthogAPIKey, host: Config.posthogHost)
+        PostHogSDK.shared.setup(posthogConfig)
+        
         // Initialize notification service (permission is requested on welcome chat screen after registration)
         Task { @MainActor in
             NotificationService.shared.checkAuthorizationStatus()

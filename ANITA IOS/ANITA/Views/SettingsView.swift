@@ -32,7 +32,7 @@ struct SettingsView: View {
     @FocusState private var isNameFieldFocused: Bool
     
     // Preferences
-    @State private var selectedCurrency: String = "EUR"
+    @State private var selectedCurrency: String = "USD"
     @State private var emailNotifications: Bool = UserDefaults.standard.bool(forKey: "anita_email_notifications")
     @State private var currentLanguageCode: String = AppL10n.currentLanguageCode()
     @State private var languageRefreshTrigger = UUID()
@@ -58,7 +58,7 @@ struct SettingsView: View {
     private let networkService = NetworkService.shared
     private let supabaseService = SupabaseService.shared
     
-    let currencies = ["EUR", "CHF"]
+    let currencies = ["USD", "EUR", "CHF"]
     
     var body: some View {
         ZStack {
@@ -306,7 +306,7 @@ struct SettingsView: View {
                                         saveCurrency(currency)
                                     }) {
                                         HStack {
-                                            Text(currency == "EUR" ? "€ Euro" : "CHF Swiss Franc")
+                                            Text(currencyDisplayName(currency))
                                             if selectedCurrency == currency {
                                                 Image(systemName: "checkmark")
                                             }
@@ -318,7 +318,7 @@ struct SettingsView: View {
                                     icon: "dollarsign.circle.fill",
                                     iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
                                     title: AppL10n.t("settings.currency"),
-                                    value: selectedCurrency == "EUR" ? "€ Euro" : "CHF Swiss Franc",
+                                    value: currencyDisplayName(selectedCurrency),
                                     showChevron: true
                                 ) {}
                             }
@@ -723,10 +723,10 @@ struct SettingsView: View {
     
     func loadPreferences() {
         var saved = UserDefaults.standard.string(forKey: userManager.prefKey("anita_user_currency"))
-        if saved == nil, let global = UserDefaults.standard.string(forKey: "anita_user_currency"), (global == "CHF" || global == "EUR") {
+        if saved == nil, let global = UserDefaults.standard.string(forKey: "anita_user_currency"), (global == "USD" || global == "CHF" || global == "EUR") {
             saved = global
         }
-        selectedCurrency = (saved == "CHF" || saved == "EUR") ? saved! : "EUR"
+        selectedCurrency = (saved == "USD" || saved == "CHF" || saved == "EUR") ? saved! : "USD"
         // Keep global key in sync so FinanceView, UpgradeView, Chat, etc. use the same currency
         UserDefaults.standard.set(selectedCurrency, forKey: "anita_user_currency")
         emailNotifications = UserDefaults.standard.bool(forKey: "anita_email_notifications")
@@ -784,12 +784,13 @@ struct SettingsView: View {
                     await MainActor.run { self.profileName = localName }
                 }
                 
-                if let currencyCode = profile["currency_code"] as? String, (currencyCode == "EUR" || currencyCode == "CHF") {
+                if let currencyCode = profile["currency_code"] as? String, (currencyCode == "USD" || currencyCode == "EUR" || currencyCode == "CHF") {
                     await MainActor.run {
                         self.selectedCurrency = currencyCode
                         UserDefaults.standard.set(currencyCode, forKey: self.userManager.prefKey("anita_user_currency"))
                         UserDefaults.standard.set(currencyCode, forKey: "anita_user_currency")
-                        UserDefaults.standard.set("1.234,56", forKey: self.userManager.prefKey("anita_number_format"))
+                        let numberFormat = self.getNumberFormatForCurrency(currencyCode)
+                        UserDefaults.standard.set(numberFormat, forKey: self.userManager.prefKey("anita_number_format"))
                     }
                 }
                 
@@ -885,14 +886,24 @@ struct SettingsView: View {
     }
     
     func getNumberFormatForCurrency(_ currency: String) -> String {
-        (currency == "CHF" || currency == "EUR") ? "1.234,56" : "1.234,56"
+        (currency == "CHF" || currency == "EUR") ? "1.234,56" : "1,234.56" // USD and others: US format
     }
     
     func getCurrencySymbol(_ currency: String) -> String {
         switch currency {
+        case "USD": return "$"
         case "EUR": return "€"
         case "CHF": return "CHF"
-        default: return "€"
+        default: return "$"
+        }
+    }
+    
+    private func currencyDisplayName(_ currency: String) -> String {
+        switch currency {
+        case "USD": return "$ US Dollar"
+        case "EUR": return "€ Euro"
+        case "CHF": return "CHF Swiss Franc"
+        default: return currency
         }
     }
     
@@ -925,7 +936,7 @@ struct SettingsView: View {
     }
     
     private func resetLocalUIState() {
-        selectedCurrency = "EUR"
+        selectedCurrency = "USD"
         profileName = ""
         emailNotifications = false
     }

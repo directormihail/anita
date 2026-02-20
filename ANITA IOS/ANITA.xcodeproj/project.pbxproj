@@ -32,6 +32,7 @@
 		A1000057 /* SignUpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000058 /* SignUpView.swift */; };
 		A1000059 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000060 /* AuthViewModel.swift */; };
 		A1000061 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = A1000062 /* GoogleSignIn */; };
+		A100009A /* PostHog in Frameworks */ = {isa = PBXBuildFile; productRef = A1000099 /* PostHog */; };
 		A1000064 /* GoogleLogoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000065 /* GoogleLogoView.swift */; };
 		A1000066 /* UpgradeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000067 /* UpgradeView.swift */; };
 		A1000068 /* StoreKitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000069 /* StoreKitService.swift */; };
@@ -99,6 +100,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A1000061 /* GoogleSignIn in Frameworks */,
+				A100009A /* PostHog in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -235,6 +237,7 @@
 			name = ANITA;
 			packageProductDependencies = (
 				A1000062 /* GoogleSignIn */,
+				A1000099 /* PostHog */,
 			);
 			productName = ANITA;
 			productReference = A0FFFFFF /* ANITA.app */;
@@ -266,6 +269,7 @@
 			mainGroup = A0FFFFF8;
 			packageReferences = (
 				A1000063 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				A1000098 /* XCRemoteSwiftPackageReference "posthog-ios" */,
 			);
 			productRefGroup = A0FFFFFD /* Products */;
 			projectDirPath = "";
@@ -561,6 +565,14 @@
 				minimumVersion = 7.0.0;
 			};
 		};
+		A1000098 /* XCRemoteSwiftPackageReference "posthog-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/PostHog/posthog-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -568,6 +580,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A1000063 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
 			productName = GoogleSignIn;
+		};
+		A1000099 /* PostHog */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1000098 /* XCRemoteSwiftPackageReference "posthog-ios" */;
+			productName = PostHog;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

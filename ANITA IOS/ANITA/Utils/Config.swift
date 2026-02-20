@@ -113,6 +113,23 @@ struct Config {
                supabaseAnonKey != "YOUR_SUPABASE_ANON_KEY_HERE"
     }
     
+    // PostHog Analytics (US cloud) – Project ID: 318843
+    static let posthogAPIKey: String = {
+        if let key = ProcessInfo.processInfo.environment["POSTHOG_KEY"], !key.isEmpty {
+            return key
+        }
+        return "phc_ec2vFoSH9LiPzanrLJ4r4is34g0yR81T3c6rVN0jRPd"
+    }()
+    
+    static let posthogHost: String = {
+        if let host = ProcessInfo.processInfo.environment["POSTHOG_HOST"], !host.isEmpty {
+            return host
+        }
+        return "https://us.i.posthog.com"
+    }()
+    
+    static let posthogProjectID: String = "318843"
+    
     // Validate Google Sign-In configuration
     static var isGoogleSignInConfigured: Bool {
         return !googleClientID.isEmpty && isValidGoogleClientID(googleClientID)

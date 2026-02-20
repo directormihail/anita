@@ -7,6 +7,16 @@
 
 import SwiftUI
 
+/// Symbol only for amounts on Finance page (e.g. "$" not "US$" or "USD").
+fileprivate func financeCurrencySymbolOnly(_ code: String) -> String {
+    switch code {
+    case "USD": return "$"
+    case "EUR": return "€"
+    case "CHF": return "CHF"
+    default: return "$"
+    }
+}
+
 // Custom iOS-style transitions - contained animations
 extension AnyTransition {
     static var expandSection: AnyTransition {
@@ -216,6 +226,7 @@ struct FinanceView: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
         return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
@@ -2597,6 +2608,7 @@ struct TransactionRow: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
         let formatted = formatter.string(from: NSNumber(value: abs(amount))) ?? "$0.00"
@@ -2918,6 +2930,7 @@ struct TargetRow: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
         return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
@@ -3121,6 +3134,7 @@ struct AddMoneyToGoalSheet: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = userCurrency
+        formatter.currencySymbol = financeCurrencySymbolOnly(userCurrency)
         formatter.locale = locale
         formatter.usesGroupingSeparator = false // No thousand separators
         
@@ -3433,6 +3447,7 @@ struct ChangeAmountSheet: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = userCurrency
+        formatter.currencySymbol = financeCurrencySymbolOnly(userCurrency)
         formatter.locale = locale
         formatter.usesGroupingSeparator = false // No thousand separators
         
@@ -4323,6 +4338,7 @@ struct TakeMoneyFromGoalSheet: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = userCurrency
+        formatter.currencySymbol = financeCurrencySymbolOnly(userCurrency)
         formatter.locale = locale
         formatter.usesGroupingSeparator = false
         
@@ -4921,6 +4937,7 @@ struct AddValueToAssetSheet: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = userCurrency
+        formatter.currencySymbol = financeCurrencySymbolOnly(userCurrency)
         formatter.locale = locale
         formatter.usesGroupingSeparator = false
         
@@ -5154,6 +5171,7 @@ struct ReduceAssetValueSheet: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = userCurrency
+        formatter.currencySymbol = financeCurrencySymbolOnly(userCurrency)
         formatter.locale = locale
         formatter.usesGroupingSeparator = false
         
@@ -5668,6 +5686,7 @@ struct GoalRow: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
         return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
@@ -5876,6 +5895,7 @@ struct AssetRow: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
         return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
@@ -6018,6 +6038,7 @@ struct FinanceCategoryRow: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = userCurrency
+        formatter.currencySymbol = financeCurrencySymbolOnly(userCurrency)
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
         return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
@@ -7967,6 +7988,7 @@ struct DeleteTransactionSheet: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
         return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
@@ -8165,6 +8187,7 @@ struct BalanceLineChart: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: amount)) ?? "$0"
@@ -8275,6 +8298,7 @@ struct IncomeExpenseBarChart: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: amount)) ?? "$0"
@@ -8439,6 +8463,7 @@ struct MonthToMonthComparisonView: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
         return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
@@ -8689,6 +8714,7 @@ struct EnhancedMonthToMonthComparisonView: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
         return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
@@ -8869,6 +8895,7 @@ struct EnhancedInteractiveBalanceChart: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: amount)) ?? "$0"
@@ -8954,6 +8981,7 @@ struct BalanceDetailSheet: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
         return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
@@ -9175,6 +9203,7 @@ struct EnhancedNetWorthChart: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: amount)) ?? "$0"
@@ -9653,6 +9682,7 @@ struct NetWorthDetailSheet: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
         return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
@@ -9808,6 +9838,7 @@ struct EnhancedIncomeExpenseBarChart: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: amount)) ?? "$0"

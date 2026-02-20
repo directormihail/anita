@@ -302,16 +302,23 @@ struct FinancialCard: View {
     }
     
     private func formatValue(_ amount: Double) -> String {
+        let userCurrency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+        let localeId: String
+        switch userCurrency {
+        case "USD": localeId = "en_US"
+        case "EUR": localeId = "de_DE"
+        case "CHF": localeId = "de_CH"
+        default: localeId = "en_US"
+        }
         let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
+        formatter.numberStyle = .currency
+        formatter.currencyCode = userCurrency
+        formatter.locale = Locale(identifier: localeId)
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
-        formatter.groupingSeparator = "."
-        formatter.decimalSeparator = ","
-        
-        let formatted = formatter.string(from: NSNumber(value: amount)) ?? "0,00"
+        let formatted = formatter.string(from: NSNumber(value: abs(amount))) ?? "0.00"
         let sign = showSign ? (isPositive ? "+" : "-") : ""
-        return "\(sign)\(formatted) €"
+        return "\(sign)\(formatted)"
     }
 }
 

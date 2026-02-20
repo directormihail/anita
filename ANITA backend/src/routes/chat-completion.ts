@@ -33,7 +33,7 @@ function getCurrencySymbolForCode(currency: string): string {
     'CHF': 'CHF', 'CNY': '¥', 'INR': '₹', 'BRL': 'R$', 'MXN': 'MX$', 'SGD': 'S$',
     'HKD': 'HK$', 'NZD': 'NZ$', 'ZAR': 'R'
   };
-  return symbols[currency] ?? '€';
+  return symbols[currency] ?? '$';
 }
 
 /** Freemium: check if user has an active premium subscription (plan is premium/pro/ultimate). */
@@ -672,7 +672,7 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
           logger.info('Skipping target creation: user is on free plan', { requestId, userId });
         } else {
         // Get user currency preference first so we can pass it to parsing and use for target
-        let userCurrencyForTarget = 'EUR';
+        let userCurrencyForTarget = 'USD';
         try {
           const { data: profileData } = await supabase
             .from('profiles')
@@ -898,7 +898,7 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
             });
             
             // Get user currency preference
-            let userCurrency = 'EUR';
+            let userCurrency = 'USD';
             try {
               const { data: profileData } = await supabase
                 .from('profiles')
@@ -1432,7 +1432,7 @@ function extractCategoryFromMessage(message: string): string | null {
  * Parse target information from conversation messages
  * Looks for patterns like "I want to save X for Y by Z" or "For X" then "Y" (amount)
  */
-function parseTargetFromConversation(messages: Array<{ role: string; content: string }>, aiResponse: string, userCurrency: string = 'EUR'): { title: string; amount: number; currency?: string; date?: string; description?: string } | null {
+function parseTargetFromConversation(messages: Array<{ role: string; content: string }>, aiResponse: string, userCurrency: string = 'USD'): { title: string; amount: number; currency?: string; date?: string; description?: string } | null {
   // Check if AI response confirms a target/goal was set (indicates we should create one)
   // Updated to also match "goal" in addition to "target"
   const aiConfirmsTarget = /(?:got it|noted|saved|created|set|great|perfect|done).*?(?:target|goal|savings goal)/i.test(aiResponse);
@@ -1936,7 +1936,7 @@ function parseTargetDate(dateStr: string): string | undefined {
  */
 async function buildFreemiumSystemPrompt(userId: string, options?: { clientCurrency?: string }): Promise<{ prompt: string; userCurrency: string }> {
   const supabase = getSupabaseClient();
-  const userCurrency = options?.clientCurrency || 'EUR';
+  const userCurrency = options?.clientCurrency || 'USD';
   const currencySymbol = getCurrencySymbolForCode(userCurrency);
   let userNameLine = '';
   if (supabase) {
@@ -1976,11 +1976,11 @@ async function buildSystemPrompt(userId: string, conversationId: string, options
   const supabase = getSupabaseClient();
   const fallbackPrompt = 'No financial data available. Use conversation context only.';
   if (!supabase) {
-    return { prompt: fallbackPrompt, userCurrency: options?.clientCurrency || 'EUR' };
+    return { prompt: fallbackPrompt, userCurrency: options?.clientCurrency || 'USD' };
   }
 
   // Fetch user preferences (currency) and display name so AI can address the user. Use DB first, then client-sent currency.
-  let userCurrency = options?.clientCurrency || 'EUR';
+  let userCurrency = options?.clientCurrency || 'USD';
   let userNameFromDb: string | null = null;
   try {
     const { data: profileData, error: profileError } = await supabase

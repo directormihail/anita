@@ -754,7 +754,7 @@ class ChatViewModel: ObservableObject {
                 let profileName = userManager.getProfileName()?.trimmingCharacters(in: .whitespacesAndNewlines)
                 let onboardingName = OnboardingSurveyResponse.loadFromUserDefaults(userId: userId)?.userName.trimmingCharacters(in: .whitespacesAndNewlines)
                 let displayName = (profileName?.isEmpty == false ? profileName : nil) ?? (onboardingName?.isEmpty == false ? onboardingName : nil)
-                // User's chosen currency (same as Settings/Finance) so the chat uses EUR, CHF, etc.
+                // User's chosen currency (same as Settings/Finance) so the chat uses USD, EUR, CHF, etc.
                 let preferredCurrency = UserDefaults.standard.string(forKey: "anita_user_currency")
                 let response = try await networkService.sendChatMessage(
                     messages: apiMessages,

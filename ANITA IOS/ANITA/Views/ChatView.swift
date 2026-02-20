@@ -881,7 +881,7 @@ struct CurrencyLoadingAnimation: View {
     @State private var animationOffsets: [CGFloat] = [0, 0, 0]
     @State private var animationTimers: [Timer] = []
     
-    private let currencies = ["€", "$", "¥"]
+    private let currencies = ["$", "€", "¥"]
     private let jumpHeight: CGFloat = 8
     private let bounceDuration: Double = 0.6 // Time for one bounce (up and down)
     private let delayBetween: Double = 0.2 // Delay between each symbol

@@ -27,7 +27,7 @@ struct OnboardingView: View {
     @State private var selectedLanguage: LanguageOption? = nil
     @State private var userName: String = ""
     @State private var answers: [String: String] = [:]
-    @State private var selectedCurrency: String = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "EUR"
+    @State private var selectedCurrency: String = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
     
     let onComplete: (OnboardingSurveyResponse) -> Void
     
@@ -101,6 +101,7 @@ struct OnboardingView: View {
     }
     
     private let currencyOptions: [CurrencyOption] = [
+        .init(id: "USD", symbol: "$", name: "US Dollar"),
         .init(id: "EUR", symbol: "€", name: "Euro"),
         .init(id: "CHF", symbol: "CHF", name: "Swiss Franc")
     ]
@@ -358,8 +359,8 @@ struct OnboardingView: View {
         }
         .onAppear {
             if !currencyOptions.contains(where: { $0.id == selectedCurrency }) {
-                selectedCurrency = "EUR"
-                persistCurrencySelection("EUR")
+                selectedCurrency = "USD"
+                persistCurrencySelection("USD")
             }
         }
     }
@@ -371,7 +372,7 @@ struct OnboardingView: View {
     }
     
     private func numberFormatForCurrency(_ currency: String) -> String {
-        (currency == "CHF" || currency == "EUR") ? "1.234,56" : "1.234,56"
+        (currency == "CHF" || currency == "EUR") ? "1.234,56" : "1,234.56" // USD and others: US format
     }
 
     // MARK: - Onboarding questions localization (with context-appropriate smiles)

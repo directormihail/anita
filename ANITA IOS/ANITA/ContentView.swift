@@ -22,7 +22,10 @@ struct ContentView: View {
     
     var body: some View {
         Group {
-            if authViewModel.isAuthenticated {
+            if !authViewModel.hasCompletedInitialAuthCheck {
+                // Don't show login until we've tried restoring session from Keychain
+                loadingView
+            } else if authViewModel.isAuthenticated {
                 if userManager.shouldShowPostSignupPlans {
                     PostSignupPlansView {
                         userManager.completePostSignupPlans()
@@ -51,6 +54,16 @@ struct ContentView: View {
             }
         }
         .dismissKeyboardOnTap()
+    }
+    
+    /// Shown while restoring session from Keychain so we don't flash the login screen for logged-in users.
+    private var loadingView: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            ProgressView()
+                .progressViewStyle(CircularProgressViewStyle(tint: Color(red: 0.4, green: 0.49, blue: 0.92)))
+                .scaleEffect(1.2)
+        }
     }
     
     private var mainContentView: some View {

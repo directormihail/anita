@@ -23,7 +23,7 @@ struct SignUpView: View {
     @State private var showConfirmPassword: Bool = false
     @State private var showPrivacySheet: Bool = false
     @State private var showTermsSheet: Bool = false
-    @State private var selectedCurrency: String = (UserDefaults.standard.string(forKey: "anita_user_currency") == "CHF" ? "CHF" : "EUR")
+    @State private var selectedCurrency: String = (UserDefaults.standard.string(forKey: "anita_user_currency")).flatMap { $0 == "USD" || $0 == "CHF" || $0 == "EUR" ? $0 : nil } ?? "USD"
     @State private var needsCurrencyStep: Bool = false
     @FocusState private var focusedField: Field?
     
@@ -31,7 +31,7 @@ struct SignUpView: View {
         case email, password, confirmPassword
     }
     
-    let currencies = ["EUR", "CHF"]
+    let currencies = ["USD", "EUR", "CHF"]
     
     var onAuthSuccess: () -> Void
     var onBack: (() -> Void)?
@@ -217,8 +217,8 @@ struct SignUpView: View {
         }
         .onAppear {
             let saved = UserDefaults.standard.string(forKey: "anita_user_currency")
-            needsCurrencyStep = (saved != "CHF" && saved != "EUR")
-            if !needsCurrencyStep, let s = saved, (s == "CHF" || s == "EUR") {
+            needsCurrencyStep = (saved != "USD" && saved != "CHF" && saved != "EUR")
+            if !needsCurrencyStep, let s = saved, (s == "USD" || s == "CHF" || s == "EUR") {
                 selectedCurrency = s
             }
         }
@@ -467,7 +467,7 @@ struct SignUpView: View {
                             persistCurrencySelection(currency)
                         }) {
                             HStack {
-                                Text(currency == "EUR" ? "€ Euro" : "CHF Swiss Franc")
+                                Text(currencyDisplayName(currency))
                                 if selectedCurrency == currency {
                                     Image(systemName: "checkmark")
                                         .font(.system(size: 14, weight: .semibold))
@@ -482,7 +482,7 @@ struct SignUpView: View {
                             .foregroundColor(.white.opacity(0.6))
                             .frame(width: 20)
                         
-                        Text(selectedCurrency == "EUR" ? "€ Euro" : "CHF Swiss Franc")
+                        Text(currencyDisplayName(selectedCurrency))
                             .font(.system(size: 17))
                             .foregroundColor(.white)
                         
@@ -543,7 +543,17 @@ struct SignUpView: View {
     
     private func persistCurrencySelection(_ currency: String) {
         UserDefaults.standard.set(currency, forKey: "anita_user_currency")
-        UserDefaults.standard.set("1.234,56", forKey: "anita_number_format")
+        let numberFormat = (currency == "CHF" || currency == "EUR") ? "1.234,56" : "1,234.56"
+        UserDefaults.standard.set(numberFormat, forKey: "anita_number_format")
+    }
+    
+    private func currencyDisplayName(_ currency: String) -> String {
+        switch currency {
+        case "USD": return "$ US Dollar"
+        case "EUR": return "€ Euro"
+        case "CHF": return "CHF Swiss Franc"
+        default: return currency
+        }
     }
 }
 
