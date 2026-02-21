@@ -2,7 +2,7 @@
 //  OnboardingView.swift
 //  ANITA
 //
-//  Registration onboarding flow (language + 5 finance questions)
+//  Registration onboarding flow (language + 4 finance questions) + FOMO screen
 //
 
 import SwiftUI
@@ -28,6 +28,7 @@ struct OnboardingView: View {
     @State private var userName: String = ""
     @State private var answers: [String: String] = [:]
     @State private var selectedCurrency: String = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
+    @State private var showingFomo: Bool = false
     
     let onComplete: (OnboardingSurveyResponse) -> Void
     
@@ -79,17 +80,6 @@ struct OnboardingView: View {
                 .init(id: "debt_heavy"),
                 .init(id: "building_wealth"),
                 .init(id: "prefer_not_say")
-            ]
-        ),
-        .init(
-            id: "challenge",
-            options: [
-                .init(id: "impulse_spending"),
-                .init(id: "no_budget"),
-                .init(id: "debt_stress"),
-                .init(id: "irregular_income"),
-                .init(id: "saving_consistency"),
-                .init(id: "investing_confusion")
             ]
         )
     ]
@@ -156,53 +146,211 @@ struct OnboardingView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             
-            VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Text("\(setupTitle) ⚙️")
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white.opacity(0.6))
-                    
-                    Spacer()
-                    
-                    Text("\(min(pageIndex + 1, totalPages))/\(totalPages)")
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white.opacity(0.6))
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 20)
-                .padding(.bottom, 8)
-                
-                SetupProgressBar(progress: onboardingProgress)
+            if showingFomo {
+                fomoView
+            } else {
+                VStack(spacing: 0) {
+                    // Header
+                    HStack {
+                        Text("\(setupTitle) ⚙️")
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white.opacity(0.6))
+                        
+                        Spacer()
+                        
+                        Text("\(min(pageIndex + 1, totalPages))/\(totalPages)")
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white.opacity(0.6))
+                    }
                     .padding(.horizontal, 24)
-                    .padding(.bottom, 14)
-                
-                TabView(selection: $pageIndex) {
-                    languagePage.tag(0)
+                    .padding(.top, 20)
+                    .padding(.bottom, 8)
                     
-                    namePage.tag(1)
+                    SetupProgressBar(progress: onboardingProgress)
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 14)
                     
-                    currencyPage.tag(2)
-                    
-                    ForEach(0..<questions.count, id: \.self) { idx in
-                        questionPage(questions[idx])
-                            .tag(idx + 3)
+                    // Single page at a time — no swipe; only Next/Back buttons change page
+                    Group {
+                        switch pageIndex {
+                        case 0: languagePage
+                        case 1: namePage
+                        case 2: currencyPage
+                        default:
+                            if pageIndex >= 3 && pageIndex < 3 + questions.count {
+                                questionPage(questions[pageIndex - 3])
+                            } else {
+                                languagePage
+                            }
+                        }
                     }
-                }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                
-                // Nav buttons
-                HStack(spacing: 16) {
-                    if !isFirstPage {
-                        backButton
-                    }
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: pageIndex)
                     
-                    nextButton
+                    // Nav buttons
+                    HStack(spacing: 16) {
+                        if !isFirstPage {
+                            backButton
+                        }
+                        
+                        nextButton
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 40)
                 }
-                .padding(.horizontal, 24)
+            }
+        }
+    }
+    
+    private var fomoView: some View {
+        ZStack {
+            // Soft gradient orbs for depth
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color(red: 0.3, green: 0.5, blue: 0.9).opacity(0.15),
+                            Color.clear
+                        ],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 180
+                    )
+                )
+                .frame(width: 360, height: 360)
+                .blur(radius: 40)
+                .offset(x: 80, y: -120)
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color(red: 0.5, green: 0.8, blue: 0.5).opacity(0.12),
+                            Color.clear
+                        ],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 140
+                    )
+                )
+                .frame(width: 280, height: 280)
+                .blur(radius: 50)
+                .offset(x: -100, y: 200)
+        }
+        .overlay {
+            VStack(spacing: 0) {
+                // Hero: big emoji + headline (no box behind emoji)
+                Text(AppL10n.t("onboarding.fomo.hero_emoji", languageCode: languageCode))
+                    .font(.system(size: 70))
+                    .padding(.top, 22)
+                    .padding(.bottom, 0)
+                
+                Text(AppL10n.t("onboarding.fomo.title", languageCode: languageCode))
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 16)
+                
+                Text(AppL10n.t("onboarding.fomo.subtitle", languageCode: languageCode))
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundColor(.white.opacity(0.88))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 20)
+                
+                // 3 blocks — same height, larger text, no colored squares behind emojis
+                VStack(spacing: 12) {
+                    fomoBenefitRow(
+                        emoji: AppL10n.t("onboarding.fomo.emoji1", languageCode: languageCode),
+                        title: AppL10n.t("onboarding.fomo.bullet1_title", languageCode: languageCode),
+                        body: AppL10n.t("onboarding.fomo.bullet1_short", languageCode: languageCode)
+                    )
+                    fomoBenefitRow(
+                        emoji: AppL10n.t("onboarding.fomo.emoji2", languageCode: languageCode),
+                        title: AppL10n.t("onboarding.fomo.bullet2_title", languageCode: languageCode),
+                        body: AppL10n.t("onboarding.fomo.bullet2_short", languageCode: languageCode)
+                    )
+                    fomoBenefitRow(
+                        emoji: AppL10n.t("onboarding.fomo.emoji4", languageCode: languageCode),
+                        title: AppL10n.t("onboarding.fomo.bullet4_title", languageCode: languageCode),
+                        body: AppL10n.t("onboarding.fomo.bullet4_short", languageCode: languageCode)
+                    )
+                }
+                .padding(.horizontal, 16)
+                
+                Spacer(minLength: 20)
+                
+                Button {
+                    let impact = UIImpactFeedbackGenerator(style: .medium)
+                    impact.impactOccurred()
+                    let survey = OnboardingSurveyResponse(
+                        languageCode: selectedLanguage?.id ?? "en",
+                        userName: trimmedUserName,
+                        currencyCode: selectedCurrency,
+                        answers: answers,
+                        completedAt: Date()
+                    )
+                    onComplete(survey)
+                } label: {
+                    HStack {
+                        Text(getStartedTitle)
+                            .font(.system(size: 19, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 56)
+                    .liquidGlass(cornerRadius: 14)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [Color.white.opacity(0.30), Color.white.opacity(0.14)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.5
+                            )
+                    )
+                    .shadow(color: Color.black.opacity(0.35), radius: 18, x: 0, y: 10)
+                    .shadow(color: Color.white.opacity(0.06), radius: 4, x: 0, y: -1)
+                }
+                .buttonStyle(PremiumButtonStyle())
+                .padding(.horizontal, 16)
                 .padding(.bottom, 40)
             }
         }
+        .transition(.opacity.combined(with: .scale(scale: 0.98)))
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showingFomo)
+    }
+    
+    /// Benefit row: same min height for all 3 blocks, emoji with no background box, title + body. Full text viewable.
+    private func fomoBenefitRow(emoji: String, title: String, body: String) -> some View {
+        HStack(alignment: .center, spacing: 16) {
+            Text(emoji)
+                .font(.system(size: 44))
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                Text(body)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(.white.opacity(0.82))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(minHeight: 72)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white.opacity(0.06))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                )
+        )
     }
     
     private var languagePage: some View {
@@ -960,15 +1108,9 @@ struct OnboardingView: View {
                     pageIndex = min(pageIndex + 1, totalPages - 1)
                 }
             } else {
-                let language = selectedLanguage?.id ?? "en"
-                let survey = OnboardingSurveyResponse(
-                    languageCode: language,
-                    userName: trimmedUserName,
-                    currencyCode: selectedCurrency,
-                    answers: answers,
-                    completedAt: Date()
-                )
-                onComplete(survey)
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                    showingFomo = true
+                }
             }
         } label: {
             HStack {

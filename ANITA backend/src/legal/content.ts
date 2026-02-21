@@ -15,7 +15,7 @@ Last updated: February 2025
 
 1. Introduction
 
-ANITA is committed to protecting your privacy. This Privacy Policy explains in detail how information is collected, used, disclosed, and safeguarded when you use the ANITA app and related services. It is designed to comply with the General Data Protection Regulation (GDPR), the California Consumer Privacy Act (CCPA), and other applicable privacy laws. By using ANITA, you consent to the practices described in this document. If you do not agree, please do not use the Service.
+ANITA is committed to protecting your privacy. This Privacy Policy explains in detail how we collect, use, disclose, and safeguard your information when you use the ANITA app and related services. We collect information you provide (such as account and financial data), information about how you use the app (usage and activity data), and technical and device information, as described below. It is designed to comply with the General Data Protection Regulation (GDPR), the California Consumer Privacy Act (CCPA), and other applicable privacy laws. By using ANITA, you consent to the collection and other practices described in this document. If you do not agree, please do not use the Service.
 
 2. Information collected
 
@@ -31,9 +31,13 @@ To provide the app’s core features, ANITA collects and stores: financial trans
 
 When you use the app, the following may be collected automatically: device type, operating system and version, app version, IP address, general usage information (for example which features you use and how often, to improve stability and performance), and error logs or performance data that help fix bugs and improve the service. This data is not used for advertising profiling.
 
+2.4 Product and usage analytics (activity data)
+
+We collect information about your activity when you use the Service. This may include: which screens or features you use and how often, session duration, app opens, general interaction events (e.g. that a feature was used, without recording the content of your inputs), device type, operating system, and app version. We collect this analytics data via a third-party provider (PostHog) and use it only to improve the product, fix issues, and understand usage patterns. It is processed in the United States. We do not use this data for advertising and we do not sell it. You may contact us via the app’s Support option to request that we disable analytics collection for your account where technically feasible. PostHog’s privacy information is at https://posthog.com/privacy.
+
 3. How your information is used
 
-The information collected is used to: provide, maintain, and improve the ANITA service; process and store your financial data and conversations so you can access them across sessions; power AI-powered features (such as chat and insights), which are informational only and not professional advice; manage your account, including subscriptions and support requests; send account-related and security-related communications (for example login alerts or password resets); and to comply with applicable law and protect legal rights. Your personal information is not sold and is not used for third-party advertising.
+The information we collect is used to: provide, maintain, and improve the ANITA service; process and store your financial data and conversations so you can access them across sessions; power AI-powered features (such as chat and insights), which are informational only and not professional advice; analyze how the app is used (e.g. feature usage and session data) to improve the product and user experience; manage your account, including subscriptions and support requests; send account-related and security-related communications (for example login alerts or password resets); and to comply with applicable law and protect legal rights. Your personal information is not sold and is not used for third-party advertising.
 
 4. Legal basis for processing (GDPR)
 
@@ -52,6 +56,8 @@ Stripe: Used for payment processing when you subscribe to paid plans. Stripe rec
 Apple: If you use Sign in with Apple, Apple provides the information you allow under their sign-in flow. Apple’s privacy information is at https://www.apple.com/legal/privacy/.
 
 Google: If you use Google sign-in where offered, authentication and basic profile information are received as permitted by your Google account settings. Google’s privacy policy is at https://policies.google.com/privacy.
+
+PostHog: We use PostHog to collect and process product and usage analytics (see section 2.4). PostHog receives pseudonymised usage and activity data (e.g. app events, screen views, device type, session information). Data is processed in the United States. PostHog’s privacy policy is at https://posthog.com/privacy.
 
 Your personal information is not sold. Data is shared with these service providers only as necessary to operate the Service, under agreements that require them to protect your data and use it only for the purposes specified.
 
@@ -115,9 +121,9 @@ To use certain features you must create an account. You agree to provide accurat
 
 You are solely responsible for the accuracy of the financial data you enter into the Service. ANITA is not responsible for any decisions you make based on the Service or for your compliance with tax, regulatory, or other legal obligations. You should verify important figures and consult qualified professionals where appropriate.
 
-7. Privacy
+7. Privacy and collection of information
 
-Your use of the Service is also governed by the Privacy Policy. By using the Service you consent to the collection, use, and sharing of your information as described in the Privacy Policy. Please read it carefully.
+Your use of the Service is also governed by the Privacy Policy. By using the Service you consent to our collection, use, and sharing of your information as described in the Privacy Policy. We collect information you provide, information about how you use the app (usage and activity data), and other data as set out in the Privacy Policy. Please read it carefully.
 
 8. Intellectual property
 
@@ -163,7 +169,7 @@ ANITA does not provide a separate website or email for support. For questions ab
 export function getPrivacyPayload() {
   return {
     privacyPolicy: WEB_PRIVACY_URL,
-    dataCollection: 'ANITA collects account data, financial transactions, chat history, preferences, and usage data necessary to provide and improve the Service.',
+    dataCollection: 'ANITA collects account data, financial transactions, chat history, preferences, and usage data necessary to provide and improve the Service. We also collect product and usage analytics (e.g. how you use the app, which features you use, and session data) via PostHog to improve the product; see the full Privacy Policy for details.',
     dataUsage: 'Data is used to provide the app, power AI features, manage subscriptions, and communicate with you. Your data is not used for advertising profiling.',
     dataSharing: 'Data is shared only with service providers (e.g. Supabase, OpenAI, Stripe, Apple, Google) as needed to operate the Service. Your data is not sold.',
     contact: 'In-app Support and Feedback only (Settings)',

@@ -439,57 +439,59 @@ class FinanceViewModel: ObservableObject {
             }
             
             let calendar = Calendar.current
-            var history: [MonthlyBalance] = []
-            var incomeExpenseHistory: [MonthlyIncomeExpense] = []
-            var comparisonDataArray: [ComparisonPeriodData] = []
-            
-            // Get data for the selected comparison period (always load at least 12 months for flexibility)
-            // Load data both backwards AND forwards from selectedMonth to ensure we have previous month data
             let monthsToLoad = 12
+            let selectedMonth = await MainActor.run { self.selectedMonth }
+            let uid = userId
             
-            // Load months backwards from selectedMonth (including selectedMonth itself)
+            // Build list of (monthDate, month, year) for all months to load
+            var monthInfos: [(Date, Int, Int)] = []
             for i in 0..<monthsToLoad {
                 if let monthDate = calendar.date(byAdding: .month, value: -i, to: selectedMonth) {
                     let month = calendar.component(.month, from: monthDate)
                     let year = calendar.component(.year, from: monthDate)
-                    
-                    do {
-                        let metrics = try await networkService.getFinancialMetrics(userId: userId, month: month, year: year)
-                        let monthStart = calendar.date(from: DateComponents(year: year, month: month, day: 1)) ?? monthDate
-                        
-                        let income = metrics.metrics.monthlyIncome
-                        let expenses = metrics.metrics.monthlyExpenses
-                        // Funds Total = sum of (income - expenses) per month; do not include transfers
-                        let balanceForTotal = income - expenses
-                        
-                        history.append(MonthlyBalance(
-                            id: "\(year)-\(month)",
-                            month: monthStart,
-                            balance: balanceForTotal
-                        ))
-                        
-                        incomeExpenseHistory.append(MonthlyIncomeExpense(
-                            id: "\(year)-\(month)",
-                            month: monthStart,
-                            income: income,
-                            expenses: expenses
-                        ))
-                        
-                        comparisonDataArray.append(ComparisonPeriodData(
-                            id: "\(year)-\(month)",
-                            month: monthStart,
-                            income: income,
-                            expenses: expenses,
-                            balance: balanceForTotal,
-                            incomeChange: 0.0, // Will calculate after sorting
-                            expensesChange: 0.0,
-                            balanceChange: 0.0
-                        ))
-                    } catch {
-                        print("[FinanceViewModel] Error loading historical data for \(year)-\(month): \(error.localizedDescription)")
-                    }
+                    monthInfos.append((monthDate, month, year))
                 }
             }
+            
+            // Fetch all 12 months in parallel (instead of sequentially) for much faster load
+            struct MonthMetricsResult {
+                let id: String
+                let monthStart: Date
+                let income: Double
+                let expenses: Double
+                let balance: Double
+            }
+            let results: [MonthMetricsResult] = await withTaskGroup(of: MonthMetricsResult?.self) { group in
+                for (monthDate, month, year) in monthInfos {
+                    group.addTask {
+                        do {
+                            let metrics = try await self.networkService.getFinancialMetrics(userId: uid, month: month, year: year)
+                            let monthStart = calendar.date(from: DateComponents(year: year, month: month, day: 1)) ?? monthDate
+                            let balanceForTotal = metrics.metrics.monthlyIncome - metrics.metrics.monthlyExpenses
+                            return MonthMetricsResult(
+                                id: "\(year)-\(month)",
+                                monthStart: monthStart,
+                                income: metrics.metrics.monthlyIncome,
+                                expenses: metrics.metrics.monthlyExpenses,
+                                balance: balanceForTotal
+                            )
+                        } catch {
+                            print("[FinanceViewModel] Error loading historical data for \(year)-\(month): \(error.localizedDescription)")
+                            return nil
+                        }
+                    }
+                }
+                var arr: [MonthMetricsResult] = []
+                for await r in group {
+                    if let r = r { arr.append(r) }
+                }
+                return arr
+            }
+            
+            // Build history arrays from parallel results (order may vary, so we sort below)
+            let history: [MonthlyBalance] = results.map { MonthlyBalance(id: $0.id, month: $0.monthStart, balance: $0.balance) }
+            let incomeExpenseHistory: [MonthlyIncomeExpense] = results.map { MonthlyIncomeExpense(id: $0.id, month: $0.monthStart, income: $0.income, expenses: $0.expenses) }
+            var comparisonDataArray: [ComparisonPeriodData] = results.map { ComparisonPeriodData(id: $0.id, month: $0.monthStart, income: $0.income, expenses: $0.expenses, balance: $0.balance, incomeChange: 0.0, expensesChange: 0.0, balanceChange: 0.0) }
             
             // Sort by date (oldest first) and calculate changes
             let sortedData = comparisonDataArray.sorted { $0.month < $1.month }

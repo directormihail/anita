@@ -10,35 +10,38 @@ import Foundation
 class NetworkService: ObservableObject {
     static let shared = NetworkService()
     
-    /// Request timeout. Longer in release so Railway cold starts don't cause timeouts.
+    /// Request timeout. Longer so production (e.g. Railway) cold starts don’t cause timeouts.
     private static var requestTimeout: TimeInterval {
         #if DEBUG
-        return 10.0
+        return 25.0
         #else
         return 30.0
         #endif
     }
     
-    // Base URL - Always reads from UserDefaults to stay in sync with Settings
+    /// Always use Railway production server. Custom URL in Settings is ignored so the app connects to Railway.
+    private var rawBaseURL: String {
+        Config.backendURL
+    }
+    
+    /// Normalized base URL: trimmed, no trailing slash, never empty.
     private var baseURL: String {
-        // Always read from UserDefaults first (to get latest value from Settings)
-        if let url = UserDefaults.standard.string(forKey: "backendURL"), !url.isEmpty {
-            return url
+        let raw = rawBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        if raw.isEmpty {
+            return Config.backendURL
         }
-        // Fall back to Config if UserDefaults is empty
-        return Config.backendURL
+        return raw.hasSuffix("/") ? String(raw.dropLast()) : raw
     }
     
     private init() {
-        // Log the initial URL being used
-        let initialURL = UserDefaults.standard.string(forKey: "backendURL") ?? Config.backendURL
-        print("[NetworkService] Initialized with backend URL: \(initialURL)")
+        let initialURL = baseURL
+        print("[NetworkService] Using Railway server: \(initialURL)")
     }
     
     func updateBaseURL(_ url: String) {
-        // Save to UserDefaults - the baseURL property will automatically use this
-        UserDefaults.standard.set(url, forKey: "backendURL")
-        print("[NetworkService] Backend URL updated to: \(url)")
+        // No-op: app always uses Railway (Config.backendURL). Kept for API compatibility with Settings.
+        UserDefaults.standard.set(url.trimmingCharacters(in: .whitespacesAndNewlines), forKey: "backendURL")
+        print("[NetworkService] Backend URL is fixed to Railway: \(Config.backendURL)")
     }
     
     // Helper to get current URL (for debugging/display)

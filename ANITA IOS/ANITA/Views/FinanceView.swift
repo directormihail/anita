@@ -792,21 +792,49 @@ struct FinanceView: View {
             
             if isTrendsAndComparisonsExpanded {
                 if subscriptionManager.isPremium {
-                    VStack(spacing: 20) {
-                        if viewModel.isHistoricalDataLoading {
-                            VStack(spacing: 8) {
-                                Text(AppL10n.t("finance.loading"))
-                                    .font(.system(size: 15, weight: .medium, design: .rounded))
-                                    .foregroundColor(.white.opacity(0.5))
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 36)
-                            .transition(.expandSection)
-                        } else {
+                    if viewModel.isHistoricalDataLoading {
+                        VStack(spacing: 8) {
+                            Text(AppL10n.t("finance.loading"))
+                                .font(.system(size: 15, weight: .medium, design: .rounded))
+                                .foregroundColor(.white.opacity(0.5))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 36)
+                        .background(
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color(white: 0.15).opacity(0.95),
+                                            Color(white: 0.12).opacity(0.9)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 20)
+                                        .stroke(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color.white.opacity(0.15),
+                                                    Color.white.opacity(0.05)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            ),
+                                            lineWidth: 1
+                                        )
+                                }
+                                .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: 6)
+                        )
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
+                        .transition(.opacity)
+                    } else {
+                        VStack(spacing: 20) {
                             ComparisonPeriodSelectorView(viewModel: viewModel)
                                 .padding(.horizontal, 20)
-                                .transition(.expandSection)
-                            
                             VStack(alignment: .leading, spacing: 16) {
                                 let chartData = viewModel.getComparisonData(for: viewModel.comparisonPeriod)
                                 EnhancedIncomeExpenseBarChart(
@@ -819,17 +847,18 @@ struct FinanceView: View {
                                 .liquidGlass(cornerRadius: 20)
                                 .padding(.horizontal, 20)
                             }
-                            .transition(.expandSection)
                         }
+                        .padding(.top, 8)
+                        .transition(.opacity)
                     }
-                    .padding(.top, 8)
                 } else {
                     PremiumGateView(onUpgrade: { showUpgradeSheet = true })
                         .padding(.top, 8)
-                        .transition(.expandSection)
+                        .transition(.opacity)
                 }
             }
         }
+        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: isTrendsAndComparisonsExpanded)
     }
     
     private var categoryAnalysisView: some View {
@@ -910,11 +939,6 @@ struct FinanceView: View {
             .buttonStyle(PremiumSettingsButtonStyle())
             
             if isCategoryAnalysisExpanded {
-                if !subscriptionManager.isPremium {
-                    PremiumGateView(onUpgrade: { showUpgradeSheet = true })
-                        .padding(.top, 8)
-                        .transition(.expandSection)
-                } else {
                 // Single section container (like webapp's insight-card)
                 VStack(spacing: 0) {
                     // Always show existing data immediately (even during refresh).
@@ -1082,10 +1106,10 @@ struct FinanceView: View {
                         .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: 6)
                 )
                 .padding(.horizontal, 20)
-                .transition(.expandSection)
-                }
+                .transition(.opacity)
             }
         }
+        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: isCategoryAnalysisExpanded)
     }
     
     private var spendingLimitsView: some View {
@@ -1162,7 +1186,7 @@ struct FinanceView: View {
                 if !subscriptionManager.isPremium {
                     PremiumGateView(onUpgrade: { showUpgradeSheet = true })
                         .padding(.top, 8)
-                        .transition(.expandSection)
+                        .transition(.opacity)
                 } else if viewModel.goals.isEmpty {
                     VStack(spacing: 20) {
                         Image(systemName: "arrow.down.right")
@@ -1225,7 +1249,7 @@ struct FinanceView: View {
                     .padding(.vertical, 36)
                     .liquidGlass(cornerRadius: 18)
                     .padding(.horizontal, 20)
-                    .transition(.expandSection)
+                    .transition(.opacity)
                 } else {
                     // Row height: ~85px (28px vertical padding + ~57px content height)
                     let rowHeight: CGFloat = 85
@@ -1362,10 +1386,11 @@ struct FinanceView: View {
                     .clipped()
                     .liquidGlass(cornerRadius: 18)
                     .padding(.horizontal, 20)
-                    .transition(.expandSection)
+                    .transition(.opacity)
                 }
             }
         }
+        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: isSpendingLimitsExpanded)
     }
     
     private var savingGoalsView: some View {
@@ -1442,7 +1467,7 @@ struct FinanceView: View {
                 if !subscriptionManager.isPremium {
                     PremiumGateView(onUpgrade: { showUpgradeSheet = true })
                         .padding(.top, 8)
-                        .transition(.expandSection)
+                        .transition(.opacity)
                 } else {
                 // Goals total reserve summary (same design as Total Assets)
                 if !viewModel.targets.isEmpty {
@@ -1464,7 +1489,7 @@ struct FinanceView: View {
                     .padding(.vertical, 18)
                     .liquidGlass(cornerRadius: 20)
                     .padding(.horizontal, 20)
-                    .transition(.expandSection)
+                    .transition(.opacity)
                 }
                 
                 if viewModel.targets.isEmpty {
@@ -1529,7 +1554,7 @@ struct FinanceView: View {
                     .padding(.vertical, 36)
                     .liquidGlass(cornerRadius: 18)
                     .padding(.horizontal, 20)
-                    .transition(.expandSection)
+                    .transition(.opacity)
                 } else {
                     // Row height: ~85px (28px vertical padding + ~57px content height)
                     let rowHeight: CGFloat = 85
@@ -1667,11 +1692,12 @@ struct FinanceView: View {
                     .clipped()
                     .liquidGlass(cornerRadius: 18)
                     .padding(.horizontal, 20)
-                    .transition(.expandSection)
+                    .transition(.opacity)
                 }
                 }
             }
         }
+        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: isSavingGoalsExpanded)
     }
     
     private var assetsView: some View {
@@ -1748,7 +1774,7 @@ struct FinanceView: View {
                 if !subscriptionManager.isPremium {
                     PremiumGateView(onUpgrade: { showUpgradeSheet = true })
                         .padding(.top, 8)
-                        .transition(.expandSection)
+                        .transition(.opacity)
                 } else {
                 // Total Assets Summary (shown when expanded)
                 if !comprehensiveAssets.isEmpty {
@@ -1769,7 +1795,7 @@ struct FinanceView: View {
                     .padding(.vertical, 18)
                     .liquidGlass(cornerRadius: 20)
                     .padding(.horizontal, 20)
-                    .transition(.expandSection)
+                    .transition(.opacity)
                 }
                 
                 if comprehensiveAssets.isEmpty {
@@ -1835,7 +1861,7 @@ struct FinanceView: View {
                     .padding(.vertical, 36)
                     .liquidGlass(cornerRadius: 18)
                     .padding(.horizontal, 20)
-                    .transition(.expandSection)
+                    .transition(.opacity)
                 } else {
                     // Row height: ~85px (28px vertical padding + ~57px content height)
                     let rowHeight: CGFloat = 85
@@ -1972,11 +1998,12 @@ struct FinanceView: View {
                     .clipped()
                     .liquidGlass(cornerRadius: 18)
                     .padding(.horizontal, 20)
-                    .transition(.expandSection)
+                    .transition(.opacity)
                 }
                 }
             }
         }
+        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: isAssetsExpanded)
     }
     
     private var xpLevelWidgetView: some View {
@@ -2067,7 +2094,7 @@ struct FinanceView: View {
                         .frame(maxWidth: .infinity)
                         .liquidGlass(cornerRadius: 18)
                         .padding(.horizontal, 20)
-                        .transition(.expandSection)
+                        .transition(.opacity)
                 } else if viewModel.transactions.isEmpty {
                     VStack(spacing: 20) {
                         Image(systemName: "chart.bar.doc.horizontal")
@@ -2126,7 +2153,7 @@ struct FinanceView: View {
                     .padding(.vertical, 36)
                     .liquidGlass(cornerRadius: 18)
                     .padding(.horizontal, 20)
-                    .transition(.expandSection)
+                    .transition(.opacity)
                 } else {
                     // Always show all transactions - Transactions section is independent
                     let allTransactions = viewModel.transactions
@@ -2206,10 +2233,11 @@ struct FinanceView: View {
                     .clipped()
                     .liquidGlass(cornerRadius: 18)
                     .padding(.horizontal, 20)
-                    .transition(.expandSection)
+                    .transition(.opacity)
                 }
             }
         }
+        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: isTransactionsExpanded)
     }
     
     /// Error banner at top of Finance page (same style as Chat).
