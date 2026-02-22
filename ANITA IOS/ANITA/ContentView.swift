@@ -25,6 +25,9 @@ struct ContentView: View {
             if !authViewModel.hasCompletedInitialAuthCheck {
                 // Don't show login until we've tried restoring session from Keychain
                 loadingView
+            } else if userManager.recoveryModeNeedsPassword {
+                // Opened from password reset link; user must set new password
+                ResetPasswordView()
             } else if authViewModel.isAuthenticated {
                 if userManager.shouldShowPostSignupPlans {
                     PostSignupPlansView {
@@ -52,6 +55,9 @@ struct ContentView: View {
                     selectedTab = 0
                 }
             }
+        }
+        .onOpenURL { url in
+            handleAuthURL(url)
         }
         .dismissKeyboardOnTap()
     }
@@ -199,6 +205,29 @@ struct ContentView: View {
                 )
             }
         }
+    }
+    
+    /// Handle anita:// URL from password reset link (e.g. anita://auth/callback#access_token=...&refresh_token=...&type=recovery).
+    private func handleAuthURL(_ url: URL) {
+        guard url.scheme == "anita", let fragment = url.fragment, !fragment.isEmpty else { return }
+        let params = parseFragment(fragment)
+        guard params["type"] == "recovery",
+              let accessToken = params["access_token"], !accessToken.isEmpty,
+              let refreshToken = params["refresh_token"], !refreshToken.isEmpty else { return }
+        Task {
+            await userManager.setRecoverySession(accessToken: accessToken, refreshToken: refreshToken)
+        }
+    }
+    
+    private func parseFragment(_ fragment: String) -> [String: String] {
+        var result: [String: String] = [:]
+        for part in fragment.split(separator: "&") {
+            let pair = part.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            if pair.count == 2, let key = String(pair[0]).removingPercentEncoding, let value = String(pair[1]).removingPercentEncoding {
+                result[key] = value
+            }
+        }
+        return result
     }
 }
 

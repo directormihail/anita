@@ -27,6 +27,8 @@ class UserManager: ObservableObject {
     @Published var hasCompletedOnboarding = false
     @Published var shouldShowPostSignupPlans = false
     @Published var profileDisplayName: String = ""
+    /// True when app was opened via password recovery link; user must set a new password before using the app.
+    @Published var recoveryModeNeedsPassword = false
     
     /// UserDefaults key scoped to current account so profile name and onboarding don't leak between accounts.
     func prefKey(_ base: String) -> String {
@@ -156,6 +158,30 @@ class UserManager: ObservableObject {
         await syncSavedOnboardingToSupabaseIfNeeded()
         syncGlobalCurrencyFromPerUser()
         Task { @MainActor in await SubscriptionManager.shared.refresh() }
+    }
+    
+    /// Request a password reset email. No session change; Supabase sends the recovery link to the user.
+    func resetPassword(email: String) async throws {
+        try await supabaseService.resetPassword(email: email)
+    }
+    
+    /// Set session from recovery link (anita://...#access_token=...&refresh_token=...&type=recovery), then require new password.
+    func setRecoverySession(accessToken: String, refreshToken: String) async {
+        supabaseService.setSessionFromRecovery(accessToken: accessToken, refreshToken: refreshToken)
+        await checkAuthStatus()
+        await MainActor.run {
+            self.recoveryModeNeedsPassword = true
+        }
+    }
+    
+    /// Clear recovery mode after user has set a new password.
+    func clearRecoveryMode() {
+        recoveryModeNeedsPassword = false
+    }
+    
+    /// Update password for current session (recovery flow). Call after setRecoverySession; clears recovery mode on success (caller may call clearRecoveryMode after).
+    func updatePasswordForRecovery(_ newPassword: String) async throws {
+        try await supabaseService.updatePassword(newPassword)
     }
     
     func signInWithGoogle() async throws {
@@ -449,7 +475,6 @@ class UserManager: ObservableObject {
 
     /// Clears onboarding and profile for the current account only (so other accounts are unaffected).
     func resetOnboardingForTesting() {
-        let uid = userId
         UserDefaults.standard.removeObject(forKey: prefKey(onboardingCompletedKey))
         UserDefaults.standard.removeObject(forKey: prefKey(onboardingSyncedKey))
         UserDefaults.standard.removeObject(forKey: prefKey(preferencesSyncedKey))

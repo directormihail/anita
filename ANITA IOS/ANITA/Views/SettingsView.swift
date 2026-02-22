@@ -918,7 +918,7 @@ struct SettingsView: View {
         }
         Task {
             do {
-                try await networkService.clearUserData(userId: uid)
+                _ = try await networkService.clearUserData(userId: uid)
                 await MainActor.run {
                     userManager.clearKeyedStorage(for: uid)
                     userManager.signOut()

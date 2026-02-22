@@ -116,9 +116,15 @@ export async function handleSaveTransaction(req: Request, res: Response): Promis
     let finalDescription: string;
 
     if (isTransfer) {
-      normalizedCategory = (category && category.trim().length > 0)
-        ? normalizeCategory(category)
-        : 'Transfer';
+      const cat = (category && category.trim().length > 0) ? category.trim() : '';
+      const lower = cat.toLowerCase();
+      if (lower.includes('to goal')) {
+        normalizedCategory = 'Transfer to goal';
+      } else if (lower.includes('from goal')) {
+        normalizedCategory = 'Transfer from goal';
+      } else {
+        normalizedCategory = cat.isEmpty ? 'Transfer' : normalizeCategory(category);
+      }
       finalDescription = description;
     } else {
       if (!detectedCategory || detectedCategory.trim().length === 0 ||
@@ -175,28 +181,38 @@ export async function handleSaveTransaction(req: Request, res: Response): Promis
       }
     }
     
-    // Prepare transaction data
+    // Use client date as UTC so get-transactions month filter includes it; also set transaction_date so it persists even if DB overwrites created_at
+    const createdAt = date ? new Date(date).toISOString() : new Date().toISOString();
+
     const transactionData: any = {
       account_id: userId,
-      message_text: description, // Keep original for reference
+      message_text: description,
       transaction_type: type,
       transaction_amount: amount,
       transaction_category: normalizedCategory,
-      transaction_description: finalDescription, // Use AI-generated clean description
+      transaction_description: finalDescription,
       data_type: 'transaction',
       message_id: transactionId || `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      created_at: date ? new Date(date).toISOString() : new Date().toISOString()
+      created_at: createdAt,
+      transaction_date: createdAt
     };
 
-    // Save transaction to anita_data table
-    const { error } = await supabase
+    // Save transaction to anita_data table (200 only after successful insert)
+    let result = await supabase
       .from('anita_data')
       .insert([transactionData])
       .select()
       .single();
 
-    if (error) {
-      logger.error('Error saving transaction', { error: error.message, requestId, userId, type, amount });
+    if (result.error) {
+      const msg = result.error.message || '';
+      if (msg.includes('transaction_date') || msg.includes('column') || msg.includes('unknown key')) {
+        delete transactionData.transaction_date;
+        result = await supabase.from('anita_data').insert([transactionData]).select().single();
+      }
+    }
+    if (result.error) {
+      logger.error('Error saving transaction', { error: result.error.message, requestId, userId, type, amount });
       res.status(500).json({
         error: 'Database error',
         message: 'Failed to save transaction',
@@ -249,6 +265,10 @@ export async function handleSaveTransaction(req: Request, res: Response): Promis
 
     logger.info('Transaction saved successfully', { requestId, userId, type, amount, transactionId: transactionData.message_id });
 
+    // Use inserted row date so client and get-transactions see the same value (transaction_date or created_at)
+    const inserted = result.data as any;
+    const storedDate = inserted?.transaction_date || inserted?.created_at || transactionData.created_at;
+
     res.status(200).json({
       success: true,
       transaction: {
@@ -257,7 +277,7 @@ export async function handleSaveTransaction(req: Request, res: Response): Promis
         amount: amount,
         category: normalizedCategory,
         description: finalDescription, // Return the clean, AI-generated description
-        date: transactionData.created_at
+        date: storedDate
       },
       requestId
     });

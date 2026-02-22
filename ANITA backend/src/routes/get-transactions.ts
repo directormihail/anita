@@ -62,40 +62,85 @@ export async function handleGetTransactions(req: Request, res: Response): Promis
       return;
     }
 
-    // Build query
-    let query = supabase
-      .from('anita_data')
-      .select('*')
-      .eq('account_id', userId)
-      .eq('data_type', 'transaction');
-    
-    // Filter by month if provided
-    if (month && year) {
-      const monthNum = parseInt(month) - 1;
-      const yearNum = parseInt(year);
-      const monthStart = new Date(yearNum, monthNum, 1).toISOString();
-      const monthEnd = new Date(yearNum, monthNum + 1, 0, 23, 59, 59, 999).toISOString();
-      query = query.gte('created_at', monthStart).lte('created_at', monthEnd);
-    } else if (month) {
-      // Format: "2024-01"
-      const [yearStr, monthStr] = month.split('-');
-      const monthNum = parseInt(monthStr) - 1;
-      const yearNum = parseInt(yearStr);
-      const monthStart = new Date(yearNum, monthNum, 1).toISOString();
-      const monthEnd = new Date(yearNum, monthNum + 1, 0, 23, 59, 59, 999).toISOString();
-      query = query.gte('created_at', monthStart).lte('created_at', monthEnd);
-    }
-    
-    const { data, error } = await query.order('created_at', { ascending: false });
+    const monthStart = (m: string, y: string) => {
+      const monthNum = parseInt(m) - 1;
+      const yearNum = parseInt(y);
+      return {
+        start: new Date(Date.UTC(yearNum, monthNum, 1, 0, 0, 0, 0)).toISOString(),
+        end: new Date(Date.UTC(yearNum, monthNum + 1, 0, 23, 59, 59, 999)).toISOString()
+      };
+    };
 
-    if (error) {
-      logger.error('Error fetching transactions', { error: error.message, requestId, userId });
-      res.status(500).json({
-        error: 'Database error',
-        message: 'Failed to fetch transactions',
-        requestId
-      });
-      return;
+    let data: any[] = [];
+
+    if (month && year) {
+      const { start: monthStartStr, end: monthEndStr } = month.length > 2
+        ? monthStart(month.split('-')[0], month.split('-')[1])
+        : monthStart(month, year);
+      // 1) Rows with transaction_date in range (persisted user date; survives reload)
+      const { data: byTxDate, error: e1 } = await supabase
+        .from('anita_data')
+        .select('*')
+        .eq('account_id', userId)
+        .eq('data_type', 'transaction')
+        .gte('transaction_date', monthStartStr)
+        .lte('transaction_date', monthEndStr)
+        .order('created_at', { ascending: false });
+      if (!e1 && byTxDate && byTxDate.length > 0) data = byTxDate;
+      // 2) Rows with transaction_date null and created_at in range (legacy or no migration yet)
+      const { data: byCreated, error: e2 } = await supabase
+        .from('anita_data')
+        .select('*')
+        .eq('account_id', userId)
+        .eq('data_type', 'transaction')
+        .gte('created_at', monthStartStr)
+        .lte('created_at', monthEndStr)
+        .order('created_at', { ascending: false });
+      if (!e2 && byCreated) {
+        const fromTxDateIds = new Set((data || []).map((r: any) => r.message_id || r.id));
+        const legacy = (byCreated || []).filter((r: any) => !fromTxDateIds.has(r.message_id || r.id));
+        data = [...(data || []), ...legacy].sort((a: any, b: any) => {
+          const tA = a.transaction_date || a.created_at || '';
+          const tB = b.transaction_date || b.created_at || '';
+          return tB.localeCompare(tA);
+        });
+      }
+      if (data.length === 0 && byCreated && byCreated.length > 0) data = byCreated;
+      if (e2) {
+        logger.error('Error fetching transactions', { error: e2.message, requestId, userId });
+        res.status(500).json({ error: 'Database error', message: 'Failed to fetch transactions', requestId });
+        return;
+      }
+    } else if (month) {
+      const [yearStr, monthStr] = month.split('-');
+      const { start: monthStartStr, end: monthEndStr } = monthStart(monthStr, yearStr);
+      const { data: byCreated, error: e } = await supabase
+        .from('anita_data')
+        .select('*')
+        .eq('account_id', userId)
+        .eq('data_type', 'transaction')
+        .gte('created_at', monthStartStr)
+        .lte('created_at', monthEndStr)
+        .order('created_at', { ascending: false });
+      if (e) {
+        logger.error('Error fetching transactions', { error: e.message, requestId, userId });
+        res.status(500).json({ error: 'Database error', message: 'Failed to fetch transactions', requestId });
+        return;
+      }
+      if (byCreated) data = byCreated;
+    } else {
+      const { data: allData, error: e } = await supabase
+        .from('anita_data')
+        .select('*')
+        .eq('account_id', userId)
+        .eq('data_type', 'transaction')
+        .order('created_at', { ascending: false });
+      if (e) {
+        logger.error('Error fetching transactions', { error: e.message, requestId, userId });
+        res.status(500).json({ error: 'Database error', message: 'Failed to fetch transactions', requestId });
+        return;
+      }
+      if (allData) data = allData;
     }
 
     // Transform data to match expected format and normalize categories

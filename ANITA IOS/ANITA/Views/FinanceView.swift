@@ -129,6 +129,8 @@ struct KeyboardDismissingBackground: UIViewRepresentable {
         }
         
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            // UIView/UIViewController must be used from main thread only (Main Thread Checker).
+            guard Thread.isMainThread else { return true }
             guard let view = touch.view else { return true }
             var currentView: UIView? = view
             while let v = currentView {
@@ -700,7 +702,7 @@ struct FinanceView: View {
                             .foregroundColor(.white)
                             .tracking(0.8)
                         
-                        Text(formatCurrency(viewModel.cumulativeTotalBalance))
+                        Text(formatCurrency(viewModel.displayTotalBalance))
                             .font(.system(size: 22, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                             .digit3D(baseColor: .white)
@@ -2348,6 +2350,18 @@ struct FinanceView: View {
                                     }
                                 }
                             }
+                            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ExpandTransactionsSection"))) { _ in
+                                if !isTransactionsExpanded {
+                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                                        isTransactionsExpanded = true
+                                    }
+                                }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                        proxy.scrollTo("transactions-section", anchor: .top)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -3197,13 +3211,16 @@ struct AddMoneyToGoalSheet: View {
         return formatter.string(from: NSNumber(value: 0)) ?? "0"
     }
     
+    /// First of selected month in UTC so backend month filter includes the transfer.
     private var selectedMonthDateString: String? {
-        let calendar = Calendar.current
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .gmt
         let comps = calendar.dateComponents([.year, .month], from: viewModel.selectedMonth)
-        guard let firstOfMonth = calendar.date(from: comps) else { return nil }
+        guard let firstOfMonthUTC = calendar.date(from: comps) else { return nil }
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
-        return formatter.string(from: firstOfMonth)
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        return formatter.string(from: firstOfMonthUTC)
     }
     
     private func addMoneyToGoal() {
@@ -3220,8 +3237,16 @@ struct AddMoneyToGoalSheet: View {
                 let userId = viewModel.userId
                 let newCurrentAmount = target.currentAmount + amountValue
                 
+                // Update goal balance first so we don't record a transfer if target update fails
+                _ = try await NetworkService.shared.updateTarget(
+                    userId: userId,
+                    targetId: target.id,
+                    currentAmount: newCurrentAmount
+                )
+                await MainActor.run { viewModel.updateGoalProgress(targetId: target.id, newCurrentAmount: newCurrentAmount) }
+                
                 // Record transfer to goal (reduces Available Funds; not income/expense)
-                _ = try await NetworkService.shared.createTransaction(
+                let newTransaction = try await NetworkService.shared.createTransaction(
                     userId: userId,
                     type: "transfer",
                     amount: amountValue,
@@ -3229,16 +3254,17 @@ struct AddMoneyToGoalSheet: View {
                     description: "To goal: \(target.title)",
                     date: selectedMonthDateString
                 )
-                
-                _ = try await NetworkService.shared.updateTarget(
-                    userId: userId,
-                    targetId: target.id,
-                    currentAmount: newCurrentAmount
-                )
-                
                 await MainActor.run {
+                    viewModel.prependTransaction(newTransaction)
+                    viewModel.subtractFromAvailableFunds(amountValue)
                     isAdding = false
                     dismiss()
+                    NotificationCenter.default.post(name: NSNotification.Name("ExpandTransactionsSection"), object: nil)
+                }
+                // Delay refresh so backend can persist; then refetch so Available Funds stays correct from API
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                await MainActor.run {
+                    viewModel.clearPendingTransferAdjustment()
                     viewModel.refresh()
                 }
             } catch {
@@ -3570,9 +3596,12 @@ struct EditGoalSheet: View {
     @State private var showChangeAmountSheet = false
     @State private var showRemoveSheet = false
     
-    // Check if this is a savings goal (not a budget)
+    // Show Add/Take for savings goals: not a budget type, or no category (savings goals have no spending category)
     private var isSavingsGoal: Bool {
-        target.targetType.lowercased() != "budget"
+        let type = target.targetType.lowercased()
+        let hasCategory = (target.category ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        if type == "budget" && hasCategory { return false }
+        return true
     }
     
     var body: some View {
@@ -4410,12 +4439,14 @@ struct TakeMoneyFromGoalSheet: View {
         errorMessage = nil
         
         let selectedMonthDateString: String? = {
-            let calendar = Calendar.current
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = TimeZone(identifier: "UTC") ?? .gmt
             let comps = calendar.dateComponents([.year, .month], from: viewModel.selectedMonth)
-            guard let firstOfMonth = calendar.date(from: comps) else { return nil }
+            guard let firstOfMonthUTC = calendar.date(from: comps) else { return nil }
             let formatter = ISO8601DateFormatter()
             formatter.formatOptions = [.withInternetDateTime]
-            return formatter.string(from: firstOfMonth)
+            formatter.timeZone = TimeZone(identifier: "UTC")
+            return formatter.string(from: firstOfMonthUTC)
         }()
         
         Task {
@@ -4423,8 +4454,16 @@ struct TakeMoneyFromGoalSheet: View {
                 let userId = viewModel.userId
                 let newCurrentAmount = target.currentAmount - amountValue
                 
+                // Update goal balance first so we don't record a transfer if target update fails
+                _ = try await NetworkService.shared.updateTarget(
+                    userId: userId,
+                    targetId: target.id,
+                    currentAmount: newCurrentAmount
+                )
+                await MainActor.run { viewModel.updateGoalProgress(targetId: target.id, newCurrentAmount: newCurrentAmount) }
+                
                 // Record transfer from goal (increases Available Funds; not income/expense)
-                _ = try await NetworkService.shared.createTransaction(
+                let newTransaction = try await NetworkService.shared.createTransaction(
                     userId: userId,
                     type: "transfer",
                     amount: amountValue,
@@ -4432,16 +4471,16 @@ struct TakeMoneyFromGoalSheet: View {
                     description: "From goal: \(target.title)",
                     date: selectedMonthDateString
                 )
-                
-                _ = try await NetworkService.shared.updateTarget(
-                    userId: userId,
-                    targetId: target.id,
-                    currentAmount: newCurrentAmount
-                )
-                
                 await MainActor.run {
+                    viewModel.prependTransaction(newTransaction)
+                    viewModel.addToAvailableFunds(amountValue)
                     isProcessing = false
                     dismiss()
+                    NotificationCenter.default.post(name: NSNotification.Name("ExpandTransactionsSection"), object: nil)
+                }
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                await MainActor.run {
+                    viewModel.clearPendingTransferAdjustment()
                     viewModel.refresh()
                 }
             } catch {
@@ -9429,7 +9468,7 @@ struct EnhancedNetWorthChart: View {
                                     path.addLine(to: CGPoint(x: x, y: y))
                                 }
                             }
-                            if let lastPoint = incomeData.last {
+                            if incomeData.last != nil {
                                 let lastIndex = incomeData.count - 1
                                 let x = CGFloat(lastIndex) / CGFloat(max(incomeData.count - 1, 1)) * chartWidth + horizontalPadding
                                 path.addLine(to: CGPoint(x: x, y: chartHeight))
@@ -9463,7 +9502,7 @@ struct EnhancedNetWorthChart: View {
                                     path.addLine(to: CGPoint(x: x, y: y))
                                 }
                             }
-                            if let lastPoint = expensesData.last {
+                            if expensesData.last != nil {
                                 let lastIndex = expensesData.count - 1
                                 let x = CGFloat(lastIndex) / CGFloat(max(expensesData.count - 1, 1)) * chartWidth + horizontalPadding
                                 path.addLine(to: CGPoint(x: x, y: chartHeight))

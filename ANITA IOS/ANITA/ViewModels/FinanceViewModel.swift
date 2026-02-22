@@ -42,6 +42,9 @@ class FinanceViewModel: ObservableObject {
     /// True after historical data has been loaded at least once (e.g. when user first opens Insights).
     var hasLoadedHistoricalDataOnce = false
     
+    /// Applied once after next loadData so Available Funds stays correct if API hasn't included the transfer yet. Then cleared.
+    private var pendingTransferAdjustment: Double = 0
+    
     private let networkService = NetworkService.shared
     let userId: String
 
@@ -117,7 +120,15 @@ class FinanceViewModel: ObservableObject {
                     self.monthlyIncome = metrics.metrics.monthlyIncome
                     self.monthlyExpenses = metrics.metrics.monthlyExpenses
                     self.monthlyBalance = metrics.metrics.monthlyBalance
-                    self.transactions = transactionsResponse.transactions
+                    if self.pendingTransferAdjustment != 0 {
+                        self.monthlyBalance += self.pendingTransferAdjustment
+                        self.pendingTransferAdjustment = 0
+                    }
+                    // Keep optimistically added transactions (e.g. transfer to goal) that aren't in the API response yet
+                    let fromAPI = transactionsResponse.transactions
+                    let apiIds = Set(fromAPI.map(\.id))
+                    let onlyLocal = self.transactions.filter { !apiIds.contains($0.id) }
+                    self.transactions = onlyLocal + fromAPI
                     self.targets = targetsResponse.targets
                     self.goals = targetsResponse.goals ?? []
                     self.assets = assetsResponse.assets
@@ -127,7 +138,10 @@ class FinanceViewModel: ObservableObject {
                     self.previousMonthIncome = previousMonthMetrics?.metrics.monthlyIncome ?? 0.0
                     self.previousMonthExpenses = previousMonthMetrics?.metrics.monthlyExpenses ?? 0.0
                     
-                    // Historical/Insights data loads only when user first opens Insights (see loadHistoricalDataIfNeeded)
+                    // Load balance history in background so Funds Total (cumulative) is correct when user selects a past month
+                    if !self.hasLoadedHistoricalDataOnce {
+                        self.loadHistoricalData()
+                    }
                     
                     self.isLoading = false
                 }
@@ -156,6 +170,77 @@ class FinanceViewModel: ObservableObject {
     
     func refresh() {
         loadData()
+    }
+
+    /// Add a new transaction to the list immediately (e.g. after creating a transfer). List is newest-first.
+    func prependTransaction(_ transaction: TransactionItem) {
+        if !transactions.contains(where: { $0.id == transaction.id }) {
+            transactions.insert(transaction, at: 0)
+        }
+    }
+
+    /// Update a goal's saved amount locally so progress shows immediately and matches the persisted value after reload.
+    func updateGoalProgress(targetId: String, newCurrentAmount: Double) {
+        if let index = targets.firstIndex(where: { $0.id == targetId }) {
+            let t = targets[index]
+            let updated = Target(
+                id: t.id,
+                accountId: t.accountId,
+                title: t.title,
+                description: t.description,
+                targetAmount: t.targetAmount,
+                currentAmount: newCurrentAmount,
+                currency: t.currency,
+                targetDate: t.targetDate,
+                status: t.status,
+                targetType: t.targetType,
+                category: t.category,
+                priority: t.priority,
+                autoUpdate: t.autoUpdate,
+                createdAt: t.createdAt,
+                updatedAt: t.updatedAt
+            )
+            targets[index] = updated
+        }
+        if let index = goals.firstIndex(where: { $0.id == targetId }) {
+            let g = goals[index]
+            let updated = Target(
+                id: g.id,
+                accountId: g.accountId,
+                title: g.title,
+                description: g.description,
+                targetAmount: g.targetAmount,
+                currentAmount: newCurrentAmount,
+                currency: g.currency,
+                targetDate: g.targetDate,
+                status: g.status,
+                targetType: g.targetType,
+                category: g.category,
+                priority: g.priority,
+                autoUpdate: g.autoUpdate,
+                createdAt: g.createdAt,
+                updatedAt: g.updatedAt
+            )
+            goals[index] = updated
+        }
+    }
+
+    /// Update Available Funds when user adds money to a goal (transfer to goal). Call immediately so the card shows the correct value.
+    func subtractFromAvailableFunds(_ amount: Double) {
+        monthlyBalance -= amount
+        pendingTransferAdjustment -= amount
+    }
+
+    /// Update Available Funds when user takes money from a goal (transfer from goal). Call immediately so the card shows the correct value.
+    func addToAvailableFunds(_ amount: Double) {
+        monthlyBalance += amount
+        pendingTransferAdjustment += amount
+    }
+
+    /// Clear in-flight transfer adjustment before refetching so we don't double-apply when the API already includes the transfer.
+    /// Call this right before refresh() after adding/taking money to/from a goal.
+    func clearPendingTransferAdjustment() {
+        pendingTransferAdjustment = 0
     }
 
     /// Refreshes only XP stats (e.g. after earning XP in chat). Keeps Finance tab XP card in sync.
@@ -491,7 +576,7 @@ class FinanceViewModel: ObservableObject {
             // Build history arrays from parallel results (order may vary, so we sort below)
             let history: [MonthlyBalance] = results.map { MonthlyBalance(id: $0.id, month: $0.monthStart, balance: $0.balance) }
             let incomeExpenseHistory: [MonthlyIncomeExpense] = results.map { MonthlyIncomeExpense(id: $0.id, month: $0.monthStart, income: $0.income, expenses: $0.expenses) }
-            var comparisonDataArray: [ComparisonPeriodData] = results.map { ComparisonPeriodData(id: $0.id, month: $0.monthStart, income: $0.income, expenses: $0.expenses, balance: $0.balance, incomeChange: 0.0, expensesChange: 0.0, balanceChange: 0.0) }
+            let comparisonDataArray: [ComparisonPeriodData] = results.map { ComparisonPeriodData(id: $0.id, month: $0.monthStart, income: $0.income, expenses: $0.expenses, balance: $0.balance, incomeChange: 0.0, expensesChange: 0.0, balanceChange: 0.0) }
             
             // Sort by date (oldest first) and calculate changes
             let sortedData = comparisonDataArray.sorted { $0.month < $1.month }
@@ -637,6 +722,17 @@ class FinanceViewModel: ObservableObject {
         let goalsValue = goals.reduce(0) { $0 + $1.currentAmount }
         let targetsValue = targets.reduce(0) { $0 + $1.currentAmount }
         return assetsValue + goalsValue + targetsValue
+    }
+    
+    /// Funds Total to display: when viewing current month use API totalBalance (all-time cumulative);
+    /// when viewing a past month use cumulative total up to that month (requires balance history).
+    var displayTotalBalance: Double {
+        let calendar = Calendar.current
+        let isCurrentMonth = calendar.isDate(selectedMonth, equalTo: Date(), toGranularity: .month)
+        if isCurrentMonth {
+            return totalBalance
+        }
+        return cumulativeTotalBalance
     }
     
     // Calculate cumulative total balance up to selected month

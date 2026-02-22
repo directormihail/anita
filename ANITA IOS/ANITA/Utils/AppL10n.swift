@@ -76,6 +76,7 @@ enum AppL10n {
             "common.skip": "Skip",
             "common.setup": "Setup",
             "common.cancel": "Cancel",
+            "common.ok": "OK",
             "common.loading": "Loading…",
             
             // Onboarding
@@ -148,6 +149,12 @@ enum AppL10n {
             "login.password": "Password",
             "login.reset.send": "Send Reset Link",
             "login.reset.help": "Enter your email address and we'll send you a password reset link.",
+            "login.reset.sent": "Check your email for a password reset link.",
+            "login.reset.sent_title": "Check your email",
+            "login.reset.new_title": "Set new password",
+            "login.reset.new_help": "Enter your new password below.",
+            "login.reset.update_button": "Update password",
+            "login.reset.password_mismatch": "Passwords don't match.",
             
             // Sign up
             "signup.next": "Next",
@@ -546,6 +553,7 @@ enum AppL10n {
             "common.skip": "Überspringen",
             "common.setup": "Setup",
             "common.cancel": "Abbrechen",
+            "common.ok": "OK",
             "common.loading": "Laden…",
             "onboarding.language.title": "Sprache wählen 🌍",
             "onboarding.language.subtitle": "So spricht ANITA mit dir 🗣️",
@@ -609,8 +617,14 @@ enum AppL10n {
             "login.by_continuing": "Wenn du fortfährst, stimmst du zu:",
             "login.email": "E‑Mail",
             "login.password": "Passwort",
-            "login.reset.send": "Link senden",
-            "login.reset.help": "Gib deine E‑Mail ein, dann senden wir dir einen Reset‑Link.",
+"login.reset.send": "Link senden",
+             "login.reset.help": "Gib deine E‑Mail ein, dann senden wir dir einen Reset‑Link.",
+             "login.reset.sent": "Schau in deiner E‑Mail nach dem Link zum Zurücksetzen des Passworts.",
+             "login.reset.sent_title": "E‑Mail prüfen",
+             "login.reset.new_title": "Neues Passwort setzen",
+             "login.reset.new_help": "Gib unten dein neues Passwort ein.",
+             "login.reset.update_button": "Passwort aktualisieren",
+             "login.reset.password_mismatch": "Passwörter stimmen nicht überein.",
             
             "signup.next": "Weiter",
             "signup.google": "Mit Google registrieren",

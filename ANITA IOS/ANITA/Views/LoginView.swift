@@ -20,6 +20,8 @@ struct LoginView: View {
     @State private var password: String = ""
     @State private var showPassword: Bool = false
     @State private var showForgotPassword: Bool = false
+    @State private var forgotPasswordEmail: String = ""
+    @State private var showResetSent: Bool = false
     @State private var showPrivacySheet: Bool = false
     @State private var showTermsSheet: Bool = false
     @FocusState private var focusedField: Field?
@@ -355,16 +357,34 @@ struct LoginView: View {
                 }
             }
         }
+        .onChange(of: showForgotPassword) { _, isShowing in
+            if isShowing { forgotPasswordEmail = email }
+        }
         .alert(AppL10n.t("login.forgot_password"), isPresented: $showForgotPassword) {
-            TextField(AppL10n.t("login.email"), text: $email)
+            TextField(AppL10n.t("login.email"), text: $forgotPasswordEmail)
                 .textContentType(.emailAddress)
                 .keyboardType(.emailAddress)
             Button(AppL10n.t("login.reset.send")) {
-                // TODO: Implement password reset
+                showForgotPassword = false
+                Task {
+                    await viewModel.resetPassword(email: forgotPasswordEmail)
+                    if viewModel.errorMessage == nil {
+                        showResetSent = true
+                    }
+                }
             }
-            Button(AppL10n.t("common.cancel"), role: .cancel) {}
+            Button(AppL10n.t("common.cancel"), role: .cancel) {
+                showForgotPassword = false
+            }
         } message: {
             Text(AppL10n.t("login.reset.help"))
+        }
+        .alert(AppL10n.t("login.reset.sent_title"), isPresented: $showResetSent) {
+            Button(AppL10n.t("common.ok"), role: .cancel) {
+                showResetSent = false
+            }
+        } message: {
+            Text(AppL10n.t("login.reset.sent"))
         }
         .sheet(isPresented: $showPrivacySheet) {
             LegalDocumentSheetView(mode: .privacy)

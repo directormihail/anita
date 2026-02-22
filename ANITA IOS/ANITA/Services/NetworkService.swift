@@ -234,7 +234,7 @@ class NetworkService: ObservableObject {
                 throw NetworkError.httpError(httpResponse.statusCode)
             }
         } catch let error as NetworkError {
-            print("[NetworkService] ❌ NetworkError: \(error.localizedDescription ?? "Unknown")")
+            print("[NetworkService] ❌ NetworkError: \(error.localizedDescription)")
             throw error
         } catch {
             print("[NetworkService] ❌ Network error: \(error.localizedDescription)")

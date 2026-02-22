@@ -12,7 +12,6 @@
 		A1000005 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000004 /* Assets.xcassets */; };
 		A1000008 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000007 /* Preview Assets.xcassets */; };
 		A1000010 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000009 /* Models.swift */; };
-		A1000079 /* OnboardingSurvey.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000078 /* OnboardingSurvey.swift */; };
 		A1000012 /* NetworkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000011 /* NetworkService.swift */; };
 		A1000014 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000013 /* ChatView.swift */; };
 		A1000020 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000019 /* SettingsView.swift */; };
@@ -32,7 +31,6 @@
 		A1000057 /* SignUpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000058 /* SignUpView.swift */; };
 		A1000059 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000060 /* AuthViewModel.swift */; };
 		A1000061 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = A1000062 /* GoogleSignIn */; };
-		A100009A /* PostHog in Frameworks */ = {isa = PBXBuildFile; productRef = A1000099 /* PostHog */; };
 		A1000064 /* GoogleLogoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000065 /* GoogleLogoView.swift */; };
 		A1000066 /* UpgradeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000067 /* UpgradeView.swift */; };
 		A1000068 /* StoreKitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000069 /* StoreKitService.swift */; };
@@ -40,13 +38,16 @@
 		A1000072 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000073 /* OnboardingView.swift */; };
 		A1000074 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000075 /* NotificationService.swift */; };
 		A1000076 /* NotificationPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000077 /* NotificationPreviewView.swift */; };
-		Aa31fd725f3f /* TextFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = Af035dc2b2fe /* TextFormatter.swift */; };
+		A1000079 /* OnboardingSurvey.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000078 /* OnboardingSurvey.swift */; };
 		A1000081 /* AppL10n.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000080 /* AppL10n.swift */; };
 		A1000083 /* PostSignupPlansView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000082 /* PostSignupPlansView.swift */; };
 		A1000091 /* XPStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000090 /* XPStore.swift */; };
 		A1000093 /* AmountParsing.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000092 /* AmountParsing.swift */; };
 		A1000095 /* SubscriptionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000094 /* SubscriptionManager.swift */; };
 		A1000097 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000096 /* KeychainHelper.swift */; };
+		A100009A /* PostHog in Frameworks */ = {isa = PBXBuildFile; productRef = A1000099 /* PostHog */; };
+		A10000B1 /* ResetPasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000B0 /* ResetPasswordView.swift */; };
+		Aa31fd725f3f /* TextFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = Af035dc2b2fe /* TextFormatter.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -56,7 +57,6 @@
 		A1000004 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A1000007 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		A1000009 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
-		A1000078 /* OnboardingSurvey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingSurvey.swift; sourceTree = "<group>"; };
 		A1000011 /* NetworkService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkService.swift; sourceTree = "<group>"; };
 		A1000013 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		A1000019 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -83,15 +83,17 @@
 		A1000073 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		A1000075 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		A1000077 /* NotificationPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPreviewView.swift; sourceTree = "<group>"; };
-		Af035dc2b2fe /* TextFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFormatter.swift; sourceTree = "<group>"; };
+		A1000078 /* OnboardingSurvey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingSurvey.swift; sourceTree = "<group>"; };
 		A1000080 /* AppL10n.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppL10n.swift; sourceTree = "<group>"; };
 		A1000082 /* PostSignupPlansView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostSignupPlansView.swift; sourceTree = "<group>"; };
 		A1000084 /* ANITA.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ANITA.entitlements; sourceTree = "<group>"; };
-		A1000086 /* Configuration.storekit */ = {isa = PBXFileReference; lastKnownFileType = file; path = Configuration.storekit; sourceTree = "<group>"; };
+		A1000086 /* Configuration.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Configuration.storekit; sourceTree = "<group>"; };
 		A1000090 /* XPStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XPStore.swift; sourceTree = "<group>"; };
 		A1000092 /* AmountParsing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmountParsing.swift; sourceTree = "<group>"; };
 		A1000094 /* SubscriptionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionManager.swift; sourceTree = "<group>"; };
 		A1000096 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
+		A10000B0 /* ResetPasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResetPasswordView.swift; sourceTree = "<group>"; };
+		Af035dc2b2fe /* TextFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFormatter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -160,6 +162,7 @@
 				A1000044 /* CategoryAnalyticsView.swift */,
 				A1000054 /* WelcomeView.swift */,
 				A1000056 /* LoginView.swift */,
+				A10000B0 /* ResetPasswordView.swift */,
 				A1000058 /* SignUpView.swift */,
 				A1000065 /* GoogleLogoView.swift */,
 				A1000067 /* UpgradeView.swift */,
@@ -226,6 +229,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = A100000A /* Build configuration list for PBXNativeTarget "ANITA" */;
 			buildPhases = (
+				A10000C1 /* Patch AppAuth main thread */,
 				A0FFFFFB /* Sources */,
 				A0FFFFFC /* Frameworks */,
 				A0FFFFFA0 /* Resources */,
@@ -251,7 +255,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1500;
-				LastUpgradeCheck = 1500;
+				LastUpgradeCheck = 2610;
 				TargetAttributes = {
 					A0FFFFFE = {
 						CreatedOnToolsVersion = 15.0;
@@ -279,6 +283,29 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		A10000C1 /* Patch AppAuth main thread */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(PROJECT_DIR)/ANITA/Patches/AppAuth-main-thread.patch",
+			);
+			name = "Patch AppAuth main thread";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/appauth-patch.stamp",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "# Patch AppAuth so presentationAnchor runs on main thread (Main Thread Checker). Always exit 0.\nPATCH=\"${PROJECT_DIR}/ANITA/Patches/AppAuth-main-thread.patch\"\nSTAMP=\"${DERIVED_FILE_DIR}/appauth-patch.stamp\"\nfor base in \"${SRCROOT}/../SourcePackages/checkouts\" \"${BUILD_DIR%/*/*}/SourcePackages/checkouts\" \"${PROJECT_DIR}/SourcePackages/checkouts\"; do\n  if [ -d \"${base}/AppAuth-iOS\" ]; then\n    APPATH_IOS=\"${base}/AppAuth-iOS\"\n    break\n  fi\ndone\nif [ -z \"$APPATH_IOS\" ]; then\n  APPATH_IOS=$(find \"${PROJECT_DIR}\" -type d -name \"AppAuth-iOS\" 2>/dev/null | head -1)\nfi\nif [ -z \"$APPATH_IOS\" ] || [ ! -f \"$APPATH_IOS/Sources/AppAuth/iOS/OIDExternalUserAgentIOS.m\" ]; then\n  touch \"$STAMP\" 2>/dev/null || true\n  exit 0\nfi\nif grep -q 'NSThread isMainThread' \"$APPATH_IOS/Sources/AppAuth/iOS/OIDExternalUserAgentIOS.m\" 2>/dev/null; then\n  touch \"$STAMP\" 2>/dev/null || true\n  exit 0\nfi\nif [ -f \"$PATCH\" ]; then\n  (cd \"$APPATH_IOS\" && patch -p0 --forward -r - < \"$PATCH\" 2>/dev/null) && echo \"Applied AppAuth main-thread patch\" || true\nfi\ntouch \"$STAMP\" 2>/dev/null || true\nexit 0\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXResourcesBuildPhase section */
 		A0FFFFFA0 /* Resources */ = {
@@ -333,6 +360,7 @@
 				A1000093 /* AmountParsing.swift in Sources */,
 				A1000095 /* SubscriptionManager.swift in Sources */,
 				A1000097 /* KeychainHelper.swift in Sources */,
+				A10000B1 /* ResetPasswordView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -374,6 +402,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 6CN83R7KSQ;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -397,6 +426,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -437,6 +467,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 6CN83R7KSQ;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -453,6 +484,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -468,7 +500,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"ANITA/Preview Content\"";
-				DEVELOPMENT_TEAM = 6CN83R7KSQ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ANITA/Info.plist;
@@ -506,7 +537,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"ANITA/Preview Content\"";
-				DEVELOPMENT_TEAM = 6CN83R7KSQ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ANITA/Info.plist;

@@ -105,5 +105,34 @@ class AuthViewModel: ObservableObject {
         userManager.signOut()
         isAuthenticated = false
     }
+    
+    /// Request a password reset email for the given address. On success, set a success message; on failure, set errorMessage.
+    func resetPassword(email: String) async {
+        errorMessage = nil
+        let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            errorMessage = "Please enter your email address."
+            return
+        }
+        do {
+            try await userManager.resetPassword(email: trimmed)
+            // Success: caller can show "Check your email" (we don't have a dedicated success message in ViewModel; LoginView will handle it)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+    
+    /// Set new password after opening app from recovery link. Clears recovery mode on success.
+    func updatePassword(_ newPassword: String) async {
+        isLoading = true
+        errorMessage = nil
+        do {
+            try await userManager.updatePasswordForRecovery(newPassword)
+            userManager.clearRecoveryMode()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isLoading = false
+    }
 }
 

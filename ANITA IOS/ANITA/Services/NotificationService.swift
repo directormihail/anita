@@ -140,7 +140,7 @@ class NotificationService: NSObject, ObservableObject {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [Self.dailyReminderIdentifier])
         
         let (hour, minute) = Self.getOrCreateDailyReminderTime()
-        var dateComponents = DateComponents(timeZone: timeZone, hour: hour, minute: minute)
+        let dateComponents = DateComponents(timeZone: timeZone, hour: hour, minute: minute)
         let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
         
         let content = UNMutableNotificationContent()
@@ -214,7 +214,7 @@ class NotificationService: NSObject, ObservableObject {
 
 extension NotificationService: UNUserNotificationCenterDelegate {
     // Handle notification when app is in foreground
-    func userNotificationCenter(
+    nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
@@ -228,7 +228,7 @@ extension NotificationService: UNUserNotificationCenterDelegate {
     }
     
     // Handle notification tap
-    func userNotificationCenter(
+    nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
@@ -236,7 +236,9 @@ extension NotificationService: UNUserNotificationCenterDelegate {
         let userInfo = response.notification.request.content.userInfo
         
         if let type = userInfo["type"] as? String, type == "daily_transaction_reminder" {
-            NotificationCenter.default.post(name: NSNotification.Name("SwitchToFinanceTab"), object: nil)
+            Task { @MainActor in
+                NotificationCenter.default.post(name: NSNotification.Name("SwitchToFinanceTab"), object: nil)
+            }
         }
         
         completionHandler()

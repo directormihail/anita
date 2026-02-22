@@ -1,0 +1,19 @@
+--- Sources/AppAuth/iOS/OIDExternalUserAgentIOS.m
++++ Sources/AppAuth/iOS/OIDExternalUserAgentIOS.m
+@@ -254,7 +254,18 @@
+ #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 130000
+ #pragma mark - ASWebAuthenticationPresentationContextProviding
+ 
+ - (ASPresentationAnchor)presentationAnchorForWebAuthenticationSession:(ASWebAuthenticationSession *)session API_AVAILABLE(ios(13.0)){
+- return _presentingViewController.view.window;
++ __block ASPresentationAnchor anchor = nil;
++ if ([NSThread isMainThread]) {
++   anchor = _presentingViewController.view.window;
++ } else {
++   dispatch_sync(dispatch_get_main_queue(), ^{
++     anchor = _presentingViewController.view.window;
++   });
++ }
++ return anchor;
+ }
+ #endif // __IPHONE_OS_VERSION_MAX_ALLOWED >= 130000

@@ -258,6 +258,97 @@ class SupabaseService {
         }
     }
     
+    /// Request a password reset email for the given address. Supabase sends a recovery link to the user.
+    func resetPassword(email: String) async throws {
+        guard !supabaseUrl.isEmpty, !supabaseAnonKey.isEmpty else {
+            throw SupabaseError.notConfigured
+        }
+        let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw SupabaseError.authFailed("Please enter your email address.")
+        }
+        
+        let baseUrl = supabaseUrl.hasSuffix("/") ? String(supabaseUrl.dropLast()) : supabaseUrl
+        let url = URL(string: "\(baseUrl)/auth/v1/recover")!
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        
+        // redirect_to so the email link opens the app (must be allowed in Supabase Auth URL config)
+        let body: [String: String] = [
+            "email": trimmed,
+            "redirect_to": "anita://auth/callback"
+        ]
+        request.httpBody = try JSONEncoder().encode(body)
+        
+        print("[Supabase] Password reset request for: \(trimmed)")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SupabaseError.invalidResponse
+        }
+        
+        if let responseString = String(data: data, encoding: .utf8) {
+            print("[Supabase] Recover response (\(httpResponse.statusCode)): \(responseString)")
+        }
+        
+        // Supabase returns 200 and sends the email; it may return an error body even on 200 for "user not found" in some configs
+        if httpResponse.statusCode == 200 {
+            return
+        }
+        let errorString = String(data: data, encoding: .utf8) ?? "Unknown error"
+        if let error = try? JSONDecoder().decode(SupabaseAuthError.self, from: data) {
+            throw SupabaseError.authFailed(error.message ?? error.error ?? "Password reset failed")
+        }
+        throw SupabaseError.authFailed("Password reset failed: \(errorString)")
+    }
+    
+    /// Set session from recovery link tokens (e.g. after user opens anita://...#access_token=...&refresh_token=...&type=recovery).
+    func setSessionFromRecovery(accessToken: String, refreshToken: String) {
+        setSession(accessToken: accessToken, refreshToken: refreshToken)
+        print("[Supabase] Session set from recovery link")
+    }
+    
+    /// Update the current user's password. Call after recovery link has set the session; used to complete "forgot password" flow.
+    func updatePassword(_ newPassword: String) async throws {
+        guard let token = accessToken else {
+            throw SupabaseError.authFailed("No session. Open the reset link from your email first.")
+        }
+        let trimmed = newPassword.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 6 else {
+            throw SupabaseError.authFailed("Password must be at least 6 characters.")
+        }
+        
+        let baseUrl = supabaseUrl.hasSuffix("/") ? String(supabaseUrl.dropLast()) : supabaseUrl
+        let url = URL(string: "\(baseUrl)/auth/v1/user")!
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        let body: [String: String] = ["password": trimmed]
+        request.httpBody = try JSONEncoder().encode(body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SupabaseError.invalidResponse
+        }
+        
+        if httpResponse.statusCode >= 200 && httpResponse.statusCode < 300 {
+            return
+        }
+        let errorString = String(data: data, encoding: .utf8) ?? "Unknown error"
+        if let error = try? JSONDecoder().decode(SupabaseAuthError.self, from: data) {
+            throw SupabaseError.authFailed(error.message ?? error.error ?? "Failed to update password")
+        }
+        throw SupabaseError.authFailed("Failed to update password: \(errorString)")
+    }
+    
     func signOut() {
         setAccessToken(nil)
     }

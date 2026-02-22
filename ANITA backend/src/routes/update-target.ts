@@ -102,7 +102,7 @@ export async function handleUpdateTarget(req: Request, res: Response): Promise<v
       updateData.priority = priority;
     }
 
-    // Update the target
+    // Update the target (persists goal progress so it survives app reload)
     const { data, error } = await supabase
       .from('targets')
       .update(updateData)
@@ -112,7 +112,7 @@ export async function handleUpdateTarget(req: Request, res: Response): Promise<v
       .single();
 
     if (error) {
-      logger.error('Error updating target', { error: error.message, requestId, targetId, userId });
+      logger.error('Error updating target', { error: error.message, requestId, targetId, userId, updateData });
       res.status(500).json({
         error: 'Database error',
         message: 'Failed to update target',
@@ -129,6 +129,8 @@ export async function handleUpdateTarget(req: Request, res: Response): Promise<v
       });
       return;
     }
+
+    logger.info('Target updated successfully', { requestId, targetId, userId, currentAmount: data.current_amount });
 
     // Transform data to match expected format
     const updatedTarget = {

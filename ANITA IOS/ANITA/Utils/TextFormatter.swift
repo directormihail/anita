@@ -23,6 +23,7 @@ struct FormattedTextElement {
     }
 }
 
+@MainActor
 public class TextFormatter {
     /**
      * Format a complete AI response with structure
@@ -337,13 +338,7 @@ public class TextFormatter {
             // Apply heading style to entire text
             attributed.font = .system(size: fontSize, weight: .bold)
             attributed.foregroundColor = .white
-            
-            // Add consistent spacing after headings (heading sits above content)
-            let paragraphStyle = NSMutableParagraphStyle()
-            paragraphStyle.paragraphSpacing = 16
-            paragraphStyle.paragraphSpacingBefore = 0
-            let fullRange = attributed.startIndex..<attributed.endIndex
-            attributed[fullRange].paragraphStyle = paragraphStyle
+            // Spacing is handled by newlines in elementsToAttributedString (NSParagraphStyle not Sendable on iOS)
             
             // Preserve bold formatting within headings
             let text = String(attributed.characters)
@@ -377,14 +372,7 @@ public class TextFormatter {
             attributed = bullet + attributed
             attributed.foregroundColor = .white
             attributed.font = .system(size: 16)
-            
-            // Add consistent line spacing for list items
-            let paragraphStyle = NSMutableParagraphStyle()
-            paragraphStyle.lineSpacing = 4
-            paragraphStyle.paragraphSpacing = 8
-            paragraphStyle.paragraphSpacingBefore = 0
-            let fullRange = attributed.startIndex..<attributed.endIndex
-            attributed[fullRange].paragraphStyle = paragraphStyle
+            // Spacing handled by newlines in elementsToAttributedString
             
             // Ensure bold text in list items uses bold font
             let text = String(attributed.characters)
@@ -412,26 +400,12 @@ public class TextFormatter {
         case .indent:
             attributed.foregroundColor = .white.opacity(0.9)
             attributed.font = .system(size: 15)
-            
-            // Add line spacing for indented content
-            let paragraphStyle = NSMutableParagraphStyle()
-            paragraphStyle.lineSpacing = 4
-            paragraphStyle.paragraphSpacing = 6
-            paragraphStyle.headIndent = CGFloat(element.level ?? 1) * 20
-            let fullRange = attributed.startIndex..<attributed.endIndex
-            attributed[fullRange].paragraphStyle = paragraphStyle
+            // Indent/spacing handled by newlines in elementsToAttributedString
             
         case .text:
             attributed.foregroundColor = .white
             attributed.font = .system(size: 16)
-            
-            // Add consistent line spacing for better readability
-            let paragraphStyle = NSMutableParagraphStyle()
-            paragraphStyle.lineSpacing = 6
-            paragraphStyle.paragraphSpacing = 12
-            paragraphStyle.paragraphSpacingBefore = 0
-            let fullRange = attributed.startIndex..<attributed.endIndex
-            attributed[fullRange].paragraphStyle = paragraphStyle
+            // Spacing handled by newlines in elementsToAttributedString
             
         case .list:
             // Lists are handled by list items

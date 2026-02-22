@@ -49,16 +49,29 @@ class ChatViewModel: ObservableObject {
             || lower.contains("could not connect") || lower.contains("network error")
     }
     
+    /// Thread-safe "run once" for path monitor callback (Swift 6 concurrency).
+    private final class OnceResume {
+        private let lock = NSLock()
+        private var didResume = false
+        func runIfFirst(_ block: () -> Void) {
+            lock.lock()
+            defer { lock.unlock() }
+            guard !didResume else { return }
+            didResume = true
+            block()
+        }
+    }
+    
     /// Returns true if the device has a network path (Wi‑Fi or cellular). Use before health check so we show connection fallback when offline instead of auth.
     private static func hasDeviceNetwork() async -> Bool {
         await withCheckedContinuation { continuation in
             let monitor = NWPathMonitor()
-            var resolved = false
+            let once = OnceResume()
             monitor.pathUpdateHandler = { path in
-                guard !resolved else { return }
-                resolved = true
-                monitor.cancel()
-                continuation.resume(returning: path.status == .satisfied)
+                once.runIfFirst {
+                    monitor.cancel()
+                    continuation.resume(returning: path.status == .satisfied)
+                }
             }
             monitor.start(queue: DispatchQueue.global(qos: .userInitiated))
         }
@@ -419,7 +432,7 @@ class ChatViewModel: ObservableObject {
                 var candidates: [Double] = []
                 for match in matches {
                     guard match.numberOfRanges > 1, let r = Range(match.range(at: 1), in: text) else { continue }
-                    var s = String(text[r]).replacingOccurrences(of: ",", with: ".")
+                    let s = String(text[r]).replacingOccurrences(of: ",", with: ".")
                     if let n = Double(s), n > 0 { candidates.append(n) }
                 }
                 if let maxAmount = candidates.max(), maxAmount > 0 { amountString = String(format: "%.2f", maxAmount) }
@@ -490,7 +503,7 @@ class ChatViewModel: ObservableObject {
                let match = regex.firstMatch(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count)),
                match.numberOfRanges > 1,
                let amountRange = Range(match.range(at: 1), in: text) {
-                var s = String(text[amountRange]).replacingOccurrences(of: ",", with: ".")
+                let s = String(text[amountRange]).replacingOccurrences(of: ",", with: ".")
                 if let n = Double(s), n > 0 { return n }
             }
         }
@@ -501,7 +514,7 @@ class ChatViewModel: ObservableObject {
             var candidates: [Double] = []
             for match in matches {
                 guard match.numberOfRanges > 1, let r = Range(match.range(at: 1), in: text) else { continue }
-                var s = String(text[r]).replacingOccurrences(of: ",", with: ".")
+                let s = String(text[r]).replacingOccurrences(of: ",", with: ".")
                 if let n = Double(s), n > 0 { candidates.append(n) }
             }
             if let maxAmount = candidates.max(), maxAmount > 0 { return maxAmount }
@@ -641,7 +654,7 @@ class ChatViewModel: ObservableObject {
         Task {
             do {
                 // Free tier: 10 messages per month — block and show paywall if over
-                let subscriptionManager = await SubscriptionManager.shared
+                let subscriptionManager = SubscriptionManager.shared
                 if !subscriptionManager.isPremium {
                     let count = getFreeMonthlySentCount()
                     if count >= Self.freeTierMessagesPerMonth {
@@ -733,7 +746,7 @@ class ChatViewModel: ObservableObject {
                 // Save user message
                 if let convId = conversationId {
                     print("[ChatViewModel] Saving user message to conversation: \(convId)")
-                    if !(await SubscriptionManager.shared.isPremium) { incrementFreeMonthlySentCount() }
+                    if !SubscriptionManager.shared.isPremium { incrementFreeMonthlySentCount() }
                     await saveMessage(userMessage, conversationId: convId)
                 }
                 
