@@ -58,15 +58,15 @@ export async function handleSaveTransaction(req: Request, res: Response): Promis
     const { 
       userId, 
       transactionId,
-      type, // 'income' or 'expense'
-      amount,
+      type, // 'income' or 'expense' or 'transfer'
+      amount: amountRaw,
       category,
       description,
       date
     } = body;
 
     // Validate required fields
-    if (!userId || !type || amount === undefined || !description) {
+    if (!userId || !type || amountRaw === undefined || amountRaw === null || !description) {
       res.status(400).json({
         error: 'Missing required fields',
         message: 'userId, type, amount, and description are required',
@@ -74,6 +74,9 @@ export async function handleSaveTransaction(req: Request, res: Response): Promis
       });
       return;
     }
+
+    // Coerce amount to number (iOS sends number; some clients may send string)
+    const amount = typeof amountRaw === 'string' ? parseFloat(amountRaw) : Number(amountRaw);
 
     // Validate type
     if (type !== 'income' && type !== 'expense' && type !== 'transfer') {
@@ -86,7 +89,7 @@ export async function handleSaveTransaction(req: Request, res: Response): Promis
     }
 
     // Validate amount
-    if (typeof amount !== 'number' || amount <= 0) {
+    if (typeof amount !== 'number' || Number.isNaN(amount) || amount <= 0) {
       res.status(400).json({
         error: 'Invalid amount',
         message: 'amount must be a positive number',
@@ -123,7 +126,7 @@ export async function handleSaveTransaction(req: Request, res: Response): Promis
       } else if (lower.includes('from goal')) {
         normalizedCategory = 'Transfer from goal';
       } else {
-        normalizedCategory = cat.isEmpty ? 'Transfer' : normalizeCategory(category);
+        normalizedCategory = !cat || cat.length === 0 ? 'Transfer' : normalizeCategory(category);
       }
       finalDescription = description;
     } else {
@@ -263,7 +266,14 @@ export async function handleSaveTransaction(req: Request, res: Response): Promis
       }
     }
 
-    logger.info('Transaction saved successfully', { requestId, userId, type, amount, transactionId: transactionData.message_id });
+    logger.info('Transaction saved successfully', {
+      requestId,
+      userId,
+      type,
+      amount,
+      transactionId: transactionData.message_id,
+      ...(isTransfer && { transfer: true, transaction_date: transactionData.transaction_date })
+    });
 
     // Use inserted row date so client and get-transactions see the same value (transaction_date or created_at)
     const inserted = result.data as any;

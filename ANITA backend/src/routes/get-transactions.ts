@@ -111,6 +111,29 @@ export async function handleGetTransactions(req: Request, res: Response): Promis
         res.status(500).json({ error: 'Database error', message: 'Failed to fetch transactions', requestId });
         return;
       }
+      // Fallback: include transfers from last 90 days that fall in this month (in case transaction_date/created_at filter missed them)
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setUTCDate(ninetyDaysAgo.getUTCDate() - 90);
+      const { data: recentTransfers } = await supabase
+        .from('anita_data')
+        .select('*')
+        .eq('account_id', userId)
+        .eq('data_type', 'transaction')
+        .eq('transaction_type', 'transfer')
+        .gte('created_at', ninetyDaysAgo.toISOString());
+      const existingIds = new Set((data || []).map((r: any) => r.message_id || r.id));
+      const inMonth = (r: any) => {
+        const d = r.transaction_date || r.created_at || '';
+        return d >= monthStartStr && d <= monthEndStr;
+      };
+      const extra = (recentTransfers || []).filter((r: any) => !existingIds.has(r.message_id || r.id) && inMonth(r));
+      if (extra.length > 0) {
+        data = [...(data || []), ...extra].sort((a: any, b: any) => {
+          const tA = a.transaction_date || a.created_at || '';
+          const tB = b.transaction_date || b.created_at || '';
+          return tB.localeCompare(tA);
+        });
+      }
     } else if (month) {
       const [yearStr, monthStr] = month.split('-');
       const { start: monthStartStr, end: monthEndStr } = monthStart(monthStr, yearStr);

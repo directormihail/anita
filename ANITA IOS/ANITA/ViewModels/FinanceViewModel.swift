@@ -42,9 +42,6 @@ class FinanceViewModel: ObservableObject {
     /// True after historical data has been loaded at least once (e.g. when user first opens Insights).
     var hasLoadedHistoricalDataOnce = false
     
-    /// Applied once after next loadData so Available Funds stays correct if API hasn't included the transfer yet. Then cleared.
-    private var pendingTransferAdjustment: Double = 0
-    
     private let networkService = NetworkService.shared
     let userId: String
 
@@ -120,15 +117,13 @@ class FinanceViewModel: ObservableObject {
                     self.monthlyIncome = metrics.metrics.monthlyIncome
                     self.monthlyExpenses = metrics.metrics.monthlyExpenses
                     self.monthlyBalance = metrics.metrics.monthlyBalance
-                    if self.pendingTransferAdjustment != 0 {
-                        self.monthlyBalance += self.pendingTransferAdjustment
-                        self.pendingTransferAdjustment = 0
-                    }
-                    // Keep optimistically added transactions (e.g. transfer to goal) that aren't in the API response yet
+                    // Only ever store the selected month's transactions so the list never shows other months.
                     let fromAPI = transactionsResponse.transactions
-                    let apiIds = Set(fromAPI.map(\.id))
+                    let fromAPIInSelectedMonth = fromAPI.filter { Self.isTransactionInMonth($0, month: month, year: year) }
+                    let apiIds = Set(fromAPIInSelectedMonth.map(\.id))
                     let onlyLocal = self.transactions.filter { !apiIds.contains($0.id) }
-                    self.transactions = onlyLocal + fromAPI
+                    let onlyLocalInSelectedMonth = onlyLocal.filter { Self.isTransactionInMonth($0, month: month, year: year) }
+                    self.transactions = onlyLocalInSelectedMonth + fromAPIInSelectedMonth
                     self.targets = targetsResponse.targets
                     self.goals = targetsResponse.goals ?? []
                     self.assets = assetsResponse.assets
@@ -170,6 +165,33 @@ class FinanceViewModel: ObservableObject {
     
     func refresh() {
         loadData()
+    }
+
+    /// True if the transaction's date falls in the given calendar month/year (used to show only selected month).
+    private static func isTransactionInMonth(_ transaction: TransactionItem, month: Int, year: Int) -> Bool {
+        guard let d = parseTransactionDate(transaction.date) else { return false }
+        let cal = Calendar.current
+        return cal.component(.month, from: d) == month && cal.component(.year, from: d) == year
+    }
+    
+    /// Parse transaction date string (ISO8601 with or without time, or date-only).
+    private static func parseTransactionDate(_ dateString: String) -> Date? {
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = iso.date(from: dateString) { return d }
+        iso.formatOptions = [.withInternetDateTime]
+        if let d = iso.date(from: dateString) { return d }
+        iso.formatOptions = [.withFullDate]
+        if let d = iso.date(from: dateString) { return d }
+        return nil
+    }
+
+    /// Transactions for the selected month only (income, expense, and transfers). Use this for display so we never show another month.
+    var transactionsForSelectedMonth: [TransactionItem] {
+        let cal = Calendar.current
+        let month = cal.component(.month, from: selectedMonth)
+        let year = cal.component(.year, from: selectedMonth)
+        return transactions.filter { Self.isTransactionInMonth($0, month: month, year: year) }
     }
 
     /// Add a new transaction to the list immediately (e.g. after creating a transfer). List is newest-first.
@@ -225,22 +247,18 @@ class FinanceViewModel: ObservableObject {
         }
     }
 
-    /// Update Available Funds when user adds money to a goal (transfer to goal). Call immediately so the card shows the correct value.
+    // MARK: - Add/Take goal (transfer) — Available Funds
+    // Flow: 1) Update target via API 2) Create transfer transaction 3) Update local goal progress, prepend transaction, adjust monthlyBalance. We do NOT refresh after add/take so the UI stays correct; a later user-driven load (change month, pull, reopen) syncs from API.
+    // Previously: a delayed refresh ran after add/take and clearPendingTransferAdjustment() was called before refresh(), so loadData() never applied the pending correction — Available Funds could show the wrong value. Removed delayed refresh and pending logic; local updates are the source of truth until next load.
+
+    /// Update Available Funds when user adds money to a goal (transfer to goal).
     func subtractFromAvailableFunds(_ amount: Double) {
         monthlyBalance -= amount
-        pendingTransferAdjustment -= amount
     }
 
-    /// Update Available Funds when user takes money from a goal (transfer from goal). Call immediately so the card shows the correct value.
+    /// Update Available Funds when user takes money from a goal (transfer from goal).
     func addToAvailableFunds(_ amount: Double) {
         monthlyBalance += amount
-        pendingTransferAdjustment += amount
-    }
-
-    /// Clear in-flight transfer adjustment before refetching so we don't double-apply when the API already includes the transfer.
-    /// Call this right before refresh() after adding/taking money to/from a goal.
-    func clearPendingTransferAdjustment() {
-        pendingTransferAdjustment = 0
     }
 
     /// Refreshes only XP stats (e.g. after earning XP in chat). Keeps Finance tab XP card in sync.
@@ -279,6 +297,21 @@ class FinanceViewModel: ObservableObject {
     func changeComparisonPeriod(to period: ComparisonPeriod) {
         comparisonPeriod = period
         // Data is already loaded once when Insights was first opened; slider only filters that data.
+    }
+    
+    /// First of the currently selected month in UTC (ISO string). Use this for new transfers so they appear in the correct month and update Available Funds.
+    var selectedMonthFirstDayISO: String {
+        let local = Calendar.current
+        let comps = local.dateComponents([.year, .month], from: selectedMonth)
+        let year = comps.year ?? 2025
+        let month = comps.month ?? 1
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC") ?? .gmt
+        let first = utc.date(from: DateComponents(year: year, month: month, day: 1)) ?? Date()
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        return formatter.string(from: first)
     }
     
     // Calculate spending for a specific category in the selected period
@@ -552,7 +585,8 @@ class FinanceViewModel: ObservableObject {
                         do {
                             let metrics = try await self.networkService.getFinancialMetrics(userId: uid, month: month, year: year)
                             let monthStart = calendar.date(from: DateComponents(year: year, month: month, day: 1)) ?? monthDate
-                            let balanceForTotal = metrics.metrics.monthlyIncome - metrics.metrics.monthlyExpenses
+                            // Use monthlyBalance (includes transfers to/from goals) so Funds Total is consistent across months
+                            let balanceForTotal = metrics.metrics.monthlyBalance
                             return MonthMetricsResult(
                                 id: "\(year)-\(month)",
                                 monthStart: monthStart,
@@ -724,20 +758,16 @@ class FinanceViewModel: ObservableObject {
         return assetsValue + goalsValue + targetsValue
     }
     
-    /// Funds Total to display: when viewing current month use API totalBalance (all-time cumulative);
-    /// when viewing a past month use cumulative total up to that month (requires balance history).
+    /// Funds Total to display: always cumulative through the selected month (so next month can be less than previous if available funds are negative).
+    /// Uses monthlyBalance for the selected month so transfers to/from goals are included.
     var displayTotalBalance: Double {
-        let calendar = Calendar.current
-        let isCurrentMonth = calendar.isDate(selectedMonth, equalTo: Date(), toGranularity: .month)
-        if isCurrentMonth {
-            return totalBalance
-        }
         return cumulativeTotalBalance
     }
     
     // Calculate cumulative total balance up to selected month
-    // This sums all monthly balances from the first month up to and including the selected month
-    // The balance will change as the user selects different months
+    // This sums all monthly balances from the first month up to and including the selected month.
+    // Uses monthlyBalance for the selected month (includes transfers to/from goals) so that when
+    // available funds go negative, the next month's Funds Total is less than the previous.
     var cumulativeTotalBalance: Double {
         let calendar = Calendar.current
         let selectedMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: selectedMonth)) ?? selectedMonth
@@ -745,9 +775,8 @@ class FinanceViewModel: ObservableObject {
         // Get all monthly balances sorted chronologically
         let sortedHistory = monthlyBalanceHistory.sorted { $0.month < $1.month }
         
-        // Calculate balance for the selected month
-        // Use monthlyIncome - monthlyExpenses since these are loaded for the selectedMonth
-        let selectedMonthBalance = monthlyIncome - monthlyExpenses
+        // Use monthlyBalance (income - expenses - transfers to goal + transfers from goal) for the selected month
+        let selectedMonthBalance = monthlyBalance
         
         // If no history available yet, return just the selected month's balance
         if sortedHistory.isEmpty {
@@ -757,7 +786,6 @@ class FinanceViewModel: ObservableObject {
         // Sum all balances from history that are BEFORE the selected month
         let previousMonthsBalance = sortedHistory
             .filter { balance in
-                // Include only months that are strictly before the selected month
                 balance.month < selectedMonthStart
             }
             .reduce(0.0) { $0 + $1.balance }
@@ -767,15 +795,17 @@ class FinanceViewModel: ObservableObject {
             calendar.isDate(balance.month, equalTo: selectedMonthStart, toGranularity: .month)
         }
         
-        if hasSelectedMonthInHistory {
-            // If selected month is in history, sum all balances up to and including it
+        let isViewingCurrentMonth = calendar.isDate(selectedMonthStart, equalTo: Date(), toGranularity: .month)
+        
+        if hasSelectedMonthInHistory && !isViewingCurrentMonth {
+            // Past month: use history
             return sortedHistory
                 .filter { balance in
                     balance.month <= selectedMonthStart
                 }
                 .reduce(0.0) { $0 + $1.balance }
         } else {
-            // If selected month is not in history, use the loaded monthlyIncome/monthlyExpenses
+            // Current month or not in history: use live monthlyBalance so new transactions/transfers update Funds Total in real time
             return previousMonthsBalance + selectedMonthBalance
         }
     }

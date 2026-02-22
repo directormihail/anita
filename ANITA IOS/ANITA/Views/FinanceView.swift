@@ -2097,7 +2097,7 @@ struct FinanceView: View {
                         .liquidGlass(cornerRadius: 18)
                         .padding(.horizontal, 20)
                         .transition(.opacity)
-                } else if viewModel.transactions.isEmpty {
+                } else if viewModel.transactionsForSelectedMonth.isEmpty {
                     VStack(spacing: 20) {
                         Image(systemName: "chart.bar.doc.horizontal")
                             .font(.system(size: 48, weight: .light))
@@ -2157,8 +2157,8 @@ struct FinanceView: View {
                     .padding(.horizontal, 20)
                     .transition(.opacity)
                 } else {
-                    // Always show all transactions - Transactions section is independent
-                    let allTransactions = viewModel.transactions
+                    // Only show transactions and transfers for the selected month
+                    let allTransactions = viewModel.transactionsForSelectedMonth
                     
                     // Row height: ~85px (28px vertical padding + ~57px content height)
                     let rowHeight: CGFloat = 85
@@ -2208,7 +2208,7 @@ struct FinanceView: View {
                                     )
                             }
                             
-                            // Transaction list - always shows all transactions
+                            // Transaction list - selected month only
                             ForEach(Array(allTransactions.enumerated()), id: \.element.id) { index, transaction in
                                 TransactionRow(transaction: transaction, viewModel: viewModel)
                                     .opacity(isTransactionsExpanded ? 1 : 0)
@@ -3211,18 +3211,6 @@ struct AddMoneyToGoalSheet: View {
         return formatter.string(from: NSNumber(value: 0)) ?? "0"
     }
     
-    /// First of selected month in UTC so backend month filter includes the transfer.
-    private var selectedMonthDateString: String? {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "UTC") ?? .gmt
-        let comps = calendar.dateComponents([.year, .month], from: viewModel.selectedMonth)
-        guard let firstOfMonthUTC = calendar.date(from: comps) else { return nil }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        formatter.timeZone = TimeZone(identifier: "UTC")
-        return formatter.string(from: firstOfMonthUTC)
-    }
-    
     private func addMoneyToGoal() {
         guard let amountValue = amount.parseAmount(), amountValue > 0 else {
             errorMessage = "Please enter a valid amount"
@@ -3237,36 +3225,32 @@ struct AddMoneyToGoalSheet: View {
                 let userId = viewModel.userId
                 let newCurrentAmount = target.currentAmount + amountValue
                 
-                // Update goal balance first so we don't record a transfer if target update fails
+                // 1) Persist to backend first (goal balance then transfer). Only update UI after both succeed.
                 _ = try await NetworkService.shared.updateTarget(
                     userId: userId,
                     targetId: target.id,
                     currentAmount: newCurrentAmount
                 )
-                await MainActor.run { viewModel.updateGoalProgress(targetId: target.id, newCurrentAmount: newCurrentAmount) }
-                
-                // Record transfer to goal (reduces Available Funds; not income/expense)
                 let newTransaction = try await NetworkService.shared.createTransaction(
                     userId: userId,
                     type: "transfer",
                     amount: amountValue,
                     category: "Transfer to goal",
                     description: "To goal: \(target.title)",
-                    date: selectedMonthDateString
+                    date: viewModel.selectedMonthFirstDayISO
                 )
+                // 2) Update UI only after backend has saved both (so we never show state that didn’t persist).
                 await MainActor.run {
+                    viewModel.updateGoalProgress(targetId: target.id, newCurrentAmount: newCurrentAmount)
                     viewModel.prependTransaction(newTransaction)
                     viewModel.subtractFromAvailableFunds(amountValue)
                     isAdding = false
                     dismiss()
                     NotificationCenter.default.post(name: NSNotification.Name("ExpandTransactionsSection"), object: nil)
                 }
-                // Delay refresh so backend can persist; then refetch so Available Funds stays correct from API
-                try? await Task.sleep(nanoseconds: 700_000_000)
-                await MainActor.run {
-                    viewModel.clearPendingTransferAdjustment()
-                    viewModel.refresh()
-                }
+                // 3) Refresh from backend so Available Funds and transaction list come from server (confirms persistence).
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                await MainActor.run { viewModel.refresh() }
             } catch {
                 print("[AddMoneyToGoalSheet] Error: \(error.localizedDescription)")
                 await MainActor.run {
@@ -4438,51 +4422,37 @@ struct TakeMoneyFromGoalSheet: View {
         isProcessing = true
         errorMessage = nil
         
-        let selectedMonthDateString: String? = {
-            var calendar = Calendar(identifier: .gregorian)
-            calendar.timeZone = TimeZone(identifier: "UTC") ?? .gmt
-            let comps = calendar.dateComponents([.year, .month], from: viewModel.selectedMonth)
-            guard let firstOfMonthUTC = calendar.date(from: comps) else { return nil }
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime]
-            formatter.timeZone = TimeZone(identifier: "UTC")
-            return formatter.string(from: firstOfMonthUTC)
-        }()
-        
         Task {
             do {
                 let userId = viewModel.userId
                 let newCurrentAmount = target.currentAmount - amountValue
                 
-                // Update goal balance first so we don't record a transfer if target update fails
+                // 1) Persist to backend first (goal balance then transfer). Only update UI after both succeed.
                 _ = try await NetworkService.shared.updateTarget(
                     userId: userId,
                     targetId: target.id,
                     currentAmount: newCurrentAmount
                 )
-                await MainActor.run { viewModel.updateGoalProgress(targetId: target.id, newCurrentAmount: newCurrentAmount) }
-                
-                // Record transfer from goal (increases Available Funds; not income/expense)
                 let newTransaction = try await NetworkService.shared.createTransaction(
                     userId: userId,
                     type: "transfer",
                     amount: amountValue,
                     category: "Transfer from goal",
                     description: "From goal: \(target.title)",
-                    date: selectedMonthDateString
+                    date: viewModel.selectedMonthFirstDayISO
                 )
+                // 2) Update UI only after backend has saved both.
                 await MainActor.run {
+                    viewModel.updateGoalProgress(targetId: target.id, newCurrentAmount: newCurrentAmount)
                     viewModel.prependTransaction(newTransaction)
                     viewModel.addToAvailableFunds(amountValue)
                     isProcessing = false
                     dismiss()
                     NotificationCenter.default.post(name: NSNotification.Name("ExpandTransactionsSection"), object: nil)
                 }
-                try? await Task.sleep(nanoseconds: 700_000_000)
-                await MainActor.run {
-                    viewModel.clearPendingTransferAdjustment()
-                    viewModel.refresh()
-                }
+                // 3) Refresh from backend to confirm persistence.
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                await MainActor.run { viewModel.refresh() }
             } catch {
                 print("[TakeMoneyFromGoalSheet] Error: \(error.localizedDescription)")
                 await MainActor.run {
@@ -9966,10 +9936,11 @@ struct EnhancedIncomeExpenseBarChart: View {
                         if let selectedIndex = selectedIndex, selectedIndex < sortedData.count {
                             return sortedData[selectedIndex]
                         } else {
-                            // Show totals when nothing is selected
+                            // Show totals across the selected months when nothing is selected.
+                            // Income and Expense = sums; Balance = total funds (sum of each month's balance, including transfers).
                             let totalIncome = sortedData.reduce(0) { $0 + $1.income }
                             let totalExpenses = sortedData.reduce(0) { $0 + $1.expenses }
-                            let totalBalance = totalIncome - totalExpenses
+                            let totalBalance = sortedData.reduce(0) { $0 + $1.balance }
                             return ComparisonPeriodData(
                                 id: "total",
                                 month: sortedData.last?.month ?? Date(),
