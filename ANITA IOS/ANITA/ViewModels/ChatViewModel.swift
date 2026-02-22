@@ -761,6 +761,11 @@ class ChatViewModel: ObservableObject {
                     }
                 }
                 
+                // When backend persisted a transaction (income/expense via chat), Finance tab should refresh so the new transaction appears
+                if response.transactionAdded == true {
+                    NotificationCenter.default.post(name: NSNotification.Name("TransactionAdded"), object: nil)
+                }
+                
                 // Save assistant message
                 if let convId = conversationId {
                     print("[ChatViewModel] Saving assistant message to conversation: \(convId)")

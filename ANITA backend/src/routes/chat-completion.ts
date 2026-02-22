@@ -387,6 +387,9 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
     const supabase = getSupabaseClient();
     const clientCurrency = (typeof bodyUserCurrency === 'string' && bodyUserCurrency) ? bodyUserCurrency : (typeof bodyCurrencyCode === 'string' && bodyCurrencyCode) ? bodyCurrencyCode : undefined;
     let transactionAddedInPreCall = false;
+    let transactionAddedForResponse = false; // Set when a transaction was persisted (pre- or post-call) so client can refresh Finance
+    let verifiedPreCallSuccessMessage: string | null = null; // Only set after DB verify; returned to user so ✅ is never shown before transaction is in DB
+    let hadFullTxWaitingConfirmation = false; // True when we had type+amount+category but user didn't say Yes — only pre-call may add, never post-call
     if (userId && supabase) {
       try {
         // Use same isPremium we already computed (respects client isPremium: false) so freemium always gets P1/P2-only prompt
@@ -403,19 +406,53 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
           resolvedUserCurrency = systemResult.userCurrency;
         }
 
-        // If we can extract a full transaction from the conversation, add it to the DB first and verify;
-        // then tell the AI to confirm. This way we only confirm after the backend has actually added it.
+        // If we can extract a full transaction from the conversation (type + amount + category from full context), add it to the DB first and verify;
+        // then tell the AI to confirm. Never show success to the user until the transaction is actually saved.
         // Never treat limit-flow messages (e.g. user confirming "87.52" or "Dining Out") as a new transaction.
         const conversationIsAboutLimit = conversationContextSuggestLimitFlow(sanitizedMessages);
         const txFromConversation = !conversationIsAboutLimit ? extractTransactionFromConversation(sanitizedMessages) : null;
-        if (txFromConversation && systemPrompt) {
+        const hasAllRequired = txFromConversation
+          && txFromConversation.type
+          && Number.isFinite(txFromConversation.amount)
+          && txFromConversation.amount > 0
+          && txFromConversation.category;
+        if (txFromConversation && !hasAllRequired) {
+          logger.info('Transaction extraction incomplete — not inserting until we have type, amount, and category', {
+            requestId,
+            userId,
+            hasType: !!txFromConversation.type,
+            hasAmount: Number.isFinite(txFromConversation.amount) && txFromConversation.amount > 0,
+            hasCategory: !!txFromConversation.category
+          });
+        }
+        const lastUserMessage = sanitizedMessages.filter((m: { role: string }) => m.role === 'user').pop();
+        const lastUserContent = typeof (lastUserMessage as any)?.content === 'string' ? (lastUserMessage as any).content?.trim() ?? '' : '';
+        const lastMessageIsConfirmation = isShortConfirmation(lastUserContent);
+        const normCategory = hasAllRequired ? normalizeCategory(txFromConversation!.category) : '';
+        // Dedupe: never insert the same transaction twice (e.g. duplicate request or race). One transaction only.
+        const recentDuplicate = hasAllRequired && lastMessageIsConfirmation ? await (async () => {
+          const since = new Date(Date.now() - 90 * 1000).toISOString();
+          const { data: recent } = await supabase
+            .from('anita_data')
+            .select('message_id')
+            .eq('account_id', userId)
+            .eq('data_type', 'transaction')
+            .eq('transaction_type', txFromConversation!.type)
+            .eq('transaction_amount', txFromConversation!.amount)
+            .eq('transaction_category', normCategory)
+            .gte('created_at', since)
+            .limit(1);
+          return (recent && recent.length > 0);
+        })() : false;
+        // Insert ONLY when user confirmed (Yep/Yes/As it is) and no recent duplicate. Then reply with ONLY the canned confirmation.
+        if (hasAllRequired && systemPrompt && lastMessageIsConfirmation && !recentDuplicate) {
           const messageId = `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
           const transactionData: any = {
             account_id: userId,
             message_text: txFromConversation.description,
             transaction_type: txFromConversation.type,
             transaction_amount: txFromConversation.amount,
-            transaction_category: normalizeCategory(txFromConversation.category),
+            transaction_category: normCategory,
             transaction_description: txFromConversation.description,
             data_type: 'transaction',
             message_id: messageId,
@@ -427,25 +464,47 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
             .select()
             .single();
           if (!insertErr) {
-            const { data: verified } = await supabase
+            const { data: verified, error: verifyErr } = await supabase
               .from('anita_data')
               .select('message_id')
               .eq('account_id', userId)
               .eq('message_id', messageId)
               .eq('data_type', 'transaction')
               .maybeSingle();
-            if (verified) {
+            if (!verifyErr && verified) {
               transactionAddedInPreCall = true;
+              transactionAddedForResponse = true;
               const currencySymbol = getCurrencySymbolForCode(resolvedUserCurrency);
-              systemPrompt += `\n\n[BACKEND INSTRUCTION - FOLLOW EXACTLY] The following transaction was just successfully added to the database by the system: ${txFromConversation.type} ${currencySymbol}${txFromConversation.amount} in category "${txFromConversation.category}" (${txFromConversation.description}). Confirm this to the user in a short, friendly message with ✅. Do NOT say you are about to add it or will add it — it is already saved.`;
-              logger.info('Pre-call transaction added and verified', { requestId, userId, type: txFromConversation.type, amount: txFromConversation.amount });
+              if (txFromConversation.type === 'income') {
+                verifiedPreCallSuccessMessage = `Your income of ${currencySymbol}${txFromConversation.amount} from ${txFromConversation.category} has been added! ✅`;
+              } else {
+                verifiedPreCallSuccessMessage = `Your expense of ${currencySymbol}${txFromConversation.amount} on ${txFromConversation.category} has been added! ✅`;
+              }
+              logger.info('Pre-call transaction added and verified in DB — will return canned success', { requestId, userId, type: txFromConversation.type, amount: txFromConversation.amount });
               await supabase.from('xp_rules').upsert(
                 { id: 'transaction_added', category: 'Engagement', name: 'Add a transaction', xp_amount: 10, description: 'Add any income, expense, or transfer', frequency: 'event', extra_meta: {}, updated_at: new Date().toISOString() },
                 { onConflict: 'id' }
               );
               await supabase.rpc('award_xp', { p_user_id: userId, p_rule_id: 'transaction_added', p_metadata: {} }).then(() => {}, () => {});
+            } else {
+              logger.warn('Pre-call insert succeeded but DB verification failed', { requestId, messageId, verifyError: (verifyErr as any)?.message });
             }
+          } else {
+            logger.warn('Pre-call transaction insert failed', { requestId, error: insertErr.message });
           }
+        } else if (hasAllRequired && systemPrompt && lastMessageIsConfirmation && recentDuplicate) {
+          const currencySymbol = getCurrencySymbolForCode(resolvedUserCurrency);
+          if (txFromConversation.type === 'income') {
+            verifiedPreCallSuccessMessage = `Your income of ${currencySymbol}${txFromConversation.amount} from ${txFromConversation.category} has been added! ✅`;
+          } else {
+            verifiedPreCallSuccessMessage = `Your expense of ${currencySymbol}${txFromConversation.amount} on ${txFromConversation.category} has been added! ✅`;
+          }
+          transactionAddedForResponse = true;
+          logger.info('Skipped duplicate insert — returning same confirmation', { requestId, userId, type: txFromConversation.type, amount: txFromConversation.amount });
+        } else if (hasAllRequired && systemPrompt && !lastMessageIsConfirmation) {
+          hadFullTxWaitingConfirmation = true; // Only pre-call may insert when user says Yes; never insert in post-call from AI reply
+          const currencySymbol = getCurrencySymbolForCode(resolvedUserCurrency);
+          systemPrompt += `\n\n[BACKEND INSTRUCTION - OBEY] You have a complete transaction from the user: ${txFromConversation.type} ${currencySymbol}${txFromConversation.amount}, category "${txFromConversation.category}". Do NOT insert it yet — the backend will insert only when the user says Yes/Yep/Confirm. Reply with ONLY this, nothing else: "Say Yes to add it." Do not repeat the amount, category, or ask "Please confirm the amount" or "Just to confirm". One short line only.`;
         }
         // Always insert backend system prompt at the beginning, even if the client already sent a system message.
         if (systemPrompt) {
@@ -493,6 +552,13 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
         res.status(200).json({ response: paywallResponse, requestId, requiresUpgrade: true });
         return;
       }
+    }
+
+    // Transaction was added in pre-call and verified in DB — return canned success so user only sees ✅ after it is really saved. Skip AI call.
+    if (verifiedPreCallSuccessMessage) {
+      logger.info('Returning verified pre-call success message (transaction in DB)', { requestId });
+      res.status(200).json({ response: verifiedPreCallSuccessMessage, requestId, transactionAdded: true });
+      return;
     }
 
     // Call OpenAI API with timeout (prevents hanging requests)
@@ -583,23 +649,41 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
       logger.info('Replaced standard goodbye with friendly Duolingo-style goodbye', { requestId });
     }
 
-    // When AI confirms it added an expense/income, we MUST persist and verify in DB before showing success.
-    // Never show a confirmation (✅) to the user unless the transaction is actually in the database.
-    // CRITICAL: Never treat limit/goal confirmations as transactions — they go only to targets, not anita_data.
-    if (userId && supabase && !transactionAddedInPreCall && !isLimitOrGoalConfirmation(aiResponse)) {
+    // When AI confirms it added an expense/income, we MUST persist then VERIFY in DB before showing success.
+    // Never show ✅ to the user unless the transaction is verified in the database. This is the "check" the user asked for.
+    if (userId && supabase && !transactionAddedInPreCall && !hadFullTxWaitingConfirmation && !isLimitOrGoalConfirmation(aiResponse)) {
       try {
         let tx = parseTransactionFromAiResponse(sanitizedMessages, aiResponse);
         if (!tx && looksLikeTransactionConfirmation(aiResponse)) {
           tx = parseTransactionFromConfirmationFallback(sanitizedMessages, aiResponse);
         }
         if (tx) {
+          const normCat = normalizeCategory(tx.category);
+          const since = new Date(Date.now() - 90 * 1000).toISOString();
+          const { data: recentDup } = await supabase
+            .from('anita_data')
+            .select('message_id')
+            .eq('account_id', userId)
+            .eq('data_type', 'transaction')
+            .eq('transaction_type', tx.type)
+            .eq('transaction_amount', tx.amount)
+            .eq('transaction_category', normCat)
+            .gte('created_at', since)
+            .limit(1);
+          if (recentDup && recentDup.length > 0) {
+            const sym = getCurrencySymbolForCode((req as any).body?.userCurrency || (req as any).body?.currencyCode || 'USD');
+            finalResponse = tx.type === 'income'
+              ? `Your income of ${sym}${tx.amount} from ${tx.category} has been added! ✅`
+              : `Your expense of ${sym}${tx.amount} on ${tx.category} has been added! ✅`;
+            transactionAddedForResponse = true;
+          } else {
           const messageId = `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
           const transactionData: any = {
             account_id: userId,
             message_text: tx.description,
             transaction_type: tx.type,
             transaction_amount: tx.amount,
-            transaction_category: normalizeCategory(tx.category),
+            transaction_category: normCat,
             transaction_description: tx.description,
             data_type: 'transaction',
             message_id: messageId,
@@ -626,6 +710,7 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
               logger.warn('Transaction insert succeeded but verification failed', { requestId, messageId, verifyError: verifyErr?.message });
               finalResponse = "I couldn't save that transaction. Please try again or add it from the Finance page.";
             } else {
+              transactionAddedForResponse = true;
               logger.info('Persisted and verified AI-confirmed transaction', { requestId, userId, type: tx.type, amount: tx.amount, category: tx.category });
               await supabase.from('xp_rules').upsert(
                 {
@@ -650,8 +735,8 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
               }
             }
           }
+          }
         } else if (looksLikeTransactionConfirmation(aiResponse)) {
-          // AI response looks like a success (✅ + amount) but we couldn't parse or persist — never show false success
           logger.warn('AI sent confirmation-like response but no transaction persisted', { requestId, aiResponsePreview: aiResponse.slice(0, 120) });
           finalResponse = "I couldn't save that transaction. Please try again or add it from the Finance page.";
         }
@@ -1017,7 +1102,9 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
       response: finalResponse,
       requestId
     };
-    
+    if (transactionAddedForResponse) {
+      responseData.transactionAdded = true;
+    }
     // Include target ID if one was created (for savings goals)
     if ((res as any).createdTargetId && !(res as any).createdTargetType) {
       responseData.targetId = (res as any).createdTargetId;
@@ -1166,6 +1253,14 @@ function extractAmountFromUserMessage(userMessage: string): number | null {
     if (Number.isFinite(num) && num > 0) decimalAmounts.push(num);
   }
   if (decimalAmounts.length > 0) return Math.max(...decimalAmounts);
+  // Whole numbers (e.g. "got 1000 from it", "earned 500") — avoid tiny numbers that are counts/frequency
+  const wholeRe = /\b(\d{1,7})\b/g;
+  const wholeAmounts: number[] = [];
+  while ((match = wholeRe.exec(t)) !== null) {
+    const num = parseInt(match[1], 10);
+    if (Number.isFinite(num) && num >= 1 && num < 1e7) wholeAmounts.push(num);
+  }
+  if (wholeAmounts.length > 0) return Math.max(...wholeAmounts);
   return null;
 }
 
@@ -1177,8 +1272,8 @@ export function parseTransactionFromAiResponse(
   const lastUserMessage = messages.filter(m => m.role === 'user').pop()?.content?.trim() || '';
 
   // AI confirmed it added a transaction (broad patterns so we don't miss phrasings)
-  const addedExpense = /(?:I've added your expense|added your expense|I've noted your .*?expense|noted your .*?expense|Got it[,!].*?added.*?expense|Done[!.]?.*?added.*?expense|Saved your expense|added.*?expense of|expense of \$\d)/i.test(r);
-  const addedIncome = /(?:I've added your income|added your income|I've noted your .*?income|noted your .*?income|Got it[,!].*?added.*?income|Done[!.]?.*?added.*?income|Saved your income|added.*?income of|income of \$\d)/i.test(r);
+  const addedExpense = /(?:I've added your expense|added your expense|your expense has been added|I've noted your .*?expense|noted your .*?expense|Got it[,!].*?added.*?expense|Done[!.]?.*?added.*?expense|Saved your expense|added.*?expense of|expense of \$\d|Confirming:.*expense)/i.test(r);
+  const addedIncome = /(?:I've added your income|added your income|your income has been added|I've noted your .*?income|noted your .*?income|Got it[,!].*?added.*?income|Done[!.]?.*?added.*?income|Saved your income|added.*?income of|income of \$\d|Confirming:.*(?:income|Freelance|Salary))/i.test(r);
   const type: 'expense' | 'income' | null = addedExpense ? 'expense' : addedIncome ? 'income' : null;
   if (!type) return null;
 
@@ -1194,10 +1289,11 @@ export function parseTransactionFromAiResponse(
   } else if (userAmount != null) amount = userAmount;
   if (!Number.isFinite(amount) || amount <= 0) return null;
 
-  // Category: "for Personal Care", "under Personal Care", or "your fishing expense of $120"
+  // Category: "for Personal Care", "under Personal Care", "Confirming: Freelance & Side Income, €1000", or "your fishing expense of $120"
   const categoryMatch = r.match(/(?:for|under)\s+([^.().]+?)(?:\s*\(|\.|,|\s*$)/i);
-  const yourCategoryExpense = !categoryMatch ? r.match(/(?:your\s+)?([a-z\s&]+?)\s+expense\s+(?:of|$)/i) : null;
-  let categoryFromPhrase = categoryMatch ? categoryMatch[1].trim() : (yourCategoryExpense && yourCategoryExpense[1] ? yourCategoryExpense[1].trim() : null);
+  const confirmingMatch = !categoryMatch ? r.match(/Confirming:\s*([^,]+?),?\s*[$€£¥\d]/i) : null;
+  const yourCategoryExpense = !categoryMatch && !confirmingMatch ? r.match(/(?:your\s+)?([a-z\s&]+?)\s+expense\s+(?:of|$)/i) : null;
+  let categoryFromPhrase = categoryMatch ? categoryMatch[1].trim() : (confirmingMatch && confirmingMatch[1] ? confirmingMatch[1].trim() : (yourCategoryExpense && yourCategoryExpense[1] ? yourCategoryExpense[1].trim() : null));
   // For expense, never use income-only categories
   if (type === 'expense' && (categoryFromPhrase === 'Salary' || categoryFromPhrase === 'Freelance & Side Income')) categoryFromPhrase = null;
   const category = normalizeCategory(categoryFromPhrase || 'Other');
@@ -1275,14 +1371,17 @@ function parseTransactionFromConfirmationFallback(
   else if (userAmount != null && Number.isFinite(amount) && (amount <= 10 && userAmount > 10 || Math.abs(amount - userAmount) > 0.01)) amount = userAmount;
   if (!Number.isFinite(amount) || amount <= 0) return null;
 
+  // Category: prefer current AI response (e.g. "Confirming: Freelance & Side Income, €1000") then "for X", then user message
+  const confirmingCatMatch = r.match(/Confirming:\s*([^,]+?),?\s*[$€£¥\d]/i);
   const categoryMatch = r.match(/for\s+([a-z\s&]+?)(?:\s*[.!,]|\s*$)/i);
-  const categoryPhrase = categoryMatch ? categoryMatch[1].trim() : null;
+  const categoryPhrase = (confirmingCatMatch && confirmingCatMatch[1] ? confirmingCatMatch[1].trim() : null) || (categoryMatch ? categoryMatch[1].trim() : null);
   const category = normalizeCategory(categoryPhrase || extractCategoryFromUserMessage(lastUserMessage) || 'Other');
 
-  const type: 'expense' | 'income' =
-    /income|salary|freelance|earned|received|einkommen/i.test(lastAssistant) && !/expense|spent|paid|ausgabe/i.test(lastAssistant)
-      ? 'income'
-      : 'expense';
+  // Type: prefer current AI response (e.g. "Your income has been added", "Freelance & Side Income", "Salary") so multi-turn income flow is correct
+  const rLower = r.toLowerCase();
+  const looksLikeIncomeInR = /your income has been added|Confirming:.*(?:Freelance|Salary|income)/i.test(r) || (rLower.includes('freelance') || rLower.includes('salary')) && !rLower.includes('expense');
+  const looksLikeIncomeInContext = /income|salary|freelance|earned|received|einkommen/i.test(lastAssistant) && !/expense|spent|paid|ausgabe/i.test(lastAssistant);
+  const type: 'expense' | 'income' = looksLikeIncomeInR || (looksLikeIncomeInContext && (category === 'Salary' || category === 'Freelance & Side Income')) ? 'income' : 'expense';
   if (type === 'expense' && (category === 'Salary' || category === 'Freelance & Side Income')) return null;
   const parenMatch = r.match(/\(([^)]+)\)/);
   const description = (parenMatch ? parenMatch[1].trim() : null) || shortifyDescription(lastUserMessage, category) || `${type} ${amount} ${category}`;
@@ -1304,26 +1403,126 @@ function conversationContextSuggestLimitFlow(messages: Array<{ role: string; con
 }
 
 /**
- * Extract a full transaction from the conversation when the user has given type, amount, category in one or two messages.
+ * Whether the user message is a short confirmation (no amount/category), e.g. "As it is,", "Yes", "Confirm".
+ */
+function isShortConfirmation(userMessage: string): boolean {
+  const t = userMessage.trim().toLowerCase();
+  if (t.length > 60) return false;
+  return /^(as\s+it\s+is|confirm|yes|yeah|yep|ok|okay|no\s+description|just\s+that|that'?s\s+it|sure|sounds\s+good|go\s+ahead)[\s,.!]*$/i.test(t)
+    || /^(as\s+is|that\s+works)[\s,.!]*$/i.test(t);
+}
+
+/** Whether the message is only a number (amount-only reply in multi-turn flow). */
+function isOnlyAmount(userMessage: string): boolean {
+  const t = userMessage.trim();
+  return /^\d+(?:[.,]\d{2})?[\s,.!]*$/.test(t) || /^[$€£¥]?\s*\d+(?:[.,]\d{2})?[\s,.!]*$/.test(t);
+}
+
+/**
+ * Aggregate type, category, and amount from the FULL conversation (AI asks category first, then amount, then optional description).
+ * Use when the user has given info across separate messages so we only create a transaction when we have all required fields.
+ * Returns { type, amount, category, description } or null if any piece is missing.
+ */
+function aggregateTransactionFromFullConversation(
+  messages: Array<{ role: string; content: string }>
+): { type: 'expense' | 'income'; amount: number; category: string; description: string } | null {
+  const userMessages = messages.filter(m => m.role === 'user').map(m => (m as { content?: string }).content?.trim() || '').filter(Boolean);
+  const assistantMessages = messages.filter(m => m.role === 'assistant' || (m as { role?: string }).role === 'anita').map(m => (m as { content?: string }).content?.trim() || '').filter(Boolean);
+  if (userMessages.length === 0) return null;
+
+  // 1) Type: from first user message that shows add income/expense intent, or from assistant context
+  let type: 'expense' | 'income' | null = null;
+  for (const m of userMessages) {
+    const lower = m.toLowerCase();
+    if (/add\s+income|income\s+\d|earned|received|einkommen|freelanc|salary|side\s+(gig|income)/i.test(m) && !/expense|spent|paid|ausgabe|spant/i.test(lower)) {
+      type = 'income';
+      break;
+    }
+    // Expense: "add expense", "spent 20", "I have Spent on Beer", "Spant on" (typo), "paid 50", "200 on it" (amount-only, type from context)
+    if (/add\s+expense|expense\s+\d|spent\s+\d|paid\s+\d|ausgabe/i.test(m)
+        || /\b(spent|spant)\s+(on|for|\d|with)/i.test(m)
+        || /\b(spent|spant)\b.*\b(on|for|with)\b/i.test(m)
+        || (/\b(spent|spant)\b/i.test(m) && /\b(beer|food|groceries|dining|rent|coffee)\b/i.test(m))) {
+      type = 'expense';
+      break;
+    }
+  }
+  if (!type && assistantMessages.length > 0) {
+    const recentAssistant = assistantMessages.slice(-3).join(' ').toLowerCase();
+    if (/category\s+of\s+income|income\s+fall\s+into|this\s+income|salary|freelance\s+&?\s*side\s+income/i.test(recentAssistant) && !/expense|ausgabe/i.test(recentAssistant)) {
+      type = 'income';
+    } else if (/category\s+of\s+expense|expense\s+fall\s+into|this\s+expense|amount\s+spent|provide\s+the\s+amount|groceries|dining|rent/i.test(recentAssistant)) {
+      type = 'expense';
+    }
+  }
+  if (!type) return null;
+
+  // 2) Category: from user messages, most recent first (skip pure confirmations and pure numbers)
+  let category = 'Other';
+  for (let i = userMessages.length - 1; i >= 0; i--) {
+    const msg = userMessages[i];
+    if (isShortConfirmation(msg) || isOnlyAmount(msg)) continue;
+    const c = extractCategoryFromUserMessage(msg);
+    if (c !== 'Other') {
+      if (type === 'expense' && (c === 'Salary' || c === 'Freelance & Side Income')) continue;
+      category = c;
+      break;
+    }
+  }
+
+  // 3) Amount: from user messages, most recent first (skip pure confirmations)
+  let amount: number | null = null;
+  for (let i = userMessages.length - 1; i >= 0; i--) {
+    const msg = userMessages[i];
+    if (isShortConfirmation(msg)) continue;
+    const a = extractAmountFromUserMessage(msg);
+    if (a != null && a > 0 && Number.isFinite(a) && a < 1e7) {
+      amount = a;
+      break;
+    }
+  }
+  if (amount == null || amount <= 0) return null;
+
+  const description = `${type} ${amount} ${category}`;
+  return { type, amount, category, description };
+}
+
+/**
+ * Extract a full transaction from the conversation when the user has given type, amount, category in one or more messages.
+ * First tries single-message (or previous message when last is confirmation); if null, tries full-conversation aggregation.
  * Used to add the transaction in the backend BEFORE calling the AI, so we only confirm after it's actually saved.
  * Returns { type, amount, category, description } or null.
  */
 function extractTransactionFromConversation(
   messages: Array<{ role: string; content: string }>
 ): { type: 'expense' | 'income'; amount: number; category: string; description: string } | null {
-  const lastUser = messages.filter(m => m.role === 'user').pop()?.content?.trim() || '';
-  if (!lastUser) return null;
-  const lower = lastUser.toLowerCase();
-  const isAddExpense = /add\s+expense|expense\s+\d|spent\s+\d|paid\s+\d|ausgabe\s+hinzufügen/i.test(lastUser) || (lower.includes('expense') && /\d+(?:[.,]\d{2})?/.test(lastUser));
-  const isAddIncome = /add\s+income|income\s+\d|earned\s+\d|received\s+\d|einkommen\s+hinzufügen/i.test(lastUser) || (lower.includes('income') && /\d+(?:[.,]\d{2})?/.test(lastUser));
-  const type: 'expense' | 'income' | null = isAddIncome ? 'income' : isAddExpense ? 'expense' : null;
-  if (!type) return null;
-  const amount = extractAmountFromUserMessage(lastUser);
-  if (amount == null || amount <= 0 || !Number.isFinite(amount)) return null;
-  const categoryFromMessage = extractCategoryFromUserMessage(lastUser);
-  const category = categoryFromMessage || 'Other';
-  const description = shortifyDescription(lastUser, category) || `${type} ${amount} ${category}`;
-  return { type, amount, category, description };
+  const userMessages = messages.filter(m => m.role === 'user').map(m => (m as { content?: string }).content?.trim() || '').filter(Boolean);
+  if (userMessages.length === 0) return null;
+  const lastUser = userMessages[userMessages.length - 1];
+  // Single-message or previous-message path (when last is confirmation)
+  const candidateMessages = isShortConfirmation(lastUser) && userMessages.length >= 2
+    ? userMessages.slice(0, -1).reverse()
+    : [lastUser];
+  for (const msg of candidateMessages) {
+    const m = msg.trim();
+    if (!m) continue;
+    const msgLower = m.toLowerCase();
+    const isAddExpense = /add\s+expense|expense\s+\d|spent\s+\d|paid\s+\d|ausgabe\s+hinzufügen/i.test(m)
+      || /\b(spent|spant)\s+(on|for|\d|with)/i.test(m)
+      || /\b(spent|spant)\b.*\b(on|for|with)\b/i.test(m)
+      || (msgLower.includes('expense') && /\d+(?:[.,]\d{2})?|\d+/.test(m));
+    const isAddIncome = /add\s+income|income\s+\d|earned\s+\d|received\s+\d|einkommen\s+hinzufügen|freelanc(e|ing)|salary|side\s+(gig|income)/i.test(m) || (msgLower.includes('income') && /\d+(?:[.,]\d{2})?|\d+/.test(m));
+    const type: 'expense' | 'income' | null = isAddIncome ? 'income' : isAddExpense ? 'expense' : null;
+    if (!type) continue;
+    const amount = extractAmountFromUserMessage(m);
+    if (amount == null || amount <= 0 || !Number.isFinite(amount)) continue;
+    const categoryFromMessage = extractCategoryFromUserMessage(m);
+    const category = categoryFromMessage || 'Other';
+    const description = shortifyDescription(m, category) || `${type} ${amount} ${category}`;
+    return { type, amount, category, description };
+  }
+  // Full-conversation aggregation (AI asked category then amount in separate turns)
+  return aggregateTransactionFromFullConversation(messages);
 }
 
 /**
@@ -1955,9 +2154,11 @@ async function buildFreemiumSystemPrompt(userId: string, options?: { clientCurre
   const prompt = `${userNameLine}CURRENCY: Use ${currencySymbol} (${userCurrency}) for amounts.\n\n
 FREE TIER — ONLY TWO PATTERNS ALLOWED. You have exactly two functions: (1) Add Income, (2) Add Expense. No metrics, no totals, no limits, no goals, no analytics.
 
+CONTEXT — CRITICAL: The user may give ONE transaction in SEPARATE messages. Combine them: e.g. "Freelancer" (category) then "I earned 100" (amount) = one transaction. The backend saves as soon as it has type + category + amount and sends the completion message with ✅. Do NOT ask "Just to confirm" or "Is that correct?" — the transaction is already completed.
+
 ALLOWED:
-- P1 Add Income: ask for category (Salary, Freelance & Side Income, Other), amount, optional description. When you have both, confirm with ✅. Backend saves it.
-- P2 Add Expense: ask for category (Groceries, Dining Out, Rent, etc.), amount, optional description. When you have both, confirm with ✅. Backend saves it.
+- P1 Add Income: ask for category then amount (in one or separate messages). When the user has given both (e.g. "Freelancer" then "I earned 100"), the backend saves immediately and sends "Your income of €100 from Freelance & Side Income has been added! ✅". Do not ask for confirmation.
+- P2 Add Expense: same — when you have category and amount from the user, the backend completes the transaction and sends the success message. Never ask "Just to confirm."
 - No-metrics questions only: "What is ANITA?", "What does this app do?", "What can you do?", "Hi", "Hello". Reply in one short sentence. You may ONLY say you help with adding income and adding expenses. Do NOT mention "analyzing budget", "setting spending limits", "limits", "goals", "analytics", or "dive into your budget". Do NOT offer to set a limit or analyze budget.
 
 EVERYTHING ELSE = SUBSCRIPTION MESSAGE:
@@ -2201,10 +2402,12 @@ There are no trigger words. Analyze every message in full. Do not react to keywo
 Every user message must be fully interpreted by you before any reply. You decide what the message means and which of the 6 flows applies. Follow this order strictly:
 
 STEP 1 — INTERPRET FULL CONTEXT (do this first, for every message):
-- Read the user's last message in full and the full CONVERSATION CONTEXT above. Recognize all words and intent before sending any response.
-- Understand what they said literally and what they mean in context (e.g. "21 on the haircut" in a thread about adding an expense means: amount 21, description haircut; "Yes" after a category question means confirmation).
-- Consider what has already been said: are we mid-flow (e.g. waiting for amount, or for category confirmation)? What intent did the user express earlier?
-- Infer the user's goal from context and full wording — do not rely on keywords or trigger phrases. Same words can mean different things in different contexts. Think, then act.
+- DEEP CONTEXT: The user may give one transaction in SEPARATE messages. Combine them into ONE transaction.
+  - Income example: "Freelancer" then "I earned 100" → income, Freelance & Side Income, €100.
+  - Expense example: "I have Spent on Beer with friends" (type=expense, category=Dining Out) then "200 on it" (amount=200) → one transaction: expense, Dining Out, €200.
+- The backend saves as soon as it has type + category + amount and returns a completion message with ✅. Do NOT say "Just to confirm" or "Is this categorized as X?" — the backend has already made the transaction.
+- Read the user's last message AND the full CONVERSATION. Collect type, category, and amount from ANY earlier messages. When the backend has all three, it saves immediately and sends the success message.
+- Do NOT ask for confirmation. If you reply before the backend response, ask only for the next missing piece (e.g. amount if you have category). Infer the user's goal from the full thread.
 
 STEP 2 — ROUTE TO EXACTLY ONE OF THE 6 PATTERNS:
 - Using your interpretation from Step 1 (full message + context, not trigger words), choose exactly one further flow: P1, P2, P3, P4, P5, or P6.
@@ -2230,12 +2433,12 @@ AMOUNT AND CATEGORY — CRITICAL (avoid wrong amount/category):
 THE 6 PATTERNS (interpret first, then choose one — follow exactly):
 
 P1 — Add Income:
-- Step 1: Ask for category of income, amount, and optionally a short description. Name example categories (e.g. Salary, Freelance & Side Income, Other). Do not ask for amount only — always ask for category and amount (and optional description).
-- Step 2: After you have category and amount, send a friendly confirmation with ✅. Include a short, context-based description in parentheses (1–4 words) that will be stored as the transaction description. Example: "I've added your income of \${amount} for {category} (Salary). ✅" or "(Freelance project). ✅". The backend saves the transaction when it has type, amount, and category; only after it is saved will the user see your confirmation. Use only a category from the Categories list below; interpret user wording (e.g. "salary", "paycheck", "job") as Salary; "freelance", "side gig" as Freelance & Side Income.
+- Step 1: Ask for category of income, amount, and optionally a short description. You may ask in separate messages. When the user gives category then amount (e.g. "Freelancer" then "I earned 100"), the backend saves the transaction immediately and sends the completion message with ✅. Do NOT ask "Just to confirm" or "Is that correct?" — the transaction is already done.
+- Step 2: If the backend has already sent the success message (with ✅), you do not need to reply again. If you are replying before the user has given amount, just ask for the amount. Never ask for confirmation after they have given category and amount — the backend completes it.
 
 P2 — Add Expense:
-- Step 1: Ask for category of expense, amount, and optionally a short description. Name example categories (e.g. Groceries, Dining Out, Rent, Entertainment). Do not ask for amount only — always ask for category and amount (and optional description).
-- Step 2: After you have category and amount, send a friendly confirmation with ✅. Include a short, context-based description in parentheses (1–4 words) that will be stored as the transaction description. Examples: "I've added your expense of \${amount} for Groceries (Groceries). ✅" or "for Personal Care (Haircut). ✅" or "for Streaming Services (Netflix). ✅" or "for Dining Out (Lunch). ✅". Create the description from context (what the user said or did), not a long sentence. The backend saves the transaction when it has type, amount, and category; only after it is saved will the user see your confirmation. Use only a category from the Categories list below; interpret user wording correctly (e.g. "restaurant", "food delivery", "pizza" → Dining Out; "supermarket", "food shop" → Groceries; "uber", "taxi" → Rideshare & Taxi; "netflix", "spotify" → Streaming Services).
+- Step 1: Ask for category then amount (in one or separate messages). When the user has given both, the backend saves immediately and returns the completion message. Do NOT ask "Just to confirm."
+- Step 2: Never ask for confirmation. The backend writes that it's completed with ✅ once it has category and amount.
 
 P3 — Set a Target:
 - Step 1 (only when user has NOT yet chosen goal or limit): Ask if user wants a goal or a limit.

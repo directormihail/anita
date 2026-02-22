@@ -70,6 +70,8 @@ struct ChatCompletionResponse: Codable {
     let category: String? // Category for budget targets (spending limits)
     /// When true, backend returned a freemium paywall (e.g. user asked for analytics on free tier). Show UpgradeView.
     let requiresUpgrade: Bool?
+    /// When true, backend persisted an income/expense transaction; Finance tab should refresh.
+    let transactionAdded: Bool?
 }
 
 struct APIError: Codable {

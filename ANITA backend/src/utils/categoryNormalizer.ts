@@ -69,6 +69,11 @@ const STANDARD_CATEGORIES: { [key: string]: string } = {
   'fast food': 'Dining Out',
   'takeout': 'Dining Out',
   'delivery': 'Dining Out',
+  'beer': 'Dining Out',
+  'drinks': 'Dining Out',
+  'bar': 'Dining Out',
+  'tires': 'Other',
+  'tire': 'Other',
   
   // Transportation
   'transportation': 'Gas & Fuel',
@@ -196,6 +201,9 @@ const CONTEXT_PHRASES: Array<{ phrase: string; category: string }> = [
   { phrase: 'lunch', category: 'Dining Out' },
   { phrase: 'dinner', category: 'Dining Out' },
   { phrase: 'breakfast', category: 'Dining Out' },
+  { phrase: 'beer', category: 'Dining Out' },
+  { phrase: 'drinks', category: 'Dining Out' },
+  { phrase: 'bar', category: 'Dining Out' },
   // Groceries (supermarket, food at home)
   { phrase: 'grocerries', category: 'Groceries' },
   { phrase: 'groceries', category: 'Groceries' },
