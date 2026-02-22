@@ -187,8 +187,9 @@ enum AppL10n {
             "plans.disclaimer_financial": "ANITA is for informational use only and does not provide financial, legal, or tax advice."
             ,
             // Plan features (match actual subscription limits)
-            "plans.feature.replies_20": "10 messages per month",
             "plans.feature.basic_expense": "Track income & expenses",
+            "plans.feature.category_analytics": "Category analytics",
+            "plans.feature.basic_functions": "Basic functions only",
             "paywall.upgrade_to_use": "Upgrade to Premium to use this feature.",
             "paywall.upgrade_button": "Upgrade",
             "chat.upgrade_banner_title": "Full AI & unlimited messages",
@@ -197,12 +198,12 @@ enum AppL10n {
             "chat.upgrade_banner_line": "Unlock with Premium",
             "chat.limit_reached": "You've used your 10 free messages this month. Upgrade to Premium for unlimited chat.",
             
-            "plans.feature.unlimited_replies": "Unlimited chat messages",
             "plans.feature.full_ai": "Full AI capabilities",
             "plans.feature.spending_limits": "Spending limits",
             "plans.feature.saving_goals": "Saving goals",
             "plans.feature.assets": "Assets tracking",
-            "plans.feature.full_budget": "Insights & budget overview"
+            "plans.feature.full_budget": "Insights & budget overview",
+            "plans.feature.premium_fun": "Respect from the developer"
             ,
             // Settings sections
             "settings.profile": "Profile",
@@ -227,6 +228,9 @@ enum AppL10n {
             "chat.set_target": "Set a Target",
             "chat.analytics": "Analytics",
             "chat.ask_finance": "Ask about finance",
+            "chat.paywall_anita_1": "Ooh, I’d love to dive into your spending charts and goals — but that’s the premium stuff! 🎩 Upgrade and I’ll show you the full picture. For now I’m your add-expense-and-income buddy. Try \"add expense 20 for coffee\" or \"add income 2000 salary\" and we’re good! 💰",
+            "chat.paywall_anita_2": "That question hits different — and by that I mean it’s locked behind Premium. 🔐 Want analytics, goals, or \"where did my money go\"? Upgrade and we’ll go there. Right now I’ve got you for adding expenses and income, plus the basics about me. Give it a try! 📊➡️💎",
+            "chat.paywall_anita_3": "My free-tier alter ego can only do two things really well: log expenses and log income (and answer \"who’s ANITA?\"). Everything else — charts, goals, limits, breakdowns — is Premium territory. Upgrade and I’ll unlock my full therapist mode. 🦉💰",
             
             // Finance View
             "finance.tap_to_change": "Tap to change",
@@ -654,8 +658,9 @@ enum AppL10n {
             "plans.subscription_terms": "Die Zahlung wird bei Bestätigung deiner Apple ID belastet. Das Abo verlängert sich automatisch, sofern es nicht mindestens 24 Stunden vor Ende des aktuellen Zeitraums gekündigt wird.",
             "plans.disclaimer_financial": "ANITA dient nur zu Informationszwecken und bietet keine Finanz-, Rechts- oder Steuerberatung."
             ,
-            "plans.feature.replies_20": "10 Nachrichten pro Monat",
             "plans.feature.basic_expense": "Einnahmen & Ausgaben erfassen",
+            "plans.feature.category_analytics": "Kategorie-Analysen",
+            "plans.feature.basic_functions": "Nur Grundfunktionen",
             "paywall.upgrade_to_use": "Upgrade auf Premium, um diese Funktion zu nutzen.",
             "paywall.upgrade_button": "Upgrade",
             "chat.upgrade_banner_title": "Vollständige KI & unbegrenzte Nachrichten",
@@ -664,12 +669,12 @@ enum AppL10n {
             "chat.upgrade_banner_line": "Mit Premium freischalten",
             "chat.limit_reached": "Du hast deine 10 kostenlosen Nachrichten diesen Monat verbraucht. Upgrade auf Premium für unbegrenzten Chat.",
             
-            "plans.feature.unlimited_replies": "Unbegrenzte Chat-Nachrichten",
             "plans.feature.full_ai": "Vollständige KI-Funktionen",
             "plans.feature.spending_limits": "Ausgabenlimits",
             "plans.feature.saving_goals": "Sparziele",
             "plans.feature.assets": "Vermögen erfassen",
-            "plans.feature.full_budget": "Insights & Budget-Übersicht"
+            "plans.feature.full_budget": "Insights & Budget-Übersicht",
+            "plans.feature.premium_fun": "Respekt vom Entwickler"
             ,
             "settings.profile": "Profil",
             "settings.preferences": "Einstellungen",
@@ -692,6 +697,9 @@ enum AppL10n {
             "chat.set_target": "Ziel setzen",
             "chat.analytics": "Analysen",
             "chat.ask_finance": "Frage zu Finanzen",
+            "chat.paywall_anita_1": "Da würde ich gern in deine Ausgaben-Charts und Ziele eintauchen — aber das ist Premium! 🎩 Upgrade und ich zeig dir das große Bild. Jetzt bin ich dein Add-Expense-and-Income-Buddy. Probier „Ausgabe 20 für Kaffee“ oder „Einkommen 2000 Gehalt“ — dann läuft’s! 💰",
+            "chat.paywall_anita_2": "Die Frage ist stark — und leider hinter Premium versteckt. 🔐 Analytics, Ziele oder „wo ist mein Geld hin“? Upgrade, dann machen wir das. Aktuell geht bei mir: Ausgaben und Einnahmen eintragen plus Basics über mich. Probier’s! 📊➡️💎",
+            "chat.paywall_anita_3": "Meine Free-Version kann nur zwei Dinge richtig: Ausgaben und Einnahmen eintragen (und „Wer ist ANITA?“ beantworten). Alles andere — Charts, Ziele, Limits, Übersichten — ist Premium. Upgrade und ich schalt meinen vollen Modus frei. 🦉💰",
             
             "finance.tap_to_change": "Tippen zum Ändern",
             "finance.health_score": "Gesundheitswert",

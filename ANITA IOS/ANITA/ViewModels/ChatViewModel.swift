@@ -17,11 +17,8 @@ class ChatViewModel: ObservableObject {
     @Published var inputText = ""
     @Published var currentConversationId: String?
     @Published var conversations: [Conversation] = []
-    /// When true, ChatView should present UpgradeView (free user hit 10 messages/month).
+    /// When true, ChatView should present UpgradeView (e.g. free user requested premium-only feature; backend returned paywall).
     @Published var showPaywallForLimitReached = false
-    
-    /// Free tier: max user messages per calendar month.
-    private static let freeTierMessagesPerMonth = 10
     
     /// Fallback when assistant response is empty or fails validation (difficult context / malformed).
     private static let invalidResponseFallbackMessages: [String] = [
@@ -48,6 +45,9 @@ class ChatViewModel: ObservableObject {
             || lower.contains("the internet connection appears to be offline")
             || lower.contains("could not connect") || lower.contains("network error")
     }
+    
+    /// Prefix the AI must use when responding with a premium paywall (so we can show upgrade sheet). Strip before displaying.
+    private static let premiumResponsePrefix = "[PREMIUM]"
     
     /// Thread-safe "run once" for path monitor callback (Swift 6 concurrency).
     private final class OnceResume {
@@ -230,47 +230,6 @@ class ChatViewModel: ObservableObject {
             }
             throw error
         }
-    }
-    
-    // MARK: - Free tier message limit (10/month)
-    
-    private func freeTierMonthKey() -> String {
-        let cal = Calendar.current
-        let year = cal.component(.year, from: Date())
-        let month = cal.component(.month, from: Date())
-        return "\(year)-\(month)"
-    }
-    
-    private func freeTierCountKey() -> String {
-        "anita_free_chat_count_\(userId)"
-    }
-    
-    private func freeTierMonthStorageKey() -> String {
-        "anita_free_chat_month_\(userId)"
-    }
-    
-    /// Current number of user messages sent this month (for free tier).
-    func getFreeMonthlySentCount() -> Int {
-        let defaults = UserDefaults.standard
-        let storedMonth = defaults.string(forKey: freeTierMonthStorageKey())
-        let currentMonth = freeTierMonthKey()
-        if storedMonth != currentMonth {
-            return 0
-        }
-        return defaults.integer(forKey: freeTierCountKey())
-    }
-    
-    /// Call once per user message when we're about to save/send it (free tier only).
-    private func incrementFreeMonthlySentCount() {
-        let defaults = UserDefaults.standard
-        let currentMonth = freeTierMonthKey()
-        let storedMonth = defaults.string(forKey: freeTierMonthStorageKey())
-        if storedMonth != currentMonth {
-            defaults.set(currentMonth, forKey: freeTierMonthStorageKey())
-            defaults.set(0, forKey: freeTierCountKey())
-        }
-        let count = defaults.integer(forKey: freeTierCountKey())
-        defaults.set(count + 1, forKey: freeTierCountKey())
     }
     
     // Save a message to Supabase
@@ -653,22 +612,7 @@ class ChatViewModel: ObservableObject {
         
         Task {
             do {
-                // Free tier: 10 messages per month — block and show paywall if over
-                let subscriptionManager = SubscriptionManager.shared
-                if !subscriptionManager.isPremium {
-                    let count = getFreeMonthlySentCount()
-                    if count >= Self.freeTierMessagesPerMonth {
-                        await MainActor.run {
-                            if let idx = messages.firstIndex(where: { $0.id == userMessage.id }) {
-                                messages.remove(at: idx)
-                            }
-                            inputText = messageText
-                            isLoading = false
-                            showPaywallForLimitReached = true
-                        }
-                        return
-                    }
-                }
+                // Free tier: no message limit — freemium has unlimited chat; premium features (analytics, limits, goals) gated by backend.
                 
                 // No trigger words: every message is sent to the AI. The AI analyzes the full message and conversation context, interprets intent, and responds (no client-side shortcuts).
                 
@@ -746,7 +690,6 @@ class ChatViewModel: ObservableObject {
                 // Save user message
                 if let convId = conversationId {
                     print("[ChatViewModel] Saving user message to conversation: \(convId)")
-                    if !SubscriptionManager.shared.isPremium { incrementFreeMonthlySentCount() }
                     await saveMessage(userMessage, conversationId: convId)
                 }
                 
@@ -775,12 +718,18 @@ class ChatViewModel: ObservableObject {
                     conversationId: conversationId,
                     userDisplayName: displayName,
                     userCurrency: preferredCurrency,
-                    isPremium: subscriptionManager.isPremium
+                    isPremium: SubscriptionManager.shared.isPremium
                 )
                 print("[ChatViewModel] Received response from backend")
                 
-                // Verify response before showing: strict message patterns, no internal markers
-                let displayContent = validateAndSanitizeAssistantResponse(response.response)
+                // Strip [PREMIUM] prefix if AI used it (free-tier intent gating); then sanitize
+                var responseText = response.response ?? ""
+                var shouldShowPaywall = response.requiresUpgrade == true
+                if responseText.trimmingCharacters(in: .whitespacesAndNewlines).uppercased().hasPrefix(Self.premiumResponsePrefix.uppercased()) {
+                    responseText = String(responseText.dropFirst(Self.premiumResponsePrefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+                    shouldShowPaywall = true
+                }
+                let displayContent = validateAndSanitizeAssistantResponse(responseText.isEmpty ? nil : responseText)
                 
                 let assistantMessage = ChatMessage(
                     role: "assistant",
@@ -807,8 +756,7 @@ class ChatViewModel: ObservableObject {
                 await MainActor.run {
                     messages.append(assistantMessage)
                     isLoading = false
-                    // Freemium: backend returned paywall (e.g. user asked for analytics) — show upgrade sheet
-                    if response.requiresUpgrade == true {
+                    if shouldShowPaywall {
                         showPaywallForLimitReached = true
                     }
                 }
@@ -859,7 +807,8 @@ class ChatViewModel: ObservableObject {
 
     private func buildSystemPrompt() -> String? {
         let survey = OnboardingSurveyResponse.loadFromUserDefaults(userId: userId)
-        let languageCode = survey?.languageCode ?? OnboardingSurveyResponse.preferredLanguageCode(userId: userId) ?? "en"
+        // Use app-chosen language (Settings) so AI and paywall messages match what the user sees in the UI.
+        let languageCode = AppL10n.currentLanguageCode()
         
         let languageName: String
         switch languageCode {
@@ -873,7 +822,7 @@ class ChatViewModel: ObservableObject {
         
         var lines: [String] = []
         lines.append("You are ANITA, a personal finance assistant.")
-        lines.append("Always reply in \(languageName), unless the user explicitly asks for another language.")
+        lines.append("Always reply in \(languageName), unless the user explicitly asks for another language. This includes any [PREMIUM] paywall message — it must be in \(languageName) too.")
         
         let profileName = userManager.getProfileName()?.trimmingCharacters(in: .whitespacesAndNewlines)
         let onboardingName = survey?.userName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -889,6 +838,14 @@ class ChatViewModel: ObservableObject {
                 .map { "\($0.key)=\($0.value)" }
                 .joined(separator: ", ")
             lines.append("Onboarding preferences: \(formatted). Use them to personalize your advice.")
+        }
+        
+        // Free tier: AI must understand the main idea of the user's message and gate premium intents with a funny paywall
+        if !SubscriptionManager.shared.isPremium {
+            lines.append("")
+            lines.append("FREE TIER RULES — The user is on the free plan. You must understand the context and main idea of what they say.")
+            lines.append("ALLOWED (respond normally): (1) Adding or logging an expense, in any wording (e.g. \"I bought coffee\", \"spent 20\", \"50 for lunch\"). (2) Adding or logging income, in any wording (e.g. \"got paid\", \"salary\", \"received 500\"). (3) Questions about who you are, what ANITA is, how the app works, or saying hi/help.")
+            lines.append("PREMIUM (do not fulfill): Anything else — e.g. analytics, spending breakdown, \"where did my money go\", goals, limits, budgets, reports, charts, comparisons, summaries, insights about their finances. For PREMIUM intents only: respond with a single short, funny message in \(languageName) that this is a premium feature and they can upgrade to use it. Keep it light and on-brand. Your entire response for PREMIUM must start with exactly the tag [PREMIUM] (including the brackets), then a space, then your funny one- or two-sentence message in \(languageName). Do not perform any analysis or action for PREMIUM requests.")
         }
         
         return lines.joined(separator: "\n")

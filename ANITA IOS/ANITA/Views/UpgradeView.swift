@@ -406,8 +406,9 @@ struct FreePlanCard: View {
             
             // Features
             VStack(alignment: .leading, spacing: 16) {
-                FeatureRow(text: AppL10n.t("plans.feature.replies_20"), accentColor: .white.opacity(0.4))
                 FeatureRow(text: AppL10n.t("plans.feature.basic_expense"), accentColor: .white.opacity(0.4))
+                FeatureRow(text: AppL10n.t("plans.feature.category_analytics"), accentColor: .white.opacity(0.4))
+                FeatureRow(text: AppL10n.t("plans.feature.basic_functions"), accentColor: .white.opacity(0.4))
             }
             .padding(.top, 6)
             
@@ -463,12 +464,12 @@ struct SubscriptionPlanCard: View {
         switch planType {
         case .pro:
             return [
-                AppL10n.t("plans.feature.unlimited_replies"),
                 AppL10n.t("plans.feature.full_ai"),
                 AppL10n.t("plans.feature.spending_limits"),
                 AppL10n.t("plans.feature.saving_goals"),
                 AppL10n.t("plans.feature.assets"),
-                AppL10n.t("plans.feature.full_budget")
+                AppL10n.t("plans.feature.full_budget"),
+                AppL10n.t("plans.feature.premium_fun")
             ]
         case .free:
             return []
@@ -814,12 +815,12 @@ struct SubscriptionPlanPlaceholder: View {
         switch planType {
         case .pro:
             return [
-                AppL10n.t("plans.feature.unlimited_replies"),
                 AppL10n.t("plans.feature.full_ai"),
                 AppL10n.t("plans.feature.spending_limits"),
                 AppL10n.t("plans.feature.saving_goals"),
                 AppL10n.t("plans.feature.assets"),
-                AppL10n.t("plans.feature.full_budget")
+                AppL10n.t("plans.feature.full_budget"),
+                AppL10n.t("plans.feature.premium_fun")
             ]
         case .free:
             return []
