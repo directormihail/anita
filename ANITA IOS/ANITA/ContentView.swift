@@ -14,11 +14,14 @@ enum AuthViewState {
     case signUp
 }
 
+private let hasShownFirstLaunchNotificationPromptKey = "anita_has_shown_first_launch_notification_prompt"
+
 struct ContentView: View {
     @StateObject private var authViewModel = AuthViewModel()
     @StateObject private var userManager = UserManager.shared
     @State private var selectedTab = 0
     @State private var authViewState: AuthViewState = .welcome
+    @State private var showFirstLaunchNotificationPrompt = false
     
     var body: some View {
         Group {
@@ -35,6 +38,24 @@ struct ContentView: View {
                     }
                 } else if userManager.hasCompletedOnboarding {
                     mainContentView
+                        .onAppear {
+                            if !UserDefaults.standard.bool(forKey: hasShownFirstLaunchNotificationPromptKey) {
+                                showFirstLaunchNotificationPrompt = true
+                            }
+                        }
+                        .sheet(isPresented: $showFirstLaunchNotificationPrompt) {
+                            FirstLaunchNotificationSheet(
+                                onEnable: {
+                                    UserDefaults.standard.set(true, forKey: hasShownFirstLaunchNotificationPromptKey)
+                                    showFirstLaunchNotificationPrompt = false
+                                    NotificationService.shared.pushNotificationsEnabled = true
+                                },
+                                onNotNow: {
+                                    UserDefaults.standard.set(true, forKey: hasShownFirstLaunchNotificationPromptKey)
+                                    showFirstLaunchNotificationPrompt = false
+                                }
+                            )
+                        }
                 } else {
                     OnboardingView { survey in
                         userManager.completeOnboarding(survey: survey)
@@ -228,6 +249,57 @@ struct ContentView: View {
             }
         }
         return result
+    }
+}
+
+// MARK: - First launch notification prompt (shown once when user opens the app for the first time)
+struct FirstLaunchNotificationSheet: View {
+    var onEnable: () -> Void
+    var onNotNow: () -> Void
+    
+    private let accentColor = Color(red: 0.4, green: 0.49, blue: 0.92)
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                VStack(spacing: 28) {
+                    Image(systemName: "bell.badge.fill")
+                        .font(.system(size: 56))
+                        .foregroundStyle(accentColor)
+                    Text(AppL10n.t("first_launch_notification.title"))
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                    Text(AppL10n.t("first_launch_notification.body"))
+                        .font(.system(size: 16, weight: .regular, design: .rounded))
+                        .foregroundColor(.white.opacity(0.8))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                    VStack(spacing: 14) {
+                        Button(action: onEnable) {
+                            Text(AppL10n.t("first_launch_notification.enable"))
+                                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 52)
+                        }
+                        .background(accentColor)
+                        .cornerRadius(14)
+                        Button(action: onNotNow) {
+                            Text(AppL10n.t("first_launch_notification.not_now"))
+                                .font(.system(size: 17, weight: .medium, design: .rounded))
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 8)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+        }
     }
 }
 

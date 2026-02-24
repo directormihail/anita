@@ -147,11 +147,19 @@ struct PostSignupPlansView: View {
                             .padding(.bottom, 8)
                         
                         if let error = storeKitService.errorMessage {
-                            Text(error)
-                                .font(.system(size: 14, weight: .medium, design: .rounded))
-                                .foregroundColor(.red.opacity(0.9))
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 12)
+                            let isSandboxHint = (error == AppL10n.t("plans.sandbox_hint"))
+                            HStack(alignment: .top, spacing: 10) {
+                                if isSandboxHint {
+                                    Image(systemName: "person.crop.circle.badge.plus")
+                                        .font(.system(size: 18))
+                                        .foregroundColor(.orange.opacity(0.95))
+                                }
+                                Text(error)
+                                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                                    .foregroundColor(isSandboxHint ? Color.white.opacity(0.9) : Color.red.opacity(0.9))
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 12)
                                 .frame(maxWidth: .infinity)
                                 .liquidGlass(cornerRadius: 12)
                                 .padding(.horizontal, 20)
@@ -196,7 +204,9 @@ struct PostSignupPlansView: View {
     private func purchasePlan(productId: String) async {
         guard let product = storeKitService.getProduct(productId) else {
             await MainActor.run {
-                storeKitService.errorMessage = AppL10n.t("plans.checkout_error")
+                storeKitService.errorMessage = storeKitService.products.isEmpty
+                    ? AppL10n.t("plans.sandbox_hint")
+                    : AppL10n.t("plans.checkout_error")
             }
             return
         }
@@ -207,6 +217,7 @@ struct PostSignupPlansView: View {
         
         do {
             _ = try await storeKitService.purchase(product)
+            await SubscriptionManager.shared.refresh()
             await loadSubscriptionFromDatabase()
         } catch StoreKitError.userCancelled {
             // User cancelled
@@ -228,6 +239,7 @@ struct PostSignupPlansView: View {
             storeKitService.errorMessage = nil
         }
         await storeKitService.restorePurchases()
+        await SubscriptionManager.shared.refresh()
         await loadSubscriptionFromDatabase()
         await MainActor.run { isRestoring = false }
     }

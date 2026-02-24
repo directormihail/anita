@@ -38,8 +38,11 @@ class StoreKitService: ObservableObject {
             let products = try await Product.products(for: productIDs)
             self.products = products.sorted { $0.price < $1.price }
             isLoading = false
+            if products.isEmpty {
+                errorMessage = AppL10n.t("plans.sandbox_hint")
+            }
         } catch {
-            errorMessage = "Failed to load products: \(error.localizedDescription)"
+            errorMessage = AppL10n.t("plans.sandbox_hint")
             isLoading = false
             print("Error loading products: \(error)")
         }
@@ -53,16 +56,13 @@ class StoreKitService: ObservableObject {
         case .success(let verification):
             let transaction = try checkVerified(verification)
             
-            // Update UI immediately so the screen doesn't freeze
             await updatePurchasedProducts()
             await transaction.finish()
             
-            // Verify with backend in the background (don't block the main thread)
+            // Verify with backend before returning so SubscriptionManager.refresh() sees the new subscription
             let userId = UserManager.shared.userId
             if !userId.isEmpty {
-                Task {
-                    await verifyAndUpdateSubscription(transaction: transaction, product: product)
-                }
+                await verifyAndUpdateSubscription(transaction: transaction, product: product)
             }
             
             return transaction

@@ -21,5 +21,22 @@ CREATE POLICY "Users can insert own support request"
   ON public.user_support_requests FOR INSERT
   WITH CHECK (auth.uid()::text = user_id);
 
--- Note: user_feedback is created by webapp migration 20241220000016_create_user_feedback.sql.
--- Backend and iOS use that same table; no need to create it here.
+-- =============================================================================
+-- Feedback table (required for Settings → Feedback in the app)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS public.user_feedback (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL,
+  message TEXT,
+  rating INTEGER NOT NULL DEFAULT 1 CHECK (rating >= 1 AND rating <= 5),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_feedback_user_id ON public.user_feedback(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_feedback_created_at ON public.user_feedback(created_at DESC);
+
+ALTER TABLE public.user_feedback ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can insert own feedback" ON public.user_feedback;
+CREATE POLICY "Users can insert own feedback"
+  ON public.user_feedback FOR INSERT
+  WITH CHECK (auth.uid()::text = user_id);

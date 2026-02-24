@@ -208,17 +208,25 @@ struct UpgradeView: View {
                         .padding(.top, 18)
                         .padding(.bottom, 20)
                         
-                        // Error message
+                        // Error or Sandbox hint
                         if let error = storeKitService.errorMessage {
-                            Text(error)
-                                .font(.system(size: 14, weight: .medium, design: .rounded))
-                                .foregroundColor(.red.opacity(0.9))
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 12)
-                                .frame(maxWidth: .infinity)
-                                .liquidGlass(cornerRadius: 12)
-                                .padding(.horizontal, 20)
-                                .padding(.bottom, 10)
+                            let isSandboxHint = (error == AppL10n.t("plans.sandbox_hint"))
+                            HStack(alignment: .top, spacing: 10) {
+                                if isSandboxHint {
+                                    Image(systemName: "person.crop.circle.badge.plus")
+                                        .font(.system(size: 18))
+                                        .foregroundColor(.orange.opacity(0.95))
+                                }
+                                Text(error)
+                                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                                    .foregroundColor(isSandboxHint ? Color.white.opacity(0.9) : Color.red.opacity(0.9))
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 12)
+                            .frame(maxWidth: .infinity)
+                            .liquidGlass(cornerRadius: 12)
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 10)
                         }
                     }
                 }
@@ -236,6 +244,9 @@ struct UpgradeView: View {
         }
         .task {
             await loadSubscriptionFromDatabase()
+        }
+        .onAppear {
+            Task { await storeKitService.loadProducts() }
         }
     }
     
@@ -261,7 +272,9 @@ struct UpgradeView: View {
     private func purchasePlan(productId: String) async {
         guard let product = storeKitService.getProduct(productId) else {
             await MainActor.run {
-                storeKitService.errorMessage = AppL10n.t("plans.checkout_error")
+                storeKitService.errorMessage = storeKitService.products.isEmpty
+                    ? AppL10n.t("plans.sandbox_hint")
+                    : AppL10n.t("plans.checkout_error")
             }
             return
         }
@@ -272,10 +285,11 @@ struct UpgradeView: View {
         
         do {
             _ = try await storeKitService.purchase(product)
+            await SubscriptionManager.shared.refresh()
+            await loadSubscriptionFromDatabase()
             await MainActor.run {
                 showSuccessAlert = true
             }
-            await loadSubscriptionFromDatabase()
         } catch StoreKitError.userCancelled {
             // User cancelled - no error to show
         } catch StoreKitError.pending {
@@ -297,8 +311,8 @@ struct UpgradeView: View {
         }
         
         await storeKitService.restorePurchases()
+        await SubscriptionManager.shared.refresh()
         await loadSubscriptionFromDatabase()
-        
         await MainActor.run {
             isRestoring = false
         }

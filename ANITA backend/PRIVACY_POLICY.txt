@@ -1,0 +1,75 @@
+Privacy Policy
+ANITA
+Last updated: February 2025
+
+1. Introduction
+
+ANITA is committed to protecting your privacy. This Privacy Policy explains in detail how we collect, use, disclose, and safeguard your information when you use the ANITA app and related services. We collect information you provide (such as account and financial data), information about how you use the app (usage and activity data), and technical and device information, as described below. It is designed to comply with the General Data Protection Regulation (GDPR), the California Consumer Privacy Act (CCPA), and other applicable privacy laws. By using ANITA, you consent to the collection and other practices described in this document. If you do not agree, please do not use the Service.
+
+2. Information collected
+
+2.1 Personal information you provide
+
+ANITA collects information that you provide directly when you create an account or use the app: your email address and authentication credentials (including those used for Sign in with Apple or Google where applicable), your name and profile information if you choose to provide them, your currency and language preferences, and any other details you enter in your profile or settings. For paid subscriptions a payment provider is used; ANITA does not store your full payment card number on its servers.
+
+2.2 Financial and usage data
+
+To provide the app's core features, ANITA collects and stores: financial transactions you enter or upload (such as income and expenses, amounts, dates, categories, and descriptions), chat messages and conversation history with the in-app assistant, financial targets and goals you set, budget information, and any notes or labels you add. If you use voice input, the audio may be sent to a transcription provider to convert speech to text; that processing is necessary to provide the feature.
+
+2.3 Automatically collected information
+
+When you use the app, the following may be collected automatically: device type, operating system and version, app version, IP address, general usage information (for example which features you use and how often, to improve stability and performance), and error logs or performance data that help fix bugs and improve the service. This data is not used for advertising profiling.
+
+2.4 Product and usage analytics (activity data)
+
+We collect information about your activity when you use the Service. This may include: which screens or features you use and how often, session duration, app opens, general interaction events (e.g. that a feature was used, without recording the content of your inputs), device type, operating system, and app version. We collect this analytics data via a third-party provider (PostHog) and use it only to improve the product, fix issues, and understand usage patterns. It is processed in the United States. We do not use this data for advertising and we do not sell it. You may contact us via the app's Support option to request that we disable analytics collection for your account where technically feasible. PostHog's privacy information is at https://posthog.com/privacy.
+
+3. How your information is used
+
+The information we collect is used to: provide, maintain, and improve the ANITA service; process and store your financial data and conversations so you can access them across sessions; power AI-powered features (such as chat and insights), which are informational only and not professional advice; analyze how the app is used (e.g. feature usage and session data) to improve the product and user experience; manage your account, including subscriptions and support requests; send account-related and security-related communications (for example login alerts or password resets); and to comply with applicable law and protect legal rights. Your personal information is not sold and is not used for third-party advertising.
+
+4. Legal basis for processing (GDPR)
+
+Where GDPR applies, personal data is processed on the following bases: your consent where it is asked for explicitly; performance of the contract with you to provide the Service; legitimate interests (such as security, fraud prevention, and improving the service), balanced against your rights; and legal obligation where retention or disclosure of data is required by law.
+
+5. Third-party services and data sharing
+
+The following third-party services are used to operate the app. Each has its own privacy policy; you are encouraged to review them.
+
+Supabase: Used for database hosting, user authentication, and secure storage. Data shared with Supabase includes your account data, financial transactions, conversation history, and app preferences. Their privacy policy is available at https://supabase.com/privacy.
+
+OpenAI: Used for AI chat, file analysis, and voice transcription (Whisper). When you use these features, the content you send (such as messages and, where applicable, audio) is processed by OpenAI to generate responses or transcriptions. Their privacy policy is at https://openai.com/policies/privacy-policy.
+
+Stripe: Used for payment processing when you subscribe to paid plans. Stripe receives payment-related identifiers and subscription status; your full payment card number is not stored. Their privacy policy is at https://stripe.com/privacy.
+
+Apple: If you use Sign in with Apple, Apple provides the information you allow under their sign-in flow. Apple's privacy information is at https://www.apple.com/legal/privacy/.
+
+Google: If you use Google sign-in where offered, authentication and basic profile information are received as permitted by your Google account settings. Google's privacy policy is at https://policies.google.com/privacy.
+
+PostHog: We use PostHog to collect and process product and usage analytics (see section 2.4). PostHog receives pseudonymised usage and activity data (e.g. app events, screen views, device type, session information). Data is processed in the United States. PostHog's privacy policy is at https://posthog.com/privacy.
+
+Your personal information is not sold. Data is shared with these service providers only as necessary to operate the Service, under agreements that require them to protect your data and use it only for the purposes specified.
+
+6. Data retention and security
+
+Your data is retained for as long as your account is active and as required by law. After you delete your account, your personal data is removed or anonymized within a reasonable period (typically within 30 days), except where retention is required for legal, regulatory, or legitimate business purposes. Industry-standard technical and organisational measures are used to protect your data, including encryption where appropriate, access controls, and secure hosting. No system can be completely secure; you and relevant authorities will be notified as required by law if a breach affecting your personal data becomes known.
+
+7. Your rights (GDPR and CCPA)
+
+If you are in the European Economic Area or another jurisdiction with similar laws you may have the right to: access the personal data held about you; request correction of inaccurate or incomplete data; request erasure of your data in certain circumstances; restrict processing in certain cases; receive a copy of your data in a portable format; object to certain processing; and withdraw consent where processing is based on consent. You may also have the right to lodge a complaint with a supervisory authority. If you are a California resident you may have additional rights under the CCPA, including the right to know what personal information is collected and how it is used, the right to request deletion, and the right to non-discrimination for exercising your rights. Personal information is not sold. To exercise any of these rights you can use the data management options in the app's Settings (such as export or clear data and account deletion), send a message via the Support option in the app's Settings, or email us at anita.finance.sup@gmail.com. Messages you send via Support, Feedback, or email are stored and used to respond and improve the service. Responses will be handled within the time required by applicable law where applicable.
+
+8. International data transfers
+
+Your data may be processed in countries outside your country of residence. Where data is transferred from the EEA or similar regions, appropriate safeguards are used, such as standard contractual clauses approved by the European Commission or other mechanisms recognised by the relevant authorities.
+
+9. Children
+
+The Service is not intended for users under the age of 18. ANITA does not knowingly collect personal information from children under 18. If you believe such information has been collected, please use the Support option in the app's Settings to report it and it will be addressed.
+
+10. Changes to this policy
+
+This Privacy Policy may be updated from time to time. The updated version will be posted in the app and the "Last updated" date will be revised. For material changes you may be notified in the app. Your continued use of the Service after the changes take effect constitutes acceptance of the updated policy.
+
+11. Support and contact
+
+For questions about this Privacy Policy, to exercise your rights, or for data protection inquiries, use the Support and Feedback options in the app's Settings or email us at anita.finance.sup@gmail.com. Messages you send via Support, Feedback, or email are stored in the service's database and used to handle your request and improve the service.

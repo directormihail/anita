@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-private let hasRequestedNotificationFromWelcomeChatKey = "anita_has_requested_notification_from_welcome_chat"
+private let aiConsentKey = "anita_ai_consent_given"
 
 struct ChatView: View {
     @StateObject private var viewModel = ChatViewModel()
@@ -15,18 +15,20 @@ struct ChatView: View {
     @FocusState private var isInputFocused: Bool
     @State private var isSidebarPresented = false
     @State private var showUpgradeView = false
+    @State private var showAIConsentSheet = false
     
     // Check if we should show the welcome screen (no messages yet)
     private var showWelcomeScreen: Bool {
         viewModel.messages.isEmpty
     }
     
-    /// Shows the standard Apple notification permission dialog once when user first sees the welcome chat after registration.
-    private func requestNotificationPermissionIfNeeded() {
-        guard !UserDefaults.standard.bool(forKey: hasRequestedNotificationFromWelcomeChatKey) else { return }
-        UserDefaults.standard.set(true, forKey: hasRequestedNotificationFromWelcomeChatKey)
-        NotificationService.shared.pushNotificationsEnabled = true
-        // requestAuthorization() is invoked by pushNotificationsEnabled didSet → system dialog appears
+    /// Before sending to AI we must have user consent (App Store AI disclosure). If not yet given, show sheet; on Continue, set consent and send.
+    private func requestSendMessage() {
+        if UserDefaults.standard.bool(forKey: aiConsentKey) {
+            viewModel.sendMessage()
+        } else {
+            showAIConsentSheet = true
+        }
     }
     
     var body: some View {
@@ -99,12 +101,22 @@ struct ChatView: View {
                 }
             }
             // First time on welcome chat after registration: show system notification permission dialog
-            if showWelcomeScreen {
-                requestNotificationPermissionIfNeeded()
-            }
+            // Notifications: we no longer request permission on first open. User can enable in Settings when they want.
         }
         .sheet(isPresented: $showUpgradeView) {
             UpgradeView()
+        }
+        .sheet(isPresented: $showAIConsentSheet) {
+            AIConsentSheetView(
+                onContinue: {
+                    UserDefaults.standard.set(true, forKey: aiConsentKey)
+                    showAIConsentSheet = false
+                    viewModel.sendMessage()
+                },
+                onNotNow: {
+                    showAIConsentSheet = false
+                }
+            )
         }
         .onChange(of: viewModel.showPaywallForLimitReached) { _, shouldShow in
             if shouldShow {
@@ -266,7 +278,7 @@ struct ChatView: View {
                                                 title: AppL10n.t("chat.add_income"),
                                                 action: {
                                                     viewModel.inputText = AppL10n.t("chat.add_income")
-                                                    viewModel.sendMessage()
+                                                    requestSendMessage()
                                                 }
                                             )
                                             
@@ -276,7 +288,7 @@ struct ChatView: View {
                                                 title: AppL10n.t("chat.add_expense"),
                                                 action: {
                                                     viewModel.inputText = AppL10n.t("chat.add_expense")
-                                                    viewModel.sendMessage()
+                                                    requestSendMessage()
                                                 }
                                             )
                                         }
@@ -292,7 +304,7 @@ struct ChatView: View {
                                                         showUpgradeView = true
                                                     } else {
                                                         viewModel.inputText = AppL10n.t("chat.set_target")
-                                                        viewModel.sendMessage()
+                                                        requestSendMessage()
                                                     }
                                                 }
                                             )
@@ -306,7 +318,7 @@ struct ChatView: View {
                                                         showUpgradeView = true
                                                     } else {
                                                         viewModel.inputText = AppL10n.t("chat.analytics")
-                                                        viewModel.sendMessage()
+                                                        requestSendMessage()
                                                     }
                                                 }
                                             )
@@ -315,6 +327,11 @@ struct ChatView: View {
                                     .padding(.horizontal, 20)
                                     .padding(.top, 12)
                                     .padding(.bottom, 12)
+                                    
+                                    Text(AppL10n.t("chat.notifications_hint"))
+                                        .font(.caption)
+                                        .foregroundColor(.white.opacity(0.4))
+                                        .padding(.top, 8)
                                     
                                     Spacer(minLength: 12)
                                 }
@@ -374,7 +391,7 @@ struct ChatView: View {
                         
                         // Send button - always visible, disabled when empty
                         Button(action: {
-                            viewModel.sendMessage()
+                            requestSendMessage()
                         }) {
                             Image(systemName: "paperplane.fill")
                                 .font(.system(size: 14))
@@ -948,6 +965,53 @@ struct CurrencyLoadingAnimation: View {
         animationTimers.forEach { $0.invalidate() }
         animationTimers.removeAll()
         animationOffsets = [0, 0, 0]
+    }
+}
+
+// MARK: - AI consent (App Store third-party AI disclosure)
+struct AIConsentSheetView: View {
+    var onContinue: () -> Void
+    var onNotNow: () -> Void
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                Image(systemName: "brain.head.profile")
+                    .font(.system(size: 48))
+                    .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                Text(AppL10n.t("chat.ai_consent_title"))
+                    .font(.title2.weight(.semibold))
+                    .foregroundColor(.white)
+                Text(AppL10n.t("chat.ai_consent_message"))
+                    .font(.body)
+                    .foregroundColor(.white.opacity(0.85))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+                Spacer(minLength: 20)
+                VStack(spacing: 12) {
+                    Button(action: onContinue) {
+                        Text(AppL10n.t("chat.ai_consent_continue"))
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color(red: 0.4, green: 0.49, blue: 0.92))
+                            .foregroundColor(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    .buttonStyle(.plain)
+                    Button(action: onNotNow) {
+                        Text(AppL10n.t("chat.ai_consent_not_now"))
+                            .font(.body)
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 32)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.black)
+        }
     }
 }
 

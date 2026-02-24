@@ -477,6 +477,29 @@ class NetworkService: ObservableObject {
         }
     }
     
+    /// Permanently delete account and all data (App Store requirement). Requires authenticated user.
+    func deleteAccount(userId: String) async throws -> DeleteAccountResponse {
+        let url = URL(string: "\(baseURL)/api/v1/delete-account")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body = ["userId": userId]
+        request.httpBody = try JSONEncoder().encode(body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        if httpResponse.statusCode == 200 {
+            let decoder = JSONDecoder()
+            return try decoder.decode(DeleteAccountResponse.self, from: data)
+        } else {
+            if let errorResponse = try? JSONDecoder().decode(APIError.self, from: data) {
+                throw NetworkError.apiError(errorResponse.message ?? errorResponse.error)
+            }
+            throw NetworkError.httpError(httpResponse.statusCode)
+        }
+    }
+    
     // MARK: - Conversations
     
     func getConversations(userId: String) async throws -> GetConversationsResponse {

@@ -661,6 +661,12 @@ struct ClearUserDataResponse: Codable {
     let requestId: String?
 }
 
+struct DeleteAccountResponse: Codable {
+    let success: Bool
+    let message: String?
+    let requestId: String?
+}
+
 // MARK: - Conversation Management Models
 
 struct CreateConversationRequest: Codable {

@@ -46,6 +46,9 @@ struct SettingsView: View {
     @State private var showExporting = false
     @State private var exportSummaryMessage: String?
     @State private var showClearDataConfirm = false
+    @State private var showDeleteAccountConfirm = false
+    @State private var isDeletingAccount = false
+    @State private var deleteAccountErrorMessage: String?
     
     // Test onboarding
     @State private var showTestOnboardingConfirm = false
@@ -408,6 +411,31 @@ struct SettingsView: View {
                                 ) {}
                             }
                             .buttonStyle(PremiumSettingsButtonStyle())
+                            
+                            if userManager.isAuthenticated {
+                                PremiumDivider()
+                                    .padding(.leading, 76)
+                                Button(action: {
+                                    showDeleteAccountConfirm = true
+                                }) {
+                                    HStack {
+                                        SettingsRowWithIcon(
+                                            icon: "person.crop.circle.badge.minus",
+                                            iconColor: .red.opacity(0.9),
+                                            title: AppL10n.t("settings.delete_account"),
+                                            value: nil,
+                                            showChevron: true
+                                        ) {}
+                                        if isDeletingAccount {
+                                            ProgressView()
+                                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                                .scaleEffect(0.8)
+                                        }
+                                    }
+                                }
+                                .buttonStyle(PremiumSettingsButtonStyle())
+                                .disabled(isDeletingAccount)
+                            }
                         }
                     }
                     
@@ -599,6 +627,28 @@ struct SettingsView: View {
             }
         } message: {
             Text(AppL10n.t("settings.clear_data_message"))
+        }
+        .alert(AppL10n.t("settings.delete_account_title"), isPresented: $showDeleteAccountConfirm) {
+            Button(AppL10n.t("common.cancel"), role: .cancel) {
+                deleteAccountErrorMessage = nil
+            }
+            Button(AppL10n.t("settings.delete_account_confirm"), role: .destructive) {
+                performDeleteAccount()
+            }
+        } message: {
+            Text(AppL10n.t("settings.delete_account_message"))
+        }
+        .alert(AppL10n.t("settings.delete_account_title"), isPresented: .init(
+            get: { deleteAccountErrorMessage != nil },
+            set: { if !$0 { deleteAccountErrorMessage = nil } }
+        )) {
+            Button(AppL10n.t("plans.ok"), role: .cancel) {
+                deleteAccountErrorMessage = nil
+            }
+        } message: {
+            if let msg = deleteAccountErrorMessage {
+                Text(msg)
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ExportSheetDismissed"))) { notification in
             if let u = notification.userInfo,
@@ -931,6 +981,32 @@ struct SettingsView: View {
                     resetLocalUIState()
                 }
                 print("Error clearing remote data: \(error)")
+            }
+        }
+    }
+    
+    func performDeleteAccount() {
+        let uid = userManager.userId
+        guard userManager.isAuthenticated, !uid.isEmpty else {
+            deleteAccountErrorMessage = "You must be signed in to delete your account."
+            return
+        }
+        isDeletingAccount = true
+        showDeleteAccountConfirm = false
+        Task {
+            do {
+                _ = try await networkService.deleteAccount(userId: uid)
+                await MainActor.run {
+                    userManager.clearKeyedStorage(for: uid)
+                    userManager.signOut()
+                    resetLocalUIState()
+                    isDeletingAccount = false
+                }
+            } catch {
+                await MainActor.run {
+                    isDeletingAccount = false
+                    deleteAccountErrorMessage = error.localizedDescription
+                }
             }
         }
     }

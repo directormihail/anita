@@ -2,7 +2,7 @@
  * ANITA – Legal content for Privacy Policy and Terms of Use.
  * Served via /privacy and /terms for in-app display. Keep in sync with web modals.
  * Last substantive review: 2025-02.
- * Support and feedback: in-app only (Settings → Support, Settings → Feedback). No website or email.
+ * Support and feedback: in-app (Settings → Support, Settings → Feedback) or anita.finance.sup@gmail.com.
  */
 
 const WEB_PRIVACY_URL = 'https://anita.app/privacy';
@@ -67,7 +67,7 @@ Your data is retained for as long as your account is active and as required by l
 
 7. Your rights (GDPR and CCPA)
 
-If you are in the European Economic Area or another jurisdiction with similar laws you may have the right to: access the personal data held about you; request correction of inaccurate or incomplete data; request erasure of your data in certain circumstances; restrict processing in certain cases; receive a copy of your data in a portable format; object to certain processing; and withdraw consent where processing is based on consent. You may also have the right to lodge a complaint with a supervisory authority. If you are a California resident you may have additional rights under the CCPA, including the right to know what personal information is collected and how it is used, the right to request deletion, and the right to non-discrimination for exercising your rights. Personal information is not sold. To exercise any of these rights you can use the data management options in the app’s Settings (such as export or clear data and account deletion) or send a message via the Support option in the app’s Settings. Support and feedback are provided only through the app; there is no separate website or email. Messages you send via Support or Feedback are stored and used to respond and improve the service. Responses will be handled within the time required by applicable law where applicable.
+If you are in the European Economic Area or another jurisdiction with similar laws you may have the right to: access the personal data held about you; request correction of inaccurate or incomplete data; request erasure of your data in certain circumstances; restrict processing in certain cases; receive a copy of your data in a portable format; object to certain processing; and withdraw consent where processing is based on consent. You may also have the right to lodge a complaint with a supervisory authority. If you are a California resident you may have additional rights under the CCPA, including the right to know what personal information is collected and how it is used, the right to request deletion, and the right to non-discrimination for exercising your rights. Personal information is not sold. To exercise any of these rights you can use the data management options in the app’s Settings (such as export or clear data and account deletion), send a message via the Support option in the app’s Settings, or email us at anita.finance.sup@gmail.com. Messages you send via Support, Feedback, or email are stored and used to respond and improve the service. Responses will be handled within the time required by applicable law where applicable.
 
 8. International data transfers
 
@@ -83,7 +83,7 @@ This Privacy Policy may be updated from time to time. The updated version will b
 
 11. Support and contact
 
-ANITA does not provide a separate website or email for support or privacy requests. For questions about this Privacy Policy, to exercise your rights, or for data protection inquiries, use the Support and Feedback options in the app’s Settings. Messages you send there are stored in the service’s database and used to handle your request and improve the service.
+For questions about this Privacy Policy, to exercise your rights, or for data protection inquiries, use the Support and Feedback options in the app’s Settings or email us at anita.finance.sup@gmail.com. Messages you send via Support, Feedback, or email are stored in the service’s database and used to handle your request and improve the service.
 `.trim();
 
 export const TERMS_OF_USE_FULL = `
@@ -172,7 +172,7 @@ export function getPrivacyPayload() {
     dataCollection: 'ANITA collects account data, financial transactions, chat history, preferences, and usage data necessary to provide and improve the Service. We also collect product and usage analytics (e.g. how you use the app, which features you use, and session data) via PostHog to improve the product; see the full Privacy Policy for details.',
     dataUsage: 'Data is used to provide the app, power AI features, manage subscriptions, and communicate with you. Your data is not used for advertising profiling.',
     dataSharing: 'Data is shared only with service providers (e.g. Supabase, OpenAI, Stripe, Apple, Google) as needed to operate the Service. Your data is not sold.',
-    contact: 'In-app Support and Feedback only (Settings)',
+    contact: 'Support in Settings (app) or anita.finance.sup@gmail.com',
     fullText: PRIVACY_POLICY_FULL,
   };
 }
@@ -180,7 +180,7 @@ export function getPrivacyPayload() {
 export function getTermsPayload() {
   return {
     termsOfUseUrl: WEB_TERMS_URL,
-    contact: 'In-app Support and Feedback only (Settings)',
+    contact: 'Support in Settings (app) or anita.finance.sup@gmail.com',
     fullText: TERMS_OF_USE_FULL,
   };
 }

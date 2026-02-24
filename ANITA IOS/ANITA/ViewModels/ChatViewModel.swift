@@ -723,7 +723,7 @@ class ChatViewModel: ObservableObject {
                 print("[ChatViewModel] Received response from backend")
                 
                 // Strip [PREMIUM] prefix if AI used it (free-tier intent gating); then sanitize
-                var responseText = response.response ?? ""
+                var responseText = response.response
                 var shouldShowPaywall = response.requiresUpgrade == true
                 if responseText.trimmingCharacters(in: .whitespacesAndNewlines).uppercased().hasPrefix(Self.premiumResponsePrefix.uppercased()) {
                     responseText = String(responseText.dropFirst(Self.premiumResponsePrefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
