@@ -379,6 +379,10 @@ class SupabaseService {
             print("[Supabase] Session refreshed successfully")
             return true
         }
+        
+        let errorString = String(data: data, encoding: .utf8) ?? "Unknown error"
+        print("[Supabase] ⚠️ Session refresh failed with status \(httpResponse.statusCode)")
+        print("[Supabase] Refresh error body: \(errorString)")
         return false
     }
     
@@ -688,39 +692,59 @@ class SupabaseService {
         let baseUrl = supabaseUrl.hasSuffix("/") ? String(supabaseUrl.dropLast()) : supabaseUrl
         let url = URL(string: "\(baseUrl)/rest/v1/\(endpoint)")!
         
-        var request = URLRequest(url: url)
-        request.httpMethod = method
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("return=representation", forHTTPHeaderField: "Prefer")
-        
-        if let token = accessToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        func buildRequest() -> URLRequest {
+            var request = URLRequest(url: url)
+            request.httpMethod = method
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            request.setValue("return=representation", forHTTPHeaderField: "Prefer")
+            
+            if let token = accessToken {
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }
+            
+            if let body = body {
+                request.httpBody = body
+            }
+            return request
         }
         
-        if let body = body {
-            request.httpBody = body
-        }
-        
+        // First attempt
+        var request = buildRequest()
         print("[Supabase] Database request: \(method) \(url.absoluteString)")
         
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
+        var (data, response) = try await URLSession.shared.data(for: request)
+        guard var httpResponse = response as? HTTPURLResponse else {
             throw SupabaseError.invalidResponse
         }
         
         print("[Supabase] Database response status: \(httpResponse.statusCode)")
         
+        // Success on first try
         if httpResponse.statusCode >= 200 && httpResponse.statusCode < 300 {
             return data
-        } else {
-            let errorString = String(data: data, encoding: .utf8) ?? "Unknown error"
-            print("[Supabase] Database error: \(errorString)")
-            let error = try? JSONDecoder().decode(SupabaseErrorResponse.self, from: data)
-            throw SupabaseError.databaseError(error?.message ?? errorString)
         }
+        
+        // If unauthorized, try to refresh the session once and retry the request
+        if httpResponse.statusCode == 401, (try? await refreshSession()) == true {
+            print("[Supabase] Retrying database request after session refresh")
+            request = buildRequest()
+            (data, response) = try await URLSession.shared.data(for: request)
+            guard let retryResponse = response as? HTTPURLResponse else {
+                throw SupabaseError.invalidResponse
+            }
+            httpResponse = retryResponse
+            print("[Supabase] Database response status after retry: \(httpResponse.statusCode)")
+            if httpResponse.statusCode >= 200 && httpResponse.statusCode < 300 {
+                return data
+            }
+        }
+        
+        let errorString = String(data: data, encoding: .utf8) ?? "Unknown error"
+        print("[Supabase] Database error status \(httpResponse.statusCode): \(errorString)")
+        let error = try? JSONDecoder().decode(SupabaseErrorResponse.self, from: data)
+        throw SupabaseError.databaseError(error?.message ?? errorString)
     }
     
     // Create conversation

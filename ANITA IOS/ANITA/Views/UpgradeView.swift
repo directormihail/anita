@@ -203,6 +203,35 @@ struct UpgradeView: View {
                                 .foregroundColor(.white.opacity(0.38))
                                 .multilineTextAlignment(.center)
                                 .lineSpacing(2)
+                            
+                            // Required: functional links to Privacy Policy and Terms of Use (EULA)
+                            HStack(spacing: 16) {
+                                Button(action: {
+                                    if let url = URL(string: "https://privacy-policy-anita.vercel.app/") {
+                                        UIApplication.shared.open(url)
+                                    }
+                                }) {
+                                    Text(AppL10n.t("settings.privacy_policy"))
+                                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                                        .foregroundColor(.white.opacity(0.75))
+                                        .underline()
+                                }
+                                .buttonStyle(.plain)
+                                Text("·")
+                                    .foregroundColor(.white.opacity(0.4))
+                                Button(action: {
+                                    if let url = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/") {
+                                        UIApplication.shared.open(url)
+                                    }
+                                }) {
+                                    Text(AppL10n.t("settings.terms_of_use"))
+                                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                                        .foregroundColor(.white.opacity(0.75))
+                                        .underline()
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .padding(.top, 6)
                         }
                         .padding(.horizontal, 28)
                         .padding(.top, 18)

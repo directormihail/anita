@@ -42,6 +42,10 @@ class UserManager: ObservableObject {
         shouldShowPostSignupPlans = UserDefaults.standard.bool(forKey: prefKey(postSignupPlansPendingKey))
         // Hydrate display name so @Published is in sync and all UI updates without re-login
         profileDisplayName = UserDefaults.standard.string(forKey: prefKey(profileNameKeyBase))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        // If we already have a saved token, start in authenticated state and let checkAuthStatus() refine user details.
+        if supabaseService.isAuthenticated {
+            isAuthenticated = true
+        }
         Task {
             await checkAuthStatus()
         }
@@ -238,14 +242,17 @@ class UserManager: ObservableObject {
                 await syncSavedOnboardingToSupabaseIfNeeded()
                 await syncProfileNameFromSupabase()
             } else {
+                // Supabase has no valid session for this device (no token or
+                // refresh failed). Treat as logged out so the user sees the
+                // welcome/login flow instead of the main app.
                 await MainActor.run {
+                    self.currentUser = nil
                     self.isAuthenticated = false
                 }
             }
         } catch {
-            await MainActor.run {
-                self.isAuthenticated = false
-            }
+            // Network or Supabase errors should not forcibly sign the user out.
+            print("[UserManager] checkAuthStatus error: \(error.localizedDescription)")
         }
         Task { @MainActor in await SubscriptionManager.shared.refresh() }
     }

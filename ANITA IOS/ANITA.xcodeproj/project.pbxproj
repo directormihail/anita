@@ -284,6 +284,18 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		A0FFFFFA0 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1000008 /* Preview Assets.xcassets in Resources */,
+				A1000005 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXShellScriptBuildPhase section */
 		A10000C1 /* Patch AppAuth main thread */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -306,18 +318,6 @@
 			shellScript = "# Patch AppAuth so presentationAnchor runs on main thread (Main Thread Checker). Always exit 0.\nPATCH=\"${PROJECT_DIR}/ANITA/Patches/AppAuth-main-thread.patch\"\nSTAMP=\"${DERIVED_FILE_DIR}/appauth-patch.stamp\"\nfor base in \"${SRCROOT}/../SourcePackages/checkouts\" \"${BUILD_DIR%/*/*}/SourcePackages/checkouts\" \"${PROJECT_DIR}/SourcePackages/checkouts\"; do\n  if [ -d \"${base}/AppAuth-iOS\" ]; then\n    APPATH_IOS=\"${base}/AppAuth-iOS\"\n    break\n  fi\ndone\nif [ -z \"$APPATH_IOS\" ]; then\n  APPATH_IOS=$(find \"${PROJECT_DIR}\" -type d -name \"AppAuth-iOS\" 2>/dev/null | head -1)\nfi\nif [ -z \"$APPATH_IOS\" ] || [ ! -f \"$APPATH_IOS/Sources/AppAuth/iOS/OIDExternalUserAgentIOS.m\" ]; then\n  touch \"$STAMP\" 2>/dev/null || true\n  exit 0\nfi\nif grep -q 'NSThread isMainThread' \"$APPATH_IOS/Sources/AppAuth/iOS/OIDExternalUserAgentIOS.m\" 2>/dev/null; then\n  touch \"$STAMP\" 2>/dev/null || true\n  exit 0\nfi\nif [ -f \"$PATCH\" ]; then\n  (cd \"$APPATH_IOS\" && patch -p0 --forward -r - < \"$PATCH\" 2>/dev/null) && echo \"Applied AppAuth main-thread patch\" || true\nfi\ntouch \"$STAMP\" 2>/dev/null || true\nexit 0\n";
 		};
 /* End PBXShellScriptBuildPhase section */
-
-/* Begin PBXResourcesBuildPhase section */
-		A0FFFFFA0 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				A1000008 /* Preview Assets.xcassets in Resources */,
-				A1000005 /* Assets.xcassets in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		A0FFFFFB /* Sources */ = {
@@ -504,7 +504,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ANITA/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = ANITA;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "ANITA needs microphone access to transcribe your voice messages.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "ANITA needs access to your photo library to analyze financial documents.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -516,13 +516,17 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.anita.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -541,7 +545,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ANITA/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = ANITA;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "ANITA needs microphone access to transcribe your voice messages.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "ANITA needs access to your photo library to analyze financial documents.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -553,13 +557,17 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.anita.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};
