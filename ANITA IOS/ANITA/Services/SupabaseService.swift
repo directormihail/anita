@@ -16,6 +16,7 @@ import GoogleSignIn
 private let keychainAccessTokenKey = "supabase_access_token"
 private let keychainRefreshTokenKey = "supabase_refresh_token"
 private let userDefaultsTokenKey = "supabase_access_token"
+private let userDefaultsRefreshTokenKey = "supabase_refresh_token"
 
 class SupabaseService {
     static let shared = SupabaseService()
@@ -36,6 +37,9 @@ class SupabaseService {
         if !Config.isConfigured {
             print("[Supabase] ⚠️ WARNING: Supabase not configured! Please set SUPABASE_URL and SUPABASE_ANON_KEY in Config.swift")
         }
+        
+        // Load persisted session from Keychain/UserDefaults so tokens are available as soon as the service is used (e.g. before UserManager runs).
+        loadSavedToken()
         
         // Check Google Sign-In configuration
         if !Config.isGoogleSignInConfigured {
@@ -58,13 +62,14 @@ class SupabaseService {
         }
     }
     
-    /// Persist full session (e.g. after login/signup). Uses Keychain so it survives app restarts and TestFlight updates.
+    /// Persist full session (e.g. after login/signup). Uses Keychain so it survives app restarts and TestFlight updates. Also backs up refresh token to UserDefaults for migration/fallback.
     private func setSession(accessToken: String, refreshToken: String) {
         self.accessToken = accessToken
         self.refreshToken = refreshToken
         KeychainHelper.set(accessToken, forKey: keychainAccessTokenKey)
         KeychainHelper.set(refreshToken, forKey: keychainRefreshTokenKey)
         UserDefaults.standard.set(accessToken, forKey: userDefaultsTokenKey)
+        UserDefaults.standard.set(refreshToken, forKey: userDefaultsRefreshTokenKey)
     }
     
     func setAccessToken(_ token: String?) {
@@ -77,6 +82,7 @@ class SupabaseService {
             KeychainHelper.delete(forKey: keychainAccessTokenKey)
             KeychainHelper.delete(forKey: keychainRefreshTokenKey)
             UserDefaults.standard.removeObject(forKey: userDefaultsTokenKey)
+            UserDefaults.standard.removeObject(forKey: userDefaultsRefreshTokenKey)
         }
     }
     
@@ -90,20 +96,44 @@ class SupabaseService {
         return accessToken != nil
     }
     
-    /// Load saved session from Keychain (primary) or UserDefaults (migration). Keychain persists on TestFlight.
+    /// Load saved session from Keychain (primary) or UserDefaults (migration). Ensures both access and refresh tokens are restored so session survives app quit/restart.
     func loadSavedToken() {
-        if let access = KeychainHelper.get(forKey: keychainAccessTokenKey),
-           let refresh = KeychainHelper.get(forKey: keychainRefreshTokenKey) {
+        // Prefer Keychain (persists across app updates)
+        let keychainAccess = KeychainHelper.get(forKey: keychainAccessTokenKey)
+        let keychainRefresh = KeychainHelper.get(forKey: keychainRefreshTokenKey)
+        if let access = keychainAccess, let refresh = keychainRefresh, !refresh.isEmpty {
             self.accessToken = access
             self.refreshToken = refresh
             UserDefaults.standard.set(access, forKey: userDefaultsTokenKey)
+            UserDefaults.standard.set(refresh, forKey: userDefaultsRefreshTokenKey)
             return
         }
-        if let access = UserDefaults.standard.string(forKey: userDefaultsTokenKey) {
+        // If we have refresh in Keychain but missing access (e.g. access expired and was cleared), keep refresh so we can restore session
+        if let refresh = keychainRefresh, !refresh.isEmpty {
+            self.refreshToken = refresh
+            UserDefaults.standard.set(refresh, forKey: userDefaultsRefreshTokenKey)
+        }
+        if let access = keychainAccess {
+            self.accessToken = access
+            UserDefaults.standard.set(access, forKey: userDefaultsTokenKey)
+            if let refresh = keychainRefresh, !refresh.isEmpty {
+                self.refreshToken = refresh
+                UserDefaults.standard.set(refresh, forKey: userDefaultsRefreshTokenKey)
+            }
+            return
+        }
+        // Migration: restore from UserDefaults (e.g. older installs or Keychain temporarily unavailable)
+        let udAccess = UserDefaults.standard.string(forKey: userDefaultsTokenKey)
+        let udRefresh = UserDefaults.standard.string(forKey: userDefaultsRefreshTokenKey)
+        if let access = udAccess, !access.isEmpty {
             self.accessToken = access
             KeychainHelper.set(access, forKey: keychainAccessTokenKey)
-            if let refresh = KeychainHelper.get(forKey: keychainRefreshTokenKey) {
+            if let refresh = udRefresh, !refresh.isEmpty {
                 self.refreshToken = refresh
+                KeychainHelper.set(refresh, forKey: keychainRefreshTokenKey)
+            } else if let refresh = KeychainHelper.get(forKey: keychainRefreshTokenKey) {
+                self.refreshToken = refresh
+                UserDefaults.standard.set(refresh, forKey: userDefaultsRefreshTokenKey)
             }
         }
     }
@@ -351,6 +381,12 @@ class SupabaseService {
     
     func signOut() {
         setAccessToken(nil)
+    }
+    
+    /// Tries to restore a valid session using the stored refresh token. Call on app launch so the first getCurrentUser doesn't fail due to expired access token.
+    func tryRestoreSessionFromRefreshToken() async -> Bool {
+        guard refreshToken != nil, !(refreshToken ?? "").isEmpty else { return false }
+        return (try? await refreshSession()) ?? false
     }
     
     /// Refresh access token using refresh token. Call when access token is expired or getCurrentUser returns 401.

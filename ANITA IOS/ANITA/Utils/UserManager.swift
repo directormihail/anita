@@ -232,6 +232,8 @@ class UserManager: ObservableObject {
     
     func checkAuthStatus() async {
         do {
+            // Restore session from refresh token if we have one (e.g. after app quit/restart with expired access token).
+            _ = await supabaseService.tryRestoreSessionFromRefreshToken()
             if let user = try await supabaseService.getCurrentUser() {
                 await MainActor.run {
                     self.currentUser = user
