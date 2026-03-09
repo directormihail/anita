@@ -10,7 +10,7 @@ ANITA is committed to protecting your privacy. This Privacy Policy explains in d
 
 2.1 Personal information you provide
 
-ANITA collects information that you provide directly when you create an account or use the app: your email address and authentication credentials (including those used for Sign in with Apple or Google where applicable), your name and profile information if you choose to provide them, your currency and language preferences, and any other details you enter in your profile or settings. For paid subscriptions a payment provider is used; ANITA does not store your full payment card number on its servers.
+ANITA collects information that you provide directly when you create an account or use the app: your email address and authentication credentials (including those used for Sign in with Apple or Google where applicable), your name and profile information if you choose to provide them, your currency and language preferences, and any other details you enter in your profile or settings. Paid subscriptions are processed by Apple via in-app purchase; ANITA does not store your payment card details.
 
 2.2 Financial and usage data
 
@@ -40,9 +40,7 @@ Supabase: Used for database hosting, user authentication, and secure storage. Da
 
 OpenAI: Used for AI chat, file analysis, and voice transcription (Whisper). When you use these features, the content you send (such as messages and, where applicable, audio) is processed by OpenAI to generate responses or transcriptions. Their privacy policy is at https://openai.com/policies/privacy-policy.
 
-Stripe: Used for payment processing when you subscribe to paid plans. Stripe receives payment-related identifiers and subscription status; your full payment card number is not stored. Their privacy policy is at https://stripe.com/privacy.
-
-Apple: If you use Sign in with Apple, Apple provides the information you allow under their sign-in flow. Apple's privacy information is at https://www.apple.com/legal/privacy/.
+Apple: Used for Sign in with Apple (authentication) and for in-app purchases and subscriptions. Billing, plan changes, cancellation, and refunds are handled through your Apple ID and Apple's payment system. Apple's privacy information is at https://www.apple.com/legal/privacy/.
 
 Google: If you use Google sign-in where offered, authentication and basic profile information are received as permitted by your Google account settings. Google's privacy policy is at https://policies.google.com/privacy.
 

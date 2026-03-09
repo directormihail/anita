@@ -202,155 +202,161 @@ struct OnboardingView: View {
     }
     
     private var fomoView: some View {
-        ZStack {
-            // Soft gradient orbs for depth
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color(red: 0.3, green: 0.5, blue: 0.9).opacity(0.15),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 180
-                    )
-                )
-                .frame(width: 360, height: 360)
-                .blur(radius: 40)
-                .offset(x: 80, y: -120)
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color(red: 0.5, green: 0.8, blue: 0.5).opacity(0.12),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 140
-                    )
-                )
-                .frame(width: 280, height: 280)
-                .blur(radius: 50)
-                .offset(x: -100, y: 200)
-        }
-        .overlay {
-            VStack(spacing: 0) {
-                // Hero: big emoji + headline (no box behind emoji)
-                Text(AppL10n.t("onboarding.fomo.hero_emoji", languageCode: languageCode))
-                    .font(.system(size: 70))
-                    .padding(.top, 22)
-                    .padding(.bottom, 0)
-                
-                Text(AppL10n.t("onboarding.fomo.title", languageCode: languageCode))
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 16)
-                
-                Text(AppL10n.t("onboarding.fomo.subtitle", languageCode: languageCode))
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundColor(.white.opacity(0.88))
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 8)
-                    .padding(.bottom, 20)
-                
-                // 3 blocks — same height, larger text, no colored squares behind emojis
-                VStack(spacing: 12) {
-                    fomoBenefitRow(
-                        emoji: AppL10n.t("onboarding.fomo.emoji1", languageCode: languageCode),
-                        title: AppL10n.t("onboarding.fomo.bullet1_title", languageCode: languageCode),
-                        body: AppL10n.t("onboarding.fomo.bullet1_short", languageCode: languageCode)
-                    )
-                    fomoBenefitRow(
-                        emoji: AppL10n.t("onboarding.fomo.emoji2", languageCode: languageCode),
-                        title: AppL10n.t("onboarding.fomo.bullet2_title", languageCode: languageCode),
-                        body: AppL10n.t("onboarding.fomo.bullet2_short", languageCode: languageCode)
-                    )
-                    fomoBenefitRow(
-                        emoji: AppL10n.t("onboarding.fomo.emoji4", languageCode: languageCode),
-                        title: AppL10n.t("onboarding.fomo.bullet4_title", languageCode: languageCode),
-                        body: AppL10n.t("onboarding.fomo.bullet4_short", languageCode: languageCode)
-                    )
-                }
-                .padding(.horizontal, 16)
-                
-                Spacer(minLength: 20)
-                
-                Button {
-                    let impact = UIImpactFeedbackGenerator(style: .medium)
-                    impact.impactOccurred()
-                    let survey = OnboardingSurveyResponse(
-                        languageCode: selectedLanguage?.id ?? "en",
-                        userName: trimmedUserName,
-                        currencyCode: selectedCurrency,
-                        answers: answers,
-                        completedAt: Date()
-                    )
-                    onComplete(survey)
-                } label: {
-                    HStack {
-                        Text(getStartedTitle)
-                            .font(.system(size: 19, weight: .semibold))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 56)
-                    .liquidGlass(cornerRadius: 14)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [Color.white.opacity(0.30), Color.white.opacity(0.14)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1.5
-                            )
-                    )
-                    .shadow(color: Color.black.opacity(0.35), radius: 18, x: 0, y: 10)
-                    .shadow(color: Color.white.opacity(0.06), radius: 4, x: 0, y: -1)
-                }
-                .buttonStyle(PremiumButtonStyle())
-                .padding(.horizontal, 16)
-                .padding(.bottom, 40)
-            }
-        }
-        .transition(.opacity.combined(with: .scale(scale: 0.98)))
-        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showingFomo)
-    }
-    
-    /// Benefit row: same min height for all 3 blocks, emoji with no background box, title + body. Full text viewable.
-    private func fomoBenefitRow(emoji: String, title: String, body: String) -> some View {
-        HStack(alignment: .center, spacing: 16) {
-            Text(emoji)
-                .font(.system(size: 44))
+        TimelineView(.animation) { timeline in
+            let date = timeline.date.timeIntervalSinceReferenceDate
+            let slow = sin(date / 5.0)
+            let fast = sin(date * 1.5)
             
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-                Text(body)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(.white.opacity(0.82))
-                    .fixedSize(horizontal: false, vertical: true)
+            ZStack {
+                // Soft gradient orbs for depth with gentle breathing motion
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color(red: 0.3, green: 0.5, blue: 0.9).opacity(0.20),
+                                Color.clear
+                            ],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 210 + CGFloat(slow) * 10
+                        )
+                    )
+                    .frame(width: 380, height: 380)
+                    .blur(radius: 42)
+                    .offset(x: 90 + CGFloat(slow) * 6, y: -130 + CGFloat(slow) * 4)
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color(red: 0.5, green: 0.8, blue: 0.5).opacity(0.17),
+                                Color.clear
+                            ],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 170 + CGFloat(-slow) * 8
+                        )
+                    )
+                    .frame(width: 300, height: 300)
+                    .blur(radius: 52)
+                    .offset(x: -110 + CGFloat(-slow) * 5, y: 210 + CGFloat(slow) * 6)
+                
+                // Subtle moving highlight arc behind bullets
+                Circle()
+                    .stroke(
+                        AngularGradient(
+                            gradient: Gradient(colors: [
+                                Color.white.opacity(0.0),
+                                Color.white.opacity(0.14),
+                                Color.white.opacity(0.0)
+                            ]),
+                            center: .center,
+                            angle: .degrees(Double(slow) * 40 + 90)
+                        ),
+                        lineWidth: 90
+                    )
+                    .blur(radius: 22)
+                    .opacity(0.55)
+                    .scaleEffect(1.1)
             }
-            Spacer(minLength: 0)
+            .overlay {
+                VStack(spacing: 0) {
+                    // Hero headline with soft fade + slide
+                    VStack(spacing: 8) {
+                        Text("ANITA")
+                            .font(.system(size: 30, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                        
+                        HStack(spacing: 6) {
+                            Text("will analyze your finances")
+                                .font(.system(size: 30, weight: .bold, design: .rounded))
+                                .foregroundColor(.white)
+                                .multilineTextAlignment(.center)
+                            
+                            // small animated sparkle
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(.white)
+                                .opacity(0.7 + 0.3 * CGFloat(max(fast, 0)))
+                                .scaleEffect(1.0 + 0.08 * CGFloat(max(fast, 0)))
+                        }
+                    }
+                    .padding(.top, 56)
+                    .padding(.horizontal, 26)
+                    .padding(.bottom, 36)
+                    .opacity(0.95)
+                    .offset(y: CGFloat(-max(0, slow)) * 4)
+                    
+                    // Animated bullet list (simple, no boxes) – more vertical space
+                    VStack(spacing: 40) {
+                        AnimatedBulletRow(
+                            icon: "sparkles",
+                            color: Color.yellow,
+                            title: "Suggest smart spending limits",
+                            subtitle: "So you always know how much you can spend",
+                            delay: 0.05
+                        )
+                        AnimatedBulletRow(
+                            icon: "chart.line.downtrend.xyaxis",
+                            color: Color.green,
+                            title: "Show where money is leaking",
+                            subtitle: "See exactly where it disappears every month",
+                            delay: 0.20
+                        )
+                        AnimatedBulletRow(
+                            icon: "bubble.left.and.bubble.right.fill",
+                            color: Color.blue,
+                            title: "Answer money questions",
+                            subtitle: "Ask about your finances anytime — day or night",
+                            delay: 0.35
+                        )
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 24)
+                    
+                    Spacer(minLength: 0)
+                    
+                    Button {
+                        let impact = UIImpactFeedbackGenerator(style: .medium)
+                        impact.impactOccurred()
+                        let survey = OnboardingSurveyResponse(
+                            languageCode: selectedLanguage?.id ?? "en",
+                            userName: trimmedUserName,
+                            currencyCode: selectedCurrency,
+                            answers: answers,
+                            completedAt: Date()
+                        )
+                        onComplete(survey)
+                    } label: {
+                        HStack {
+                            Text(getStartedTitle)
+                                .font(.system(size: 19, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 56)
+                        .liquidGlass(cornerRadius: 14)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [Color.white.opacity(0.30), Color.white.opacity(0.14)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1.5
+                                )
+                        )
+                        .shadow(color: Color.black.opacity(0.35), radius: 18, x: 0, y: 10)
+                        .shadow(color: Color.white.opacity(0.06), radius: 4, x: 0, y: -1)
+                    }
+                    .buttonStyle(PremiumButtonStyle())
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 20)
+                }
+            }
         }
-        .frame(minHeight: 72)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white.opacity(0.06))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                )
-        )
+        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+        .animation(.spring(response: 0.45, dampingFraction: 0.86), value: showingFomo)
     }
     
     private var languagePage: some View {
@@ -1146,6 +1152,52 @@ struct OnboardingView: View {
         .buttonStyle(PremiumButtonStyle())
         .disabled(!isNextEnabled)
         .opacity(isNextEnabled ? 1.0 : 0.45)
+    }
+}
+
+private struct AnimatedBulletRow: View {
+    let icon: String
+    let color: Color
+    let title: String
+    let subtitle: String
+    let delay: Double
+    
+    @State private var isVisible: Bool = false
+    @State private var hasAnimated: Bool = false
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 18) {
+            Image(systemName: icon)
+                .font(.system(size: 32, weight: .semibold))
+                .foregroundColor(color)
+                .symbolRenderingMode(.hierarchical)
+                .scaleEffect(isVisible ? 1.0 : 0.5)
+                .opacity(isVisible ? 1.0 : 0.0)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 21, weight: .semibold, design: .rounded))
+                    .foregroundColor(.white)
+                Text(subtitle)
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundColor(.white.opacity(0.82))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 0)
+        .padding(.vertical, 6)
+        .opacity(isVisible ? 1.0 : 0.0)
+        .offset(y: isVisible ? 0 : 18)
+        .onAppear {
+            guard !hasAnimated else { return }
+            hasAnimated = true
+            withAnimation(.spring(response: 0.7, dampingFraction: 0.8).delay(delay)) {
+                isVisible = true
+            }
+        }
     }
 }
 
