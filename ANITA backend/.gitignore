@@ -1,7 +1,9 @@
 node_modules/
 dist/
+# Never commit secrets (Stripe, Supabase, OpenAI, etc.)
 .env
 .env.local
+.env.*.local
 *.log
 .DS_Store
 *.swp

@@ -24,15 +24,14 @@ Supabase is already set up (tables `bank_accounts`, `bank_transactions`, and `pr
 
 ## 2. Set the webhook secret
 
-- **Local (ANITA backend):** In **`.env`** add or update:
+- **Local (ANITA backend):** In **`.env`** add or update (paste the signing secret from Stripe; it starts with `whsec_`):
   ```env
-  STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxx
+  STRIPE_WEBHOOK_SECRET=<paste from Stripe Dashboard>
   ```
-  (paste the value you copied).
 
 - **Production (Railway):** In your Railway project → **Variables** add:
   - **Name:** `STRIPE_WEBHOOK_SECRET`
-  - **Value:** the same `whsec_...` value.
+  - **Value:** the same signing secret from Stripe.
   If the app is already deployed, redeploy so it picks up the new variable.
 
 ---
@@ -55,7 +54,7 @@ Supabase is already set up (tables `bank_accounts`, `bank_transactions`, and `pr
 | Step | Where | What to do |
 |------|--------|------------|
 | 1 | Stripe Dashboard → Webhooks | Add endpoint with the URL above; select the two `financial_connections.*` events; copy **Signing secret**. |
-| 2 | Backend `.env` + Railway Variables | Set `STRIPE_WEBHOOK_SECRET` to the `whsec_...` value. |
+| 2 | Backend `.env` + Railway Variables | Set `STRIPE_WEBHOOK_SECRET` to the signing secret from Stripe. |
 | 3 | Railway / local | Deploy or run backend so it uses the new env. |
 
 After this, when users connect a bank via your app, Stripe will call your webhook and the backend will store accounts and transactions in Supabase. Use **GET /api/v1/bank-accounts** and **GET /api/v1/bank-transactions** from the app to show the data.

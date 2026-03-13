@@ -36,14 +36,13 @@ Follow these steps so ANITA can link user bank accounts and sync transactions.
 
 ## Step 3: Set the webhook secret in your backend
 
-1. **Local:** In **`ANITA backend/.env`** add (or update):
+1. **Local:** In **`ANITA backend/.env`** add (or update). Use the signing secret you copied in Step 2 (do not commit this file):
    ```env
-   STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxxxxxxxxxx
+   STRIPE_WEBHOOK_SECRET=<paste from Stripe Dashboard>
    ```
-   Use the value you copied in Step 2.
 2. **Railway (production):** In your Railway project → **Variables** add:
    - **Name:** `STRIPE_WEBHOOK_SECRET`
-   - **Value:** the same `whsec_...` signing secret.
+   - **Value:** the same signing secret from Stripe.
 3. Redeploy the backend on Railway if it’s already running so the new variable is picked up.
 
 ---

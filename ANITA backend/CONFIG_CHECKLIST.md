@@ -10,8 +10,8 @@ Use this to confirm everything is set so the app and bank connection (Stripe Fin
 |----------|--------------|--------|
 | **SUPABASE_URL** | All | Your Supabase project URL (e.g. `https://xxx.supabase.co`) |
 | **SUPABASE_SERVICE_ROLE_KEY** | All | From Supabase → Settings → API → service_role key |
-| **STRIPE_SECRET_KEY** | Bank connection, checkout | From Stripe Dashboard → Developers → API keys (`sk_live_...` or `sk_test_...`) |
-| **STRIPE_WEBHOOK_SECRET** | Bank connection (webhook) | From Stripe → Developers → Webhooks → your endpoint → Signing secret (`whsec_...`) |
+| **STRIPE_SECRET_KEY** | Bank connection, checkout | From Stripe Dashboard → Developers → API keys. Never commit. |
+| **STRIPE_WEBHOOK_SECRET** | Bank connection (webhook) | From Stripe → Webhooks → your endpoint → Reveal signing secret. Never commit. |
 | OPENAI_API_KEY | Chat, transcription | For AI features |
 | PORT | Optional | Default 3001; Railway sets this |
 
@@ -40,7 +40,7 @@ If these are missing, the financial-connections session still works, but the web
 3. **Events:**  
    - `financial_connections.account.created`  
    - `financial_connections.account.refreshed`
-4. Copy the **Signing secret** (`whsec_...`) into **STRIPE_WEBHOOK_SECRET** in `.env` (and Railway Variables for production).
+4. Copy the **Signing secret** into **STRIPE_WEBHOOK_SECRET** in `.env` (and Railway Variables for production). Do not commit `.env`.
 
 Without this, users can connect a bank in the app, but accounts and transactions are not saved to Supabase.
 
@@ -71,3 +71,13 @@ Without this, users can connect a bank in the app, but accounts and transactions
 - Webhook URL in Stripe must use your production backend URL (e.g. `https://anita-production-bb9a.up.railway.app/api/v1/stripe/webhook`).
 
 Once this checklist is done, you can work on the app and bank connection flow with everything configured correctly.
+
+---
+
+## If GitHub (or another scanner) reported an exposed secret
+
+- **Your real `.env` file was not committed** (it is in `.gitignore`). Scanners sometimes flag example or placeholder text.
+- To be safe, **rotate any secret that could have been exposed**:
+  1. **Stripe webhook secret:** Stripe Dashboard → Developers → Webhooks → your endpoint → **Roll** or create a new endpoint and copy the new signing secret. Update `STRIPE_WEBHOOK_SECRET` in `.env` and in Railway Variables.
+  2. **Stripe API key:** Stripe Dashboard → Developers → API keys → Roll the key. Update `STRIPE_SECRET_KEY` in `.env` and Railway.
+- See **`ANITA backend/SECURITY.md`** for more.

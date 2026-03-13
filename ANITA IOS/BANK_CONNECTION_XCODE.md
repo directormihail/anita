@@ -7,9 +7,7 @@ Follow these steps so that when you tap **"Test bank connection"** in the app (r
 The backend must return a `client_secret` so the app can show the Stripe sheet. That requires a Stripe secret key.
 
 - Open **`ANITA backend/.env`** (create from `.env.example` if needed).
-- Set **`STRIPE_SECRET_KEY`** to your Stripe secret key, e.g.:
-  - Test: `STRIPE_SECRET_KEY=sk_test_...` (from [Stripe Dashboard → Developers → API keys](https://dashboard.stripe.com/test/apikeys))
-  - Live: `STRIPE_SECRET_KEY=sk_live_...`
+- Set **`STRIPE_SECRET_KEY`** to your Stripe secret key (from [Stripe Dashboard → Developers → API keys](https://dashboard.stripe.com/test/apikeys)). Use test key for development, live key for production. Do not commit `.env`.
 - Ensure **`SUPABASE_URL`** and **`SUPABASE_SERVICE_ROLE_KEY`** are also set (needed to create/link the Stripe customer).
 
 ## 2. Run the backend

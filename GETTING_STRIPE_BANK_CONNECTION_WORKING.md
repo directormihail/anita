@@ -13,7 +13,7 @@ cd "ANITA backend"
 npm run dev
 ```
 
-Leave this terminal open. You should see: `Running on http://localhost:3001` and no "Stripe secret key not configured" error. If you see that error, check that `.env` exists in `ANITA backend` and contains a line like `STRIPE_SECRET_KEY=sk_live_...`.
+Leave this terminal open. You should see: `Running on http://localhost:3001` and no "Stripe secret key not configured" error. If you see that error, check that `.env` exists in `ANITA backend` and contains your Stripe secret key (from Stripe Dashboard → API keys). Do not commit `.env`.
 
 ### 2. Point the app to your Mac
 
