@@ -326,6 +326,24 @@ struct SettingsView: View {
                                 ) {}
                             }
                             
+                            PremiumDivider()
+                                .padding(.leading, 76)
+                            
+                            // Backend URL (for local dev / bank connection)
+                            Button(action: {
+                                backendURLText = networkService.getCurrentBaseURL()
+                                showBackendURLSheet = true
+                            }) {
+                                SettingsRowWithIcon(
+                                    icon: "server.rack",
+                                    iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
+                                    title: AppL10n.t("settings.backend_url"),
+                                    value: networkService.getCurrentBaseURL(),
+                                    showChevron: true
+                                ) {}
+                            }
+                            .buttonStyle(PremiumSettingsButtonStyle())
+                            
                         }
                     }
                     

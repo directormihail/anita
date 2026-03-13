@@ -28,15 +28,19 @@ struct WelcomeView: View {
     @State private var orbPhase2: CGFloat = 0  // green
     @State private var orbPhase3: CGFloat = 0  // purple
     @State private var orbPhase4: CGFloat = 0  // coral (small accent)
+    @State private var isConnectingBanks: Bool = false
+    @State private var bankConnectionError: String?
     
     var body: some View {
         ZStack {
             Color.black
                 .ignoresSafeArea()
+                .allowsHitTesting(false)
             
             // Subtle shifting gradient overlay (very soft)
             MovingGradientOverlay(phase: orbPhase1)
                 .ignoresSafeArea()
+                .allowsHitTesting(false)
             
             // Orb 1 — blue, drifts top-right → down-right
             Circle()
@@ -56,6 +60,7 @@ struct WelcomeView: View {
                 .blur(radius: 52)
                 .scaleEffect(orbBreath)
                 .offset(x: 70 + orbPhase1 * 60, y: -160 + orbPhase1 * 80)
+                .allowsHitTesting(false)
             
             // Orb 2 — green, drifts bottom-left → up
             Circle()
@@ -75,6 +80,7 @@ struct WelcomeView: View {
                 .blur(radius: 54)
                 .scaleEffect(orbBreath * 0.98)
                 .offset(x: -120 + (1 - orbPhase2) * 50, y: 200 - orbPhase2 * 70)
+                .allowsHitTesting(false)
             
             // Orb 3 — purple, center-ish, slow drift
             Circle()
@@ -94,6 +100,7 @@ struct WelcomeView: View {
                 .blur(radius: 50)
                 .scaleEffect(0.9 + orbBreath * 0.1)
                 .offset(x: -30 + orbPhase3 * 80, y: 20 + (1 - orbPhase3) * 60)
+                .allowsHitTesting(false)
             
             // Orb 4 — coral accent, small, drifts opposite
             Circle()
@@ -112,6 +119,7 @@ struct WelcomeView: View {
                 .frame(width: 220, height: 220)
                 .blur(radius: 44)
                 .offset(x: 100 - orbPhase4 * 90, y: -40 - orbPhase4 * 50)
+                .allowsHitTesting(false)
             
             VStack(spacing: 0) {
                 Spacer()
@@ -212,6 +220,31 @@ struct WelcomeView: View {
                         .shadow(color: Color.white.opacity(0.06), radius: 4, x: 0, y: -1)
                     }
                     .buttonStyle(PremiumButtonStyle())
+                    
+                    // Temporary test button to open Stripe Financial Connections
+                    Button(action: {
+                        let impact = UIImpactFeedbackGenerator(style: .light)
+                        impact.impactOccurred()
+                        startTestBankConnection()
+                    }) {
+                        HStack {
+                            Text("Test bank connection")
+                                .font(.system(size: 17, weight: .regular))
+                        }
+                        .foregroundColor(.white.opacity(0.9))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 48)
+                        .contentShape(Rectangle())
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.white.opacity(0.04))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                )
+                        )
+                    }
+                    .buttonStyle(PremiumButtonStyle())
                 }
                 .padding(.horizontal, 16)
                 .offset(y: contentOffset)
@@ -219,6 +252,14 @@ struct WelcomeView: View {
                 
                 Spacer()
             }
+        }
+        .alert("Bank connection", isPresented: Binding(
+            get: { bankConnectionError != nil },
+            set: { if !$0 { bankConnectionError = nil } }
+        )) {
+            Button("OK") { bankConnectionError = nil }
+        } message: {
+            if let msg = bankConnectionError { Text(msg) }
         }
         .onAppear {
             heroScale = 0.82
@@ -254,6 +295,31 @@ struct WelcomeView: View {
             }
             withAnimation(.easeInOut(duration: 10).repeatForever(autoreverses: true).delay(0.3)) {
                 orbPhase4 = 1
+            }
+        }
+    }
+    
+    private func startTestBankConnection() {
+        if isConnectingBanks { return }
+        let userManager = UserManager.shared
+        let userId = userManager.userId ?? ""
+        let userEmail = userManager.currentUser?.email
+        
+        guard !userId.isEmpty else {
+            bankConnectionError = "Please sign in first to connect your bank."
+            return
+        }
+        
+        isConnectingBanks = true
+        Task { @MainActor in
+            defer { isConnectingBanks = false }
+            do {
+                try await BankConnectionTester.shared.startTestFlow(
+                    userId: userId,
+                    userEmail: userEmail
+                )
+            } catch {
+                bankConnectionError = error.localizedDescription
             }
         }
     }

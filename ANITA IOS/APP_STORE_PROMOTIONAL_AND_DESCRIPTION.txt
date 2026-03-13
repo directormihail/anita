@@ -1,0 +1,57 @@
+============================================
+APP STORE CONNECT – Promotional Text & Description
+Copy each block into the matching field in App Store Connect.
+============================================
+
+--- PROMOTIONAL TEXT (max 170 characters) ---
+Paste into: "Promotional Text ?"
+
+Your AI finance assistant. Track spending, set goals, and get insights by simply talking to ANITA. Try free today.
+
+(Character count: 109)
+
+
+--- DESCRIPTION (max 4,000 characters) ---
+Paste into: "Description ?"
+
+ANITA is your personal finance assistant powered by AI. Manage your money by talking to ANITA like a friend—log expenses, see where your money goes, set goals, and get clear insights without spreadsheets or complicated apps.
+
+WHAT ANITA DOES
+
+• Talk to manage money — Use natural language or voice to add income and expenses. ANITA understands you and categorizes transactions automatically.
+
+• See your financial health at a glance — One overview shows income, expenses, available funds, and a health score. No digging through statements.
+
+• Get AI-driven insights — Understand spending by category, compare months, and discover realistic ways to save. ANITA suggests limits and tracks progress.
+
+• Set and hit targets — Define savings or spending goals. ANITA tells you if they’re achievable and helps you stay on track with reminders and progress updates.
+
+• Stay organized — Auto-categorization, duplicate detection, and multi-currency support keep your data clean and accurate.
+
+• Make it rewarding — Earn XP and level up as you track expenses and build better habits. Turn finance into a habit you’ll keep.
+
+• Bank-level security — Your data is protected with encryption. We’re GDPR compliant and don’t share your information.
+
+HOW IT WORKS
+
+1. Sign up free — No credit card required.
+2. Start chatting — Log transactions and ask questions in plain language.
+3. Use the Finance view — See charts, categories, and insights in one place.
+
+Premium unlocks the full experience: unlimited conversations, advanced analytics, and priority support.
+
+ANITA is for informational use only and does not provide financial, legal, or tax advice. Always consult a qualified professional for decisions about your money.
+
+By using Anita Finance, you agree to Apple’s Media Services Terms and Conditions (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/
+
+Download ANITA and make finance simple again.
+
+(Character count: ~1,580)
+
+
+============================================
+NOTES
+============================================
+• Promotional Text can be changed anytime without a new app version—use it for seasonal or timely offers.
+• Description is shown on your App Store page; keep it accurate and aligned with your app and Privacy Policy.
+• If you need a shorter description, use the first two paragraphs plus the disclaimer paragraph.

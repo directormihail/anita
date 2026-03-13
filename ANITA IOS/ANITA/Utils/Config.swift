@@ -52,11 +52,16 @@ struct Config {
     
     static let backendURL: String = {
         // Check environment variable first
-        if let url = ProcessInfo.processInfo.environment["BACKEND_URL"] {
+        if let url = ProcessInfo.processInfo.environment["BACKEND_URL"], !url.isEmpty {
             return url
         }
-        // Use production Railway URL for all builds (test). For local dev, set Backend URL in Settings to http://localhost:3001 or your Mac IP.
+#if DEBUG
+        // When running from Xcode (simulator or device), use local backend so "Test bank connection" works without Settings.
+        return "http://localhost:3001"
+#else
+        // Release / TestFlight uses production Railway URL.
         return productionBackendURL
+#endif
     }()
     
     // Google Sign-In Configuration
@@ -129,6 +134,15 @@ struct Config {
     }()
     
     static let posthogProjectID: String = "318843"
+    
+    // Stripe (Financial Connections – bank data for onboarding / insights)
+    // Publishable key only – safe for client. Secret key must stay on backend (.env / Railway).
+    static let stripePublishableKey: String = {
+        if let key = ProcessInfo.processInfo.environment["STRIPE_PUBLISHABLE_KEY"], !key.isEmpty {
+            return key.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return "pk_live_51SPnR83ZFm0UsFDGAMEA6i8ubiNNPvYzIROv0W6xdPqHo1wCeSBNpmrBPbpNr3Pw5ZWmQIWYQxSdUEX2AsLNTDuI00DAtV3caw"
+    }()
     
     // Validate Google Sign-In configuration
     static var isGoogleSignInConfigured: Bool {

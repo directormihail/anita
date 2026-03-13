@@ -1,5 +1,5 @@
 {
-  "originHash" : "ccc48d66527ee64b1bf4948f9542a23c1fd7d7da1747d37a1d2cd356c6cdd79c",
+  "originHash" : "c8309a68360715297fe0c271c7d5865588bef5fce0a4724ef4b207c87ac41503",
   "pins" : [
     {
       "identity" : "appauth-ios",
@@ -44,6 +44,15 @@
       "state" : {
         "revision" : "38dc32a8b80da53ed6736a7ea696b324881c3d40",
         "version" : "3.41.2"
+      }
+    },
+    {
+      "identity" : "stripe-ios",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/stripe/stripe-ios",
+      "state" : {
+        "revision" : "dfc152145ced35e248e6fda5a8d6eb620bfcd74f",
+        "version" : "24.25.0"
       }
     }
   ],

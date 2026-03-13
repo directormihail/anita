@@ -147,6 +147,27 @@ struct CreateCheckoutResponse: Codable {
     let error: String?
 }
 
+// MARK: - Stripe Financial Connections Models
+
+struct CreateFinancialConnectionsSessionRequest: Codable {
+    let userId: String
+    let userEmail: String?
+}
+
+struct CreateFinancialConnectionsSessionResponse: Codable {
+    let clientSecret: String?
+    let sessionId: String?
+    let requestId: String?
+    let error: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case clientSecret = "client_secret"
+        case sessionId = "session_id"
+        case requestId
+        case error
+    }
+}
+
 // MARK: - Subscription Models
 
 struct Subscription: Codable {

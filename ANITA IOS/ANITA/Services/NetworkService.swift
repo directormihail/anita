@@ -19,9 +19,13 @@ class NetworkService: ObservableObject {
         #endif
     }
     
-    /// Always use Railway production server. Custom URL in Settings is ignored so the app connects to Railway.
+    /// Base URL: Settings override (for local testing) if set, else Config.backendURL (Railway).
     private var rawBaseURL: String {
-        Config.backendURL
+        let key = "backendURL"
+        if let url = UserDefaults.standard.string(forKey: key)?.trimmingCharacters(in: .whitespacesAndNewlines), !url.isEmpty {
+            return url.hasSuffix("/") ? String(url.dropLast()) : url
+        }
+        return Config.backendURL
     }
     
     /// Normalized base URL: trimmed, no trailing slash, never empty.
@@ -35,13 +39,18 @@ class NetworkService: ObservableObject {
     
     private init() {
         let initialURL = baseURL
-        print("[NetworkService] Using Railway server: \(initialURL)")
+        print("[NetworkService] Using backend: \(initialURL)")
     }
     
     func updateBaseURL(_ url: String) {
-        // No-op: app always uses Railway (Config.backendURL). Kept for API compatibility with Settings.
-        UserDefaults.standard.set(url.trimmingCharacters(in: .whitespacesAndNewlines), forKey: "backendURL")
-        print("[NetworkService] Backend URL is fixed to Railway: \(Config.backendURL)")
+        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            UserDefaults.standard.removeObject(forKey: "backendURL")
+            print("[NetworkService] Backend URL cleared; using default: \(Config.backendURL)")
+        } else {
+            UserDefaults.standard.set(trimmed, forKey: "backendURL")
+            print("[NetworkService] Backend URL set to: \(trimmed)")
+        }
     }
     
     // Helper to get current URL (for debugging/display)
@@ -184,6 +193,43 @@ class NetworkService: ObservableObject {
         } else {
             if let errorResponse = try? JSONDecoder().decode(CreateCheckoutResponse.self, from: data) {
                 throw NetworkError.apiError(errorResponse.error ?? "Checkout session creation failed")
+            }
+            throw NetworkError.httpError(httpResponse.statusCode)
+        }
+    }
+    
+    // MARK: - Stripe Financial Connections
+    
+    func createFinancialConnectionsSession(userId: String, userEmail: String?) async throws -> CreateFinancialConnectionsSessionResponse {
+        let url = URL(string: "\(baseURL)/api/v1/financial-connections/session")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = Self.requestTimeout
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let requestBody = CreateFinancialConnectionsSessionRequest(
+            userId: userId,
+            userEmail: userEmail
+        )
+        
+        request.httpBody = try JSONEncoder().encode(requestBody)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 200 {
+            let decoder = JSONDecoder()
+            return try decoder.decode(CreateFinancialConnectionsSessionResponse.self, from: data)
+        } else if httpResponse.statusCode == 404 {
+            throw NetworkError.apiError(
+                "Bank connection isn’t available: this server doesn’t have the financial-connections route. Deploy the latest ANITA backend to Railway (it includes POST /api/v1/financial-connections/session). For local testing: set Settings → Backend URL to http://localhost:3001 and run: cd 'ANITA backend' && npm run dev"
+            )
+        } else {
+            if let errorResponse = try? JSONDecoder().decode(CreateFinancialConnectionsSessionResponse.self, from: data) {
+                throw NetworkError.apiError(errorResponse.error ?? "Financial Connections session creation failed")
             }
             throw NetworkError.httpError(httpResponse.statusCode)
         }

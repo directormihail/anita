@@ -7,7 +7,15 @@
 // This ensures all modules can access process.env values
 import dotenv from 'dotenv';
 import path from 'path';
-dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+
+// Load from backend root so .env is found when running "npm run dev" from any cwd
+const backendRoot = path.resolve(__dirname, '..');
+const envPath = path.join(backendRoot, '.env');
+dotenv.config({ path: envPath });
+// Fallback: also try cwd in case backend is run from project root
+if (process.cwd() !== backendRoot) {
+  dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+}
 
 // Now import everything else after env vars are loaded
 import express, { Request, Response } from 'express';
@@ -43,6 +51,10 @@ import { handleVerifyIOSSubscription } from './routes/verify-ios-subscription';
 import { handleGetSubscription } from './routes/get-subscription';
 import { handleSubmitSupport } from './routes/submit-support';
 import { handleSubmitFeedback } from './routes/submit-feedback';
+import { handleCreateFinancialConnectionsSession } from './routes/create-financial-connections-session';
+import { handleStripeWebhook } from './routes/stripe-webhook';
+import { handleGetBankAccounts } from './routes/get-bank-accounts';
+import { handleGetBankTransactions } from './routes/get-bank-transactions';
 import { applySecurityHeaders } from './utils/securityHeaders';
 import { requestIdMiddleware } from './middleware/requestId';
 import { getPrivacyPayload, getTermsPayload } from './legal/content';
@@ -81,6 +93,13 @@ app.use(cors(corsOptions));
 
 // Request ID middleware (must be early in the chain)
 app.use(requestIdMiddleware);
+
+// Stripe webhook must receive raw body for signature verification (before express.json)
+app.post(
+  '/api/v1/stripe/webhook',
+  express.raw({ type: 'application/json' }),
+  handleStripeWebhook
+);
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -145,6 +164,9 @@ app.post('/api/v1/update-asset', handleUpdateAsset);
 app.post('/api/v1/delete-asset', handleDeleteAsset);
 app.post('/api/v1/support', handleSubmitSupport);
 app.post('/api/v1/feedback', handleSubmitFeedback);
+app.post('/api/v1/financial-connections/session', handleCreateFinancialConnectionsSession);
+app.get('/api/v1/bank-accounts', handleGetBankAccounts);
+app.get('/api/v1/bank-transactions', handleGetBankTransactions);
 
 // Legacy routes (redirect to v1 for backward compatibility)
 app.post('/api/chat-completion', handleChatCompletion);
@@ -229,6 +251,10 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('   - GET  /terms');
   console.log('   - POST /api/v1/support');
   console.log('   - POST /api/v1/feedback');
+  console.log('   - POST /api/v1/financial-connections/session');
+  console.log('   - GET  /api/v1/bank-accounts');
+  console.log('   - GET  /api/v1/bank-transactions');
+  console.log('   - POST /api/v1/stripe/webhook (Stripe only)');
   console.log('\n   ✅ Ready for iOS app!\n');
   
   // Check environment variables

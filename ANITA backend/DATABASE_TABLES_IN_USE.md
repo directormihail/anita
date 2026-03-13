@@ -17,6 +17,8 @@ Before dropping any table in Supabase, check this list. **Only drop tables that 
 | **xp_rules** | Backend, Webapp | XP rule definitions |
 | **xp_levels** | Backend, Webapp | Level thresholds |
 | **user_subscriptions** | Backend, Webapp | Subscription status (Stripe / Apple) |
+| **bank_accounts** | Backend | Stripe Financial Connections linked accounts |
+| **bank_transactions** | Backend | Transactions synced from linked bank accounts |
 | **message_feedback** | Backend | Like/dislike on chat messages |
 | **user_support_requests** | Backend | Support form (Settings → Support) |
 | **user_feedback** | Backend, Webapp | Feedback form (Settings → Feedback) |
