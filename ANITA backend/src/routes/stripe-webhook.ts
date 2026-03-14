@@ -94,6 +94,7 @@ async function syncTransactionsForAccount(
   userId: string,
   supabase: SupabaseClient
 ): Promise<void> {
+  const stripe = getStripe();
   if (!stripe) return;
 
   let hasMore = true;
@@ -223,6 +224,9 @@ export async function handleStripeWebhook(req: Request, res: Response): Promise<
       if (customerId) {
         await processAccount(supabase, account.id, customerId);
       }
+    } else {
+      // Acknowledge other events (e.g. setup_intent.created, checkout.session.completed) so Stripe doesn't retry
+      logger.info('Stripe webhook received (no handler)', { requestId, type: eventType });
     }
   } catch (err) {
     logger.error('Stripe webhook processing error', {
