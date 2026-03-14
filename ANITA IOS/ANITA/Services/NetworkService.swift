@@ -20,12 +20,18 @@ class NetworkService: ObservableObject {
     }
     
     /// Base URL: Settings override (for local testing) if set, else Config.backendURL (Railway).
+    /// If a stored URL is localhost/127.0.0.1 we ignore it and use Railway so "Test bank connection" works from Xcode without running backend locally.
     private var rawBaseURL: String {
         let key = "backendURL"
-        if let url = UserDefaults.standard.string(forKey: key)?.trimmingCharacters(in: .whitespacesAndNewlines), !url.isEmpty {
-            return url.hasSuffix("/") ? String(url.dropLast()) : url
+        guard let url = UserDefaults.standard.string(forKey: key)?.trimmingCharacters(in: .whitespacesAndNewlines), !url.isEmpty else {
+            return Config.backendURL
         }
-        return Config.backendURL
+        let normalized = url.hasSuffix("/") ? String(url.dropLast()) : url
+        let lower = normalized.lowercased()
+        if lower.hasPrefix("http://localhost") || lower.hasPrefix("http://127.0.0.1") || lower.contains("localhost") || lower.contains("127.0.0.1") {
+            return Config.backendURL
+        }
+        return normalized
     }
     
     /// Normalized base URL: trimmed, no trailing slash, never empty.
@@ -201,7 +207,11 @@ class NetworkService: ObservableObject {
     // MARK: - Stripe Financial Connections
     
     func createFinancialConnectionsSession(userId: String, userEmail: String?) async throws -> CreateFinancialConnectionsSessionResponse {
-        let url = URL(string: "\(baseURL)/api/v1/financial-connections/session")!
+        let sessionURL = "\(baseURL)/api/v1/financial-connections/session"
+        print("[NetworkService] Bank connection: POST \(sessionURL)")
+        guard let url = URL(string: sessionURL) else {
+            throw NetworkError.apiError("Invalid backend URL: \(baseURL)")
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = Self.requestTimeout
@@ -214,7 +224,14 @@ class NetworkService: ObservableObject {
         
         request.httpBody = try JSONEncoder().encode(requestBody)
         
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            let msg = (error as NSError).localizedDescription
+            throw NetworkError.apiError("Cannot reach backend at \(baseURL). \(msg)")
+        }
         
         guard let httpResponse = response as? HTTPURLResponse else {
             throw NetworkError.invalidResponse

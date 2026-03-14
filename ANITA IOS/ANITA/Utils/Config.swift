@@ -55,13 +55,9 @@ struct Config {
         if let url = ProcessInfo.processInfo.environment["BACKEND_URL"], !url.isEmpty {
             return url
         }
-#if DEBUG
-        // When running from Xcode (simulator or device), use local backend so "Test bank connection" works without Settings.
-        return "http://localhost:3001"
-#else
-        // Release / TestFlight uses production Railway URL.
+        // DEBUG and Release both use Railway so "Test bank connection" works from Xcode without running backend locally.
+        // For local backend testing, set Backend URL in Settings → Developer to http://localhost:3001 and run: cd 'ANITA backend' && npm run dev
         return productionBackendURL
-#endif
     }()
     
     // Google Sign-In Configuration
@@ -136,12 +132,12 @@ struct Config {
     static let posthogProjectID: String = "318843"
     
     // Stripe (Financial Connections – bank data for onboarding / insights)
-    // Publishable key only – safe for client. Secret key must stay on backend (.env / Railway).
+    // Publishable key only – safe for client. Must match backend mode: use pk_test_ when backend uses sk_test_, pk_live_ when backend uses sk_live_.
     static let stripePublishableKey: String = {
         if let key = ProcessInfo.processInfo.environment["STRIPE_PUBLISHABLE_KEY"], !key.isEmpty {
             return key.trimmingCharacters(in: .whitespacesAndNewlines)
         }
-        return "pk_live_51SPnR83ZFm0UsFDGAMEA6i8ubiNNPvYzIROv0W6xdPqHo1wCeSBNpmrBPbpNr3Pw5ZWmQIWYQxSdUEX2AsLNTDuI00DAtV3caw"
+        return "pk_test_51SPnR83ZFm0UsFDGphkA814fQAkFNLGKki4jXNlrUUcuVbTM3wLFBuNClYOEQjqOF5s0S8OEwGsnJsa6jiKwM4Fj00ZNXZjYHf"
     }()
     
     // Validate Google Sign-In configuration
