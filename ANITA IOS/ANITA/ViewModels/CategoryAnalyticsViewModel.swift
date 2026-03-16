@@ -8,6 +8,21 @@
 import Foundation
 import SwiftUI
 
+/// Returns (first day YYYY-MM-DD, last day YYYY-MM-DD) for the given month/year for bank transaction API.
+private func monthRange(calendar: Calendar, month: Int?, year: Int?) -> (String, String) {
+    let now = Date()
+    let m = month ?? calendar.component(.month, from: now)
+    let y = year ?? calendar.component(.year, from: now)
+    let fromStr = String(format: "%04d-%02d-01", y, m)
+    var comp = DateComponents(year: y, month: m, day: 1)
+    guard let firstDay = calendar.date(from: comp),
+          let lastDay = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: firstDay) else {
+        return (fromStr, fromStr)
+    }
+    let toStr = String(format: "%04d-%02d-%02d", y, m, calendar.component(.day, from: lastDay))
+    return (fromStr, toStr)
+}
+
 @MainActor
 class CategoryAnalyticsViewModel: ObservableObject {
     @Published var categoryData: CategoryAnalyticsData?
@@ -17,6 +32,14 @@ class CategoryAnalyticsViewModel: ObservableObject {
     
     private let networkService = NetworkService.shared
     private let userId: String
+
+    /// Backend user id: requires Supabase auth so analytics reflect server data shared across devices.
+    private var effectiveUserId: String? {
+        guard let authed = UserManager.shared.currentUser, UserManager.shared.isAuthenticated else {
+            return nil
+        }
+        return authed.id
+    }
     
     // Period filtering - defaults to current month
     var selectedMonth: Date? = nil
@@ -37,7 +60,7 @@ class CategoryAnalyticsViewModel: ObservableObject {
     init(userId: String? = nil) {
         self.userId = userId ?? UserManager.shared.userId
     }
-    
+
     func loadData(month: Int? = nil, year: Int? = nil) {
         isLoading = true
         errorMessage = nil
@@ -56,39 +79,118 @@ class CategoryAnalyticsViewModel: ObservableObject {
         Task {
             do {
                 let calendar = Calendar.current
-                // Load transactions filtered by period
-                let transactionsResponse = try await networkService.getTransactions(
-                    userId: userId,
-                    month: month,
-                    year: year
-                )
-                let analyticsData = calculateCategoryAnalytics(from: transactionsResponse.transactions)
-                
-                // Load previous month data for trend comparison
+                guard let userId = self.effectiveUserId else {
+                    await MainActor.run {
+                        self.errorMessage = "Please log in to see category analytics on all devices."
+                        self.isLoading = false
+                    }
+                    return
+                }
+                var currentTransactions: [TransactionItem] = []
                 var previousMonthData: [TransactionItem] = []
-                if let month = month, let year = year,
-                   let currentMonthDate = calendar.date(from: DateComponents(year: year, month: month, day: 1)),
-                   let previousMonthDate = calendar.date(byAdding: .month, value: -1, to: currentMonthDate) {
-                    let prevMonth = calendar.component(.month, from: previousMonthDate)
-                    let prevYear = calendar.component(.year, from: previousMonthDate)
-                    do {
-                        let prevResponse = try await networkService.getTransactions(
+
+                if UserManager.shared.usesBankDataOnly {
+                    // Bank-only mode: use bank transactions (same source as Transactions list and health score)
+                    let (fromStr, toStr) = monthRange(calendar: calendar, month: month, year: year)
+                    let bankResponse = try await networkService.getBankTransactions(
+                        userId: userId,
+                        from: fromStr,
+                        to: toStr,
+                        limit: 1000
+                    )
+                    currentTransactions = bankResponse.transactions.map { $0.toTransactionItem() }
+                    
+                    if let month = month, let year = year,
+                       let currentMonthDate = calendar.date(from: DateComponents(year: year, month: month, day: 1)),
+                       let previousMonthDate = calendar.date(byAdding: .month, value: -1, to: currentMonthDate) {
+                        let prevMonth = calendar.component(.month, from: previousMonthDate)
+                        let prevYear = calendar.component(.year, from: previousMonthDate)
+                        let (prevFrom, prevTo) = monthRange(calendar: calendar, month: prevMonth, year: prevYear)
+                        do {
+                            let prevBank = try await networkService.getBankTransactions(
+                                userId: userId,
+                                from: prevFrom,
+                                to: prevTo,
+                                limit: 1000
+                            )
+                            previousMonthData = prevBank.transactions.map { $0.toTransactionItem() }
+                        } catch {
+                            print("[CategoryAnalyticsViewModel] Error loading previous month bank data: \(error.localizedDescription)")
+                        }
+                    }
+                } else {
+                    // Manual mode: include BOTH manual (anita_data) and bank transactions so Insights reflects all activity.
+                    async let manualCurrent = networkService.getTransactions(
+                        userId: userId,
+                        month: month,
+                        year: year
+                    )
+                    async let manualPrevious: GetTransactionsResponse? = {
+                        if let month = month, let year = year,
+                           let currentMonthDate = calendar.date(from: DateComponents(year: year, month: month, day: 1)),
+                           let previousMonthDate = calendar.date(byAdding: .month, value: -1, to: currentMonthDate) {
+                            let prevMonth = calendar.component(.month, from: previousMonthDate)
+                            let prevYear = calendar.component(.year, from: previousMonthDate)
+                            return try? await networkService.getTransactions(
+                                userId: userId,
+                                month: prevMonth,
+                                year: prevYear
+                            )
+                        }
+                        return nil
+                    }()
+                    
+                    async let bankCurrent: GetBankTransactionsResponse? = {
+                        let (fromStr, toStr) = monthRange(calendar: calendar, month: month, year: year)
+                        return try? await networkService.getBankTransactions(
                             userId: userId,
-                            month: prevMonth,
-                            year: prevYear
+                            from: fromStr,
+                            to: toStr,
+                            limit: 1000
                         )
-                        previousMonthData = prevResponse.transactions
-                    } catch {
-                        print("[CategoryAnalyticsViewModel] Error loading previous month data: \(error.localizedDescription)")
+                    }()
+                    
+                    async let bankPrevious: [TransactionItem]? = {
+                        if let month = month, let year = year,
+                           let currentMonthDate = calendar.date(from: DateComponents(year: year, month: month, day: 1)),
+                           let previousMonthDate = calendar.date(byAdding: .month, value: -1, to: currentMonthDate) {
+                            let prevMonth = calendar.component(.month, from: previousMonthDate)
+                            let prevYear = calendar.component(.year, from: previousMonthDate)
+                            let (prevFrom, prevTo) = monthRange(calendar: calendar, month: prevMonth, year: prevYear)
+                            if let resp = try? await networkService.getBankTransactions(
+                                userId: userId,
+                                from: prevFrom,
+                                to: prevTo,
+                                limit: 1000
+                            ) {
+                                return resp.transactions.map { $0.toTransactionItem() }
+                            }
+                        }
+                        return nil
+                    }()
+                    
+                    let manualCurrentResp = try await manualCurrent
+                    let manualPreviousResp = await manualPrevious
+                    let bankCurrentResp = await bankCurrent
+                    let bankPreviousTx = await bankPrevious
+                    
+                    currentTransactions = manualCurrentResp.transactions
+                    if let bankTx = bankCurrentResp?.transactions {
+                        currentTransactions.append(contentsOf: bankTx.map { $0.toTransactionItem() })
+                    }
+                    
+                    previousMonthData = manualPreviousResp?.transactions ?? []
+                    if let bankPrev = bankPreviousTx {
+                        previousMonthData.append(contentsOf: bankPrev)
                     }
                 }
-                
-                // Calculate trends
+
+                let analyticsData = calculateCategoryAnalytics(from: currentTransactions)
                 let trends = calculateCategoryTrends(
-                    current: transactionsResponse.transactions,
+                    current: currentTransactions,
                     previous: previousMonthData
                 )
-                
+
                 await MainActor.run {
                     self.categoryData = analyticsData
                     self.categoryTrends = trends

@@ -118,8 +118,13 @@ class SidebarViewModel: ObservableObject {
             // If health check passes, load all data
             do {
                 print("[SidebarViewModel] Loading data from backend...")
-                // Load all data in parallel
-                async let metricsTask = networkService.getFinancialMetrics(userId: currentUserId)
+                let calendar = Calendar.current
+                let now = Date()
+                let month = calendar.component(.month, from: now)
+                let year = calendar.component(.year, from: now)
+                let useBankData = UserManager.shared.usesBankDataOnly
+                // Load all data in parallel; use bank metrics when user has bank connected
+                async let metricsTask = networkService.getFinancialMetrics(userId: currentUserId, month: month, year: year, useBankData: useBankData)
                 async let conversationsTask = networkService.getConversations(userId: currentUserId)
                 async let xpStatsTask = networkService.getXPStats(userId: currentUserId)
                 

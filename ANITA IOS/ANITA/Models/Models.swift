@@ -260,6 +260,73 @@ struct GetTransactionsResponse: Codable {
     let requestId: String?
 }
 
+// MARK: - Bank transactions (Stripe Financial Connections)
+struct BankTransactionItem: Decodable {
+    let id: String
+    /// Backend/Supabase may return bigint as Int or String
+    let amount_cents: Int
+    let currency: String?
+    let description: String?
+    let merchant_name: String?
+    let transacted_at: String
+    let category: String?
+    let raw_category: String?
+    let bank_account_id: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case id, amount_cents, currency, description, merchant_name, transacted_at, category, raw_category, bank_account_id
+    }
+    
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        if let n = try? c.decode(Int.self, forKey: .amount_cents) {
+            amount_cents = n
+        } else if let s = try? c.decode(String.self, forKey: .amount_cents), let n = Int(s) {
+            amount_cents = n
+        } else {
+            amount_cents = 0
+        }
+        currency = try c.decodeIfPresent(String.self, forKey: .currency)
+        description = try c.decodeIfPresent(String.self, forKey: .description)
+        merchant_name = try c.decodeIfPresent(String.self, forKey: .merchant_name)
+        // Backend/Supabase can return transacted_at as ISO string or as Unix timestamp number
+        if let str = try? c.decode(String.self, forKey: .transacted_at) {
+            transacted_at = str
+        } else if let ts = try? c.decode(Double.self, forKey: .transacted_at) {
+            transacted_at = ISO8601DateFormatter().string(from: Date(timeIntervalSince1970: ts))
+        } else if let ts = try? c.decode(Int.self, forKey: .transacted_at) {
+            transacted_at = ISO8601DateFormatter().string(from: Date(timeIntervalSince1970: Double(ts)))
+        } else {
+            transacted_at = ISO8601DateFormatter().string(from: Date())
+        }
+        category = try c.decodeIfPresent(String.self, forKey: .category)
+        raw_category = try c.decodeIfPresent(String.self, forKey: .raw_category)
+        bank_account_id = try c.decodeIfPresent(String.self, forKey: .bank_account_id)
+    }
+    
+    /// Map to TransactionItem for use in Finance tab (amount in units, type from sign, date ISO).
+    func toTransactionItem() -> TransactionItem {
+        let amount = Double(amount_cents) / 100.0
+        let type = amount_cents >= 0 ? "income" : "expense"
+        let desc = (merchant_name?.isEmpty == false ? merchant_name : description) ?? ""
+        let cat = category ?? "Uncategorized"
+        return TransactionItem(
+            id: id,
+            type: type,
+            amount: abs(amount),
+            category: cat,
+            description: desc,
+            date: transacted_at
+        )
+    }
+}
+
+struct GetBankTransactionsResponse: Decodable {
+    let transactions: [BankTransactionItem]
+    let requestId: String?
+}
+
 // MARK: - Conversation Models
 
 struct Conversation: Codable {

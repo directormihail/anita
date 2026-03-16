@@ -11,6 +11,8 @@ import Foundation
 struct WelcomeView: View {
     var onShowLogin: () -> Void
     var onShowSignUp: () -> Void
+    /// When set, "Test bank connection" shows sign in/sign up first, then onboarding with bank step, then Get started → subscriptions → chat. When nil, button is hidden or does nothing.
+    var onStartTestBankFlow: (() -> Void)?
     
     // Extended palette: FOMO blue/green + accent
     private static let orbBlue = Color(red: 0.3, green: 0.5, blue: 0.9)
@@ -28,8 +30,6 @@ struct WelcomeView: View {
     @State private var orbPhase2: CGFloat = 0  // green
     @State private var orbPhase3: CGFloat = 0  // purple
     @State private var orbPhase4: CGFloat = 0  // coral (small accent)
-    @State private var isConnectingBanks: Bool = false
-    @State private var bankConnectionError: String?
     
     var body: some View {
         ZStack {
@@ -221,30 +221,32 @@ struct WelcomeView: View {
                     }
                     .buttonStyle(PremiumButtonStyle())
                     
-                    // Temporary test button to open Stripe Financial Connections
-                    Button(action: {
-                        let impact = UIImpactFeedbackGenerator(style: .light)
-                        impact.impactOccurred()
-                        startTestBankConnection()
-                    }) {
-                        HStack {
-                            Text("Test bank connection")
-                                .font(.system(size: 17, weight: .regular))
+                    // Test bank connection: sign in/up → onboarding (with bank as last step) → Get started → subscriptions → chat
+                    if let onStartTestBankFlow = onStartTestBankFlow {
+                        Button(action: {
+                            let impact = UIImpactFeedbackGenerator(style: .light)
+                            impact.impactOccurred()
+                            onStartTestBankFlow()
+                        }) {
+                            HStack {
+                                Text("Test bank connection")
+                                    .font(.system(size: 17, weight: .regular))
+                            }
+                            .foregroundColor(.white.opacity(0.9))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 48)
+                            .contentShape(Rectangle())
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.white.opacity(0.04))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                    )
+                            )
                         }
-                        .foregroundColor(.white.opacity(0.9))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 48)
-                        .contentShape(Rectangle())
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.white.opacity(0.04))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                                )
-                        )
+                        .buttonStyle(PremiumButtonStyle())
                     }
-                    .buttonStyle(PremiumButtonStyle())
                 }
                 .padding(.horizontal, 16)
                 .offset(y: contentOffset)
@@ -252,14 +254,6 @@ struct WelcomeView: View {
                 
                 Spacer()
             }
-        }
-        .alert("Bank connection", isPresented: Binding(
-            get: { bankConnectionError != nil },
-            set: { if !$0 { bankConnectionError = nil } }
-        )) {
-            Button("OK") { bankConnectionError = nil }
-        } message: {
-            if let msg = bankConnectionError { Text(msg) }
         }
         .onAppear {
             heroScale = 0.82
@@ -299,30 +293,6 @@ struct WelcomeView: View {
         }
     }
     
-    private func startTestBankConnection() {
-        if isConnectingBanks { return }
-        let userManager = UserManager.shared
-        let userId = userManager.userId ?? ""
-        let userEmail = userManager.currentUser?.email
-        
-        guard !userId.isEmpty else {
-            bankConnectionError = "Please sign in first to connect your bank."
-            return
-        }
-        
-        isConnectingBanks = true
-        Task { @MainActor in
-            defer { isConnectingBanks = false }
-            do {
-                try await BankConnectionTester.shared.startTestFlow(
-                    userId: userId,
-                    userEmail: userEmail
-                )
-            } catch {
-                bankConnectionError = error.localizedDescription
-            }
-        }
-    }
 }
 
 // MARK: - Subtle moving gradient overlay

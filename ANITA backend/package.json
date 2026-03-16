@@ -7,7 +7,9 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node -r dotenv/config dist/index.js",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test:ai-categories": "tsx scripts/test-ai-categorization.ts",
+    "inspect-stripe-format": "tsx scripts/inspect-stripe-transaction-format.ts"
   },
   "keywords": ["anita", "finance", "api"],
   "author": "",

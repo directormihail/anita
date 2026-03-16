@@ -57,8 +57,13 @@ struct ContentView: View {
                             )
                         }
                 } else {
-                    OnboardingView { survey in
+                    OnboardingView(
+                        includeBankConnectionStep: UserManager.pendingTestBankConnectionFlow
+                    ) { survey in
                         userManager.completeOnboarding(survey: survey)
+                        if UserManager.pendingTestBankConnectionFlow {
+                            userManager.clearPendingTestBankConnectionFlowAndShowPlans()
+                        }
                     }
                 }
             } else {
@@ -185,6 +190,12 @@ struct ContentView: View {
                         withAnimation {
                             authViewState = .onboarding
                         }
+                    },
+                    onStartTestBankFlow: {
+                        UserManager.setPendingTestBankConnectionFlow(true)
+                        withAnimation {
+                            authViewState = .signUp
+                        }
                     }
                 )
                 
@@ -205,6 +216,9 @@ struct ContentView: View {
                         }
                     },
                     onBack: {
+                        if UserManager.pendingTestBankConnectionFlow {
+                            UserManager.setPendingTestBankConnectionFlow(false)
+                        }
                         withAnimation {
                             authViewState = .welcome
                         }
@@ -219,6 +233,9 @@ struct ContentView: View {
                         }
                     },
                     onBack: {
+                        if UserManager.pendingTestBankConnectionFlow {
+                            UserManager.setPendingTestBankConnectionFlow(false)
+                        }
                         withAnimation {
                             authViewState = .welcome
                         }

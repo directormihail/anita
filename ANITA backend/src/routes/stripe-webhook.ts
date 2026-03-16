@@ -8,6 +8,7 @@ import { Request, Response } from 'express';
 import Stripe from 'stripe';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import * as logger from '../utils/logger';
+import { categorizeUncategorizedBankTransactions } from '../utils/categorizeBankTransactions';
 
 /** Read at request time so .env is loaded (same as create-financial-connections-session). */
 function getStripe(): Stripe | null {
@@ -118,7 +119,7 @@ async function syncTransactionsForAccount(
         description: tx.description ?? null,
         merchant_name: (tx as any).merchant_name ?? null,
         transacted_at: typeof tx.transacted_at === 'number' ? new Date(tx.transacted_at * 1000).toISOString() : (tx as any).transacted_at ?? new Date().toISOString(),
-        category: (tx as any).category ?? null,
+        // Do NOT set category from Stripe – we use AI categorization; overwriting with "other" would hide correct categories
         raw_category: (tx as any).raw_category ?? null,
         updated_at: new Date().toISOString(),
       };
@@ -135,12 +136,13 @@ async function syncTransactionsForAccount(
 }
 
 /**
- * Process a single Financial Connections account: upsert bank_accounts, then sync transactions.
+ * Process a single Financial Connections account: upsert bank_accounts, sync transactions, then AI-categorize uncategorized rows.
  */
 async function processAccount(
   supabase: SupabaseClient,
   accountId: string,
-  stripeCustomerId: string
+  stripeCustomerId: string,
+  requestId?: string
 ): Promise<void> {
   const userId = await getUserIdFromStripeCustomer(supabase, stripeCustomerId);
   if (!userId) {
@@ -162,6 +164,16 @@ async function processAccount(
   });
 
   await syncTransactionsForAccount(account, bankAccountId, userId, supabase);
+
+  try {
+    await categorizeUncategorizedBankTransactions(supabase, userId, requestId);
+  } catch (err) {
+    logger.warn('Stripe webhook: AI categorization failed', {
+      requestId,
+      userId,
+      error: err instanceof Error ? err.message : 'Unknown',
+    });
+  }
 }
 
 export async function handleStripeWebhook(req: Request, res: Response): Promise<void> {
@@ -222,7 +234,7 @@ export async function handleStripeWebhook(req: Request, res: Response): Promise<
       const account = (event.data as { object: Stripe.FinancialConnections.Account }).object;
       const customerId = typeof account.account_holder === 'string' ? account.account_holder : (account.account_holder as { customer?: string })?.customer ?? (account as any).customer;
       if (customerId) {
-        await processAccount(supabase, account.id, customerId);
+        await processAccount(supabase, account.id, customerId, requestId);
       }
     } else {
       // Acknowledge other events (e.g. setup_intent.created, checkout.session.completed) so Stripe doesn't retry

@@ -168,7 +168,7 @@ struct Digit3DEffect: ViewModifier {
             .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 1)
             // Subtle highlight on top (embossed effect) - reduced shine
             .shadow(color: baseColor.opacity(0.2), radius: 0, x: 0, y: -1)
-            .shadow(color: .white.opacity(0.08), radius: 0, x: 0, y: -0.5)
+            .shadow(color: Color(white: 0.35).opacity(0.2), radius: 0, x: 0, y: -0.5)
     }
 }
 
@@ -378,10 +378,10 @@ struct FinanceView: View {
                     .frame(width: 40, height: 40)
                     .background {
                         Circle()
-                            .fill(Color.white.opacity(0.08))
+                            .fill(Color(white: 0.14).opacity(0.7))
                             .overlay {
                                 Circle()
-                                    .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                                    .stroke(Color(white: 0.25).opacity(0.5), lineWidth: 0.5)
                             }
                     }
             }
@@ -423,10 +423,10 @@ struct FinanceView: View {
                     .frame(width: 40, height: 40)
                     .background {
                         Circle()
-                            .fill(Color.white.opacity(0.08))
+                            .fill(Color(white: 0.14).opacity(0.7))
                             .overlay {
                                 Circle()
-                                    .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                                    .stroke(Color(white: 0.25).opacity(0.5), lineWidth: 0.5)
                             }
                     }
             }
@@ -457,8 +457,8 @@ struct FinanceView: View {
     private var balanceCardView: some View {
         // Use computed property that updates reactively
         let healthScore = currentHealthScore
-        // Available Funds = monthlyBalance from API (income - expenses - transfers to goal + transfers from goal)
-        let availableFunds = viewModel.monthlyBalance
+        // Available Funds = computed display value so it always matches income/expenses and transfers for the selected month.
+        let availableFunds = viewModel.displayAvailableFunds
         
         // Use animated score for display (integer for counting effect)
         let displayScore = Int(animatedHealthScore)
@@ -505,9 +505,9 @@ struct FinanceView: View {
                         .stroke(
                             LinearGradient(
                                 colors: [
-                                    Color.white.opacity(0.12),
-                                    Color.white.opacity(0.08),
-                                    Color.white.opacity(0.12)
+                                    Color(white: 0.20).opacity(0.6),
+                                    Color(white: 0.14).opacity(0.5),
+                                    Color(white: 0.20).opacity(0.6)
                                 ],
                                 startPoint: .leading,
                                 endPoint: .trailing
@@ -630,7 +630,7 @@ struct FinanceView: View {
                             .foregroundColor(.white)
                             .tracking(0.8)
                         
-                        Text(formatCurrency(viewModel.monthlyIncome))
+                        Text(formatCurrency(viewModel.displayMonthlyIncome))
                             .font(.system(size: 22, weight: .bold, design: .rounded))
                             .foregroundColor(.green)
                             .digit3D(baseColor: .green)
@@ -642,7 +642,7 @@ struct FinanceView: View {
                     
                     // Divider
                     Rectangle()
-                        .fill(Color.white.opacity(0.12))
+                        .fill(Color(white: 0.20).opacity(0.6))
                         .frame(width: 0.5)
                         .padding(.vertical, 8)
                     
@@ -653,7 +653,7 @@ struct FinanceView: View {
                             .foregroundColor(.white)
                             .tracking(0.8)
                         
-                        Text(formatCurrency(viewModel.monthlyExpenses))
+                        Text(formatCurrency(viewModel.displayMonthlyExpenses))
                             .font(.system(size: 22, weight: .bold, design: .rounded))
                             .foregroundColor(.red)
                             .digit3D(baseColor: .red)
@@ -666,7 +666,7 @@ struct FinanceView: View {
                 
                 // Horizontal divider
                 Rectangle()
-                    .fill(Color.white.opacity(0.12))
+                    .fill(Color(white: 0.20).opacity(0.6))
                     .frame(height: 0.5)
                     .padding(.horizontal, 20)
                 
@@ -691,7 +691,7 @@ struct FinanceView: View {
                     
                     // Divider
                     Rectangle()
-                        .fill(Color.white.opacity(0.12))
+                        .fill(Color(white: 0.20).opacity(0.6))
                         .frame(width: 0.5)
                         .padding(.vertical, 8)
                     
@@ -750,8 +750,8 @@ struct FinanceView: View {
                                     .stroke(
                                         LinearGradient(
                                             colors: [
-                                                Color.white.opacity(0.2),
-                                                Color.white.opacity(0.1)
+                                                Color(white: 0.28).opacity(0.6),
+                                                Color(white: 0.22).opacity(0.5)
                                             ],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
@@ -819,8 +819,8 @@ struct FinanceView: View {
                                         .stroke(
                                             LinearGradient(
                                                 colors: [
-                                                    Color.white.opacity(0.15),
-                                                    Color.white.opacity(0.05)
+                                                    Color(white: 0.24).opacity(0.5),
+                                                    Color(white: 0.15).opacity(0.5)
                                                 ],
                                                 startPoint: .topLeading,
                                                 endPoint: .bottomTrailing
@@ -897,8 +897,8 @@ struct FinanceView: View {
                                     .stroke(
                                         LinearGradient(
                                             colors: [
-                                                Color.white.opacity(0.2),
-                                                Color.white.opacity(0.1)
+                                                Color(white: 0.28).opacity(0.6),
+                                                Color(white: 0.22).opacity(0.5)
                                             ],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
@@ -1096,8 +1096,8 @@ struct FinanceView: View {
                                 .stroke(
                                     LinearGradient(
                                         colors: [
-                                            Color.white.opacity(0.15),
-                                            Color.white.opacity(0.05)
+                                            Color(white: 0.24).opacity(0.5),
+                                            Color(white: 0.15).opacity(0.5)
                                         ],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
@@ -1141,8 +1141,8 @@ struct FinanceView: View {
                                     .stroke(
                                         LinearGradient(
                                             colors: [
-                                                Color.white.opacity(0.2),
-                                                Color.white.opacity(0.1)
+                                                Color(white: 0.28).opacity(0.6),
+                                                Color(white: 0.22).opacity(0.5)
                                             ],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
@@ -1196,8 +1196,8 @@ struct FinanceView: View {
                             .foregroundStyle(
                                 LinearGradient(
                                     colors: [
-                                        Color.white.opacity(0.4),
-                                        Color.white.opacity(0.3)
+                                        Color(white: 0.45).opacity(0.7),
+                                        Color(white: 0.35).opacity(0.6)
                                     ],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
@@ -1306,8 +1306,8 @@ struct FinanceView: View {
                                                     .stroke(
                                                         LinearGradient(
                                                             colors: [
-                                                                Color.white.opacity(0.2),
-                                                                Color.white.opacity(0.1)
+                                                                Color(white: 0.28).opacity(0.6),
+                                                                Color(white: 0.22).opacity(0.5)
                                                             ],
                                                             startPoint: .topLeading,
                                                             endPoint: .bottomTrailing
@@ -1422,8 +1422,8 @@ struct FinanceView: View {
                                     .stroke(
                                         LinearGradient(
                                             colors: [
-                                                Color.white.opacity(0.2),
-                                                Color.white.opacity(0.1)
+                                                Color(white: 0.28).opacity(0.6),
+                                                Color(white: 0.22).opacity(0.5)
                                             ],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
@@ -1501,8 +1501,8 @@ struct FinanceView: View {
                             .foregroundStyle(
                                 LinearGradient(
                                     colors: [
-                                        Color.white.opacity(0.4),
-                                        Color.white.opacity(0.3)
+                                        Color(white: 0.45).opacity(0.7),
+                                        Color(white: 0.35).opacity(0.6)
                                     ],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
@@ -1611,8 +1611,8 @@ struct FinanceView: View {
                                                     .stroke(
                                                         LinearGradient(
                                                             colors: [
-                                                                Color.white.opacity(0.2),
-                                                                Color.white.opacity(0.1)
+                                                                Color(white: 0.28).opacity(0.6),
+                                                                Color(white: 0.22).opacity(0.5)
                                                             ],
                                                             startPoint: .topLeading,
                                                             endPoint: .bottomTrailing
@@ -1729,8 +1729,8 @@ struct FinanceView: View {
                                     .stroke(
                                         LinearGradient(
                                             colors: [
-                                                Color.white.opacity(0.2),
-                                                Color.white.opacity(0.1)
+                                                Color(white: 0.28).opacity(0.6),
+                                                Color(white: 0.22).opacity(0.5)
                                             ],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
@@ -1808,8 +1808,8 @@ struct FinanceView: View {
                             .foregroundStyle(
                                 LinearGradient(
                                     colors: [
-                                        Color.white.opacity(0.4),
-                                        Color.white.opacity(0.3)
+                                        Color(white: 0.45).opacity(0.7),
+                                        Color(white: 0.35).opacity(0.6)
                                     ],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
@@ -1918,8 +1918,8 @@ struct FinanceView: View {
                                                     .stroke(
                                                         LinearGradient(
                                                             colors: [
-                                                                Color.white.opacity(0.2),
-                                                                Color.white.opacity(0.1)
+                                                                Color(white: 0.28).opacity(0.6),
+                                                                Color(white: 0.22).opacity(0.5)
                                                             ],
                                                             startPoint: .topLeading,
                                                             endPoint: .bottomTrailing
@@ -2043,8 +2043,8 @@ struct FinanceView: View {
                                     .stroke(
                                         LinearGradient(
                                             colors: [
-                                                Color.white.opacity(0.2),
-                                                Color.white.opacity(0.1)
+                                                Color(white: 0.28).opacity(0.6),
+                                                Color(white: 0.22).opacity(0.5)
                                             ],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
@@ -2104,8 +2104,8 @@ struct FinanceView: View {
                             .foregroundStyle(
                                 LinearGradient(
                                     colors: [
-                                        Color.white.opacity(0.4),
-                                        Color.white.opacity(0.3)
+                                        Color(white: 0.45).opacity(0.7),
+                                        Color(white: 0.35).opacity(0.6)
                                     ],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
@@ -2499,8 +2499,8 @@ struct TransactionRow: View {
                             .stroke(
                                 LinearGradient(
                                     colors: [
-                                        Color.white.opacity(0.2),
-                                        Color.white.opacity(0.1)
+                                        Color(white: 0.28).opacity(0.6),
+                                        Color(white: 0.22).opacity(0.5)
                                     ],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
@@ -2583,8 +2583,8 @@ struct TransactionRow: View {
                                     .stroke(
                                         LinearGradient(
                                             colors: [
-                                                Color.white.opacity(0.2),
-                                                Color.white.opacity(0.1)
+                                                Color(white: 0.28).opacity(0.6),
+                                                Color(white: 0.22).opacity(0.5)
                                             ],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
@@ -2720,8 +2720,8 @@ struct AddTransactionRow: View {
                                 .stroke(
                                     LinearGradient(
                                         colors: [
-                                            Color.white.opacity(0.2),
-                                            Color.white.opacity(0.1)
+                                            Color(white: 0.28).opacity(0.6),
+                                            Color(white: 0.22).opacity(0.5)
                                         ],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
@@ -2801,8 +2801,8 @@ struct TargetRow: View {
                             .stroke(
                                 LinearGradient(
                                     colors: [
-                                        Color.white.opacity(0.2),
-                                        Color.white.opacity(0.1)
+                                        Color(white: 0.28).opacity(0.6),
+                                        Color(white: 0.22).opacity(0.5)
                                     ],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
@@ -2875,7 +2875,7 @@ struct TargetRow: View {
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
                         Rectangle()
-                            .fill(Color.white.opacity(0.12))
+                            .fill(Color(white: 0.20).opacity(0.6))
                             .frame(height: 5)
                             .cornerRadius(2.5)
                         
@@ -2933,8 +2933,8 @@ struct TargetRow: View {
                                 .stroke(
                                     LinearGradient(
                                         colors: [
-                                            Color.white.opacity(0.2),
-                                            Color.white.opacity(0.1)
+                                            Color(white: 0.28).opacity(0.6),
+                                            Color(white: 0.22).opacity(0.5)
                                         ],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
@@ -3637,8 +3637,8 @@ struct EditGoalSheet: View {
                                                     .stroke(
                                                         LinearGradient(
                                                             colors: [
-                                                                Color.white.opacity(0.2),
-                                                                Color.white.opacity(0.1)
+                                                                Color(white: 0.28).opacity(0.6),
+                                                                Color(white: 0.22).opacity(0.5)
                                                             ],
                                                             startPoint: .topLeading,
                                                             endPoint: .bottomTrailing
@@ -3705,8 +3705,8 @@ struct EditGoalSheet: View {
                                                     .stroke(
                                                         LinearGradient(
                                                             colors: [
-                                                                Color.white.opacity(0.2),
-                                                                Color.white.opacity(0.1)
+                                                                Color(white: 0.28).opacity(0.6),
+                                                                Color(white: 0.22).opacity(0.5)
                                                             ],
                                                             startPoint: .topLeading,
                                                             endPoint: .bottomTrailing
@@ -3774,8 +3774,8 @@ struct EditGoalSheet: View {
                                                     .stroke(
                                                         LinearGradient(
                                                             colors: [
-                                                                Color.white.opacity(0.2),
-                                                                Color.white.opacity(0.1)
+                                                                Color(white: 0.28).opacity(0.6),
+                                                                Color(white: 0.22).opacity(0.5)
                                                             ],
                                                             startPoint: .topLeading,
                                                             endPoint: .bottomTrailing
@@ -3843,8 +3843,8 @@ struct EditGoalSheet: View {
                                                 .stroke(
                                                     LinearGradient(
                                                         colors: [
-                                                            Color.white.opacity(0.2),
-                                                            Color.white.opacity(0.1)
+                                                            Color(white: 0.28).opacity(0.6),
+                                                            Color(white: 0.22).opacity(0.5)
                                                         ],
                                                         startPoint: .topLeading,
                                                         endPoint: .bottomTrailing
@@ -3975,8 +3975,8 @@ struct EditAssetSheet: View {
                                                 .stroke(
                                                     LinearGradient(
                                                         colors: [
-                                                            Color.white.opacity(0.2),
-                                                            Color.white.opacity(0.1)
+                                                            Color(white: 0.28).opacity(0.6),
+                                                            Color(white: 0.22).opacity(0.5)
                                                         ],
                                                         startPoint: .topLeading,
                                                         endPoint: .bottomTrailing
@@ -4046,8 +4046,8 @@ struct EditAssetSheet: View {
                                                 .stroke(
                                                     LinearGradient(
                                                         colors: [
-                                                            Color.white.opacity(0.2),
-                                                            Color.white.opacity(0.1)
+                                                            Color(white: 0.28).opacity(0.6),
+                                                            Color(white: 0.22).opacity(0.5)
                                                         ],
                                                         startPoint: .topLeading,
                                                         endPoint: .bottomTrailing
@@ -4117,8 +4117,8 @@ struct EditAssetSheet: View {
                                                 .stroke(
                                                     LinearGradient(
                                                         colors: [
-                                                            Color.white.opacity(0.2),
-                                                            Color.white.opacity(0.1)
+                                                            Color(white: 0.28).opacity(0.6),
+                                                            Color(white: 0.22).opacity(0.5)
                                                         ],
                                                         startPoint: .topLeading,
                                                         endPoint: .bottomTrailing
@@ -4578,8 +4578,8 @@ struct RemoveGoalSheet: View {
                                     .fill(
                                         LinearGradient(
                                             colors: [
-                                                Color.white.opacity(0.15),
-                                                Color.white.opacity(0.1)
+                                                Color(white: 0.24).opacity(0.5),
+                                                Color(white: 0.22).opacity(0.5)
                                             ],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
@@ -4749,8 +4749,8 @@ struct RemoveTargetSheet: View {
                                     .fill(
                                         LinearGradient(
                                             colors: [
-                                                Color.white.opacity(0.15),
-                                                Color.white.opacity(0.1)
+                                                Color(white: 0.24).opacity(0.5),
+                                                Color(white: 0.22).opacity(0.5)
                                             ],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
@@ -5381,8 +5381,8 @@ struct RemoveAssetSheet: View {
                                     .fill(
                                         LinearGradient(
                                             colors: [
-                                                Color.white.opacity(0.15),
-                                                Color.white.opacity(0.1)
+                                                Color(white: 0.24).opacity(0.5),
+                                                Color(white: 0.22).opacity(0.5)
                                             ],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
@@ -5475,8 +5475,8 @@ struct CalculatorButton: View {
                             .fill(
                                 LinearGradient(
                                     colors: [
-                                        Color.white.opacity(0.1),
-                                        Color.white.opacity(0.05),
+                                        Color(white: 0.22).opacity(0.5),
+                                        Color(white: 0.15).opacity(0.5),
                                         Color.clear
                                     ],
                                     startPoint: .topLeading,
@@ -5489,7 +5489,7 @@ struct CalculatorButton: View {
                                 LinearGradient(
                                     colors: [
                                         Color.white.opacity(0.25),
-                                        Color.white.opacity(0.15)
+                                        Color(white: 0.24).opacity(0.5)
                                     ],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
@@ -5568,8 +5568,8 @@ struct GoalRow: View {
                             .stroke(
                                 LinearGradient(
                                     colors: [
-                                        Color.white.opacity(0.2),
-                                        Color.white.opacity(0.1)
+                                        Color(white: 0.28).opacity(0.6),
+                                        Color(white: 0.22).opacity(0.5)
                                     ],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
@@ -5635,7 +5635,7 @@ struct GoalRow: View {
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
                         Rectangle()
-                            .fill(Color.white.opacity(0.12))
+                            .fill(Color(white: 0.20).opacity(0.6))
                             .frame(height: 5)
                             .cornerRadius(2.5)
                         
@@ -5684,8 +5684,8 @@ struct GoalRow: View {
                                 .stroke(
                                     LinearGradient(
                                         colors: [
-                                            Color.white.opacity(0.2),
-                                            Color.white.opacity(0.1)
+                                            Color(white: 0.28).opacity(0.6),
+                                            Color(white: 0.22).opacity(0.5)
                                         ],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
@@ -5767,8 +5767,8 @@ struct AssetRow: View {
                             .stroke(
                                 LinearGradient(
                                     colors: [
-                                        Color.white.opacity(0.2),
-                                        Color.white.opacity(0.1)
+                                        Color(white: 0.28).opacity(0.6),
+                                        Color(white: 0.22).opacity(0.5)
                                     ],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
@@ -5858,8 +5858,8 @@ struct AssetRow: View {
                                     .stroke(
                                         LinearGradient(
                                             colors: [
-                                                Color.white.opacity(0.2),
-                                                Color.white.opacity(0.1)
+                                                Color(white: 0.28).opacity(0.6),
+                                                Color(white: 0.22).opacity(0.5)
                                             ],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
@@ -6028,7 +6028,7 @@ struct XPLevelWidget: View {
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
                         Rectangle()
-                            .fill(Color.white.opacity(0.12))
+                            .fill(Color(white: 0.20).opacity(0.6))
                             .frame(height: progressHeight)
                             .cornerRadius(progressRadius)
                         
@@ -6089,7 +6089,7 @@ struct FinanceCategoryRow: View {
                 .frame(width: 28, height: 28)
                 .overlay {
                     Circle()
-                        .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                        .stroke(Color(white: 0.25).opacity(0.5), lineWidth: 0.5)
                 }
             
             // Category name and percentages - left aligned
@@ -6178,8 +6178,8 @@ struct FinanceCategoryRow: View {
                     .stroke(
                         LinearGradient(
                             colors: [
-                                isSelected ? category.color.opacity(0.5) : Color.white.opacity(0.1),
-                                isSelected ? category.color.opacity(0.3) : Color.white.opacity(0.05)
+                                isSelected ? category.color.opacity(0.5) : Color(white: 0.22).opacity(0.5),
+                                isSelected ? category.color.opacity(0.3) : Color(white: 0.15).opacity(0.5)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -6241,7 +6241,7 @@ struct AddAssetSheet: View {
                                 .padding(.vertical, 14)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.white.opacity(0.1))
+                                        .fill(Color(white: 0.12).opacity(0.7))
                                 )
                         }
                         .padding(.horizontal, 20)
@@ -6283,7 +6283,7 @@ struct AddAssetSheet: View {
                                 .padding(.vertical, 14)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.white.opacity(0.1))
+                                        .fill(Color(white: 0.12).opacity(0.7))
                                 )
                             }
                         }
@@ -6305,7 +6305,7 @@ struct AddAssetSheet: View {
                                 .padding(.vertical, 14)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.white.opacity(0.1))
+                                        .fill(Color(white: 0.12).opacity(0.7))
                                 )
                         }
                         .padding(.horizontal, 20)
@@ -6326,7 +6326,7 @@ struct AddAssetSheet: View {
                                 .padding(.vertical, 14)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.white.opacity(0.1))
+                                        .fill(Color(white: 0.12).opacity(0.7))
                                 )
                         }
                         .padding(.horizontal, 20)
@@ -6488,7 +6488,7 @@ struct AddSavingGoalSheet: View {
                                 .padding(.vertical, 14)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.white.opacity(0.1))
+                                        .fill(Color(white: 0.12).opacity(0.7))
                                 )
                         }
                         .padding(.horizontal, 20)
@@ -6509,7 +6509,7 @@ struct AddSavingGoalSheet: View {
                                 .padding(.vertical, 14)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.white.opacity(0.1))
+                                        .fill(Color(white: 0.12).opacity(0.7))
                                 )
                         }
                         .padding(.horizontal, 20)
@@ -6530,7 +6530,7 @@ struct AddSavingGoalSheet: View {
                                 .padding(.vertical, 14)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.white.opacity(0.1))
+                                        .fill(Color(white: 0.12).opacity(0.7))
                                 )
                         }
                         .padding(.horizontal, 20)
@@ -6551,7 +6551,7 @@ struct AddSavingGoalSheet: View {
                                 .padding(.vertical, 14)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.white.opacity(0.1))
+                                        .fill(Color(white: 0.12).opacity(0.7))
                                 )
                         }
                         .padding(.horizontal, 20)
@@ -6744,7 +6744,7 @@ struct AddSavingLimitSheet: View {
                                 .padding(.vertical, 14)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.white.opacity(0.1))
+                                        .fill(Color(white: 0.12).opacity(0.7))
                                 )
                             }
                         }
@@ -6766,7 +6766,7 @@ struct AddSavingLimitSheet: View {
                                 .padding(.vertical, 14)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.white.opacity(0.1))
+                                        .fill(Color(white: 0.12).opacity(0.7))
                                 )
                         }
                         .padding(.horizontal, 20)
@@ -6787,7 +6787,7 @@ struct AddSavingLimitSheet: View {
                                 .padding(.vertical, 14)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.white.opacity(0.1))
+                                        .fill(Color(white: 0.12).opacity(0.7))
                                 )
                         }
                         .padding(.horizontal, 20)
@@ -6978,7 +6978,7 @@ struct AddSpendingLimitSheet: View {
                                 .padding(.vertical, 14)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.white.opacity(0.1))
+                                        .fill(Color(white: 0.12).opacity(0.7))
                                 )
                             }
                         }
@@ -7000,7 +7000,7 @@ struct AddSpendingLimitSheet: View {
                                 .padding(.vertical, 14)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.white.opacity(0.1))
+                                        .fill(Color(white: 0.12).opacity(0.7))
                                 )
                         }
                         .padding(.horizontal, 20)
@@ -7021,7 +7021,7 @@ struct AddSpendingLimitSheet: View {
                                 .padding(.vertical, 14)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.white.opacity(0.1))
+                                        .fill(Color(white: 0.12).opacity(0.7))
                                 )
                         }
                         .padding(.horizontal, 20)
@@ -7444,7 +7444,7 @@ struct AddTransactionSheet: View {
         RoundedRectangle(cornerRadius: 12)
             .fill(transactionType == type ? 
                   (type == "expense" ? Color.red.opacity(0.2) : Color.green.opacity(0.2)) :
-                  Color.white.opacity(0.1))
+                  Color(white: 0.22).opacity(0.5))
     }
     
     private func typeButtonOverlay(for type: String) -> some View {
@@ -7470,7 +7470,7 @@ struct AddTransactionSheet: View {
                 .padding(.vertical, 14)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.white.opacity(0.1))
+                        .fill(Color(white: 0.12).opacity(0.7))
                 )
         }
         .padding(.horizontal, 20)
@@ -7513,7 +7513,7 @@ struct AddTransactionSheet: View {
                 .padding(.vertical, 14)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.white.opacity(0.1))
+                        .fill(Color(white: 0.12).opacity(0.7))
                 )
             }
             .onChange(of: transactionType) { oldValue, newValue in
@@ -7541,7 +7541,7 @@ struct AddTransactionSheet: View {
                 .padding(.vertical, 14)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.white.opacity(0.1))
+                        .fill(Color(white: 0.12).opacity(0.7))
                 )
         }
         .padding(.horizontal, 20)
@@ -7794,7 +7794,7 @@ struct EditTransactionSheet: View {
         RoundedRectangle(cornerRadius: 12)
             .fill(transactionType == type ? 
                   (type == "expense" ? Color.red.opacity(0.2) : Color.green.opacity(0.2)) :
-                  Color.white.opacity(0.1))
+                  Color(white: 0.22).opacity(0.5))
     }
     
     private func typeButtonOverlay(for type: String) -> some View {
@@ -7820,7 +7820,7 @@ struct EditTransactionSheet: View {
                 .padding(.vertical, 14)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.white.opacity(0.1))
+                        .fill(Color(white: 0.12).opacity(0.7))
                 )
         }
         .padding(.horizontal, 20)
@@ -7861,7 +7861,7 @@ struct EditTransactionSheet: View {
                 .padding(.vertical, 14)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.white.opacity(0.1))
+                        .fill(Color(white: 0.12).opacity(0.7))
                 )
             }
             .onChange(of: transactionType) { oldValue, newValue in
@@ -7888,7 +7888,7 @@ struct EditTransactionSheet: View {
                 .padding(.vertical, 14)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.white.opacity(0.1))
+                        .fill(Color(white: 0.12).opacity(0.7))
                 )
         }
         .padding(.horizontal, 20)
@@ -8090,7 +8090,7 @@ struct DeleteTransactionSheet: View {
                     .padding(.vertical, 20)
                     .background(
                         RoundedRectangle(cornerRadius: 16)
-                            .fill(Color.white.opacity(0.1))
+                            .fill(Color(white: 0.12).opacity(0.7))
                     )
                     .padding(.horizontal, 20)
                     
@@ -8154,8 +8154,8 @@ struct DeleteTransactionSheet: View {
                                     .fill(
                                         LinearGradient(
                                             colors: [
-                                                Color.white.opacity(0.15),
-                                                Color.white.opacity(0.1)
+                                                Color(white: 0.24).opacity(0.5),
+                                                Color(white: 0.22).opacity(0.5)
                                             ],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
@@ -8261,7 +8261,7 @@ struct BalanceLineChart: View {
                     VStack(spacing: 0) {
                         ForEach(0..<5) { i in
                             Rectangle()
-                                .fill(Color.white.opacity(0.05))
+                                .fill(Color(white: 0.15).opacity(0.5))
                                 .frame(height: 1)
                             if i < 4 {
                                 Spacer()
@@ -8533,7 +8533,7 @@ struct MonthToMonthComparisonView: View {
                 }
                 
                 Divider()
-                    .background(Color.white.opacity(0.1))
+                    .background(Color(white: 0.18).opacity(0.5))
                 
                 // Expenses comparison
                 HStack {
@@ -8906,8 +8906,8 @@ struct EnhancedMonthToMonthComparisonView: View {
                         .stroke(
                             LinearGradient(
                                 colors: [
-                                    Color.white.opacity(0.2),
-                                    Color.white.opacity(0.1)
+                                    Color(white: 0.28).opacity(0.6),
+                                    Color(white: 0.22).opacity(0.5)
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
@@ -9587,7 +9587,7 @@ struct EnhancedNetWorthChart: View {
                                     
                                     // Middle ring
                                     Circle()
-                                        .fill(Color.white.opacity(isSelected ? 0.3 : 0.2))
+                                        .fill(Color(white: 0.45).opacity(isSelected ? 0.8 : 0.5))
                                         .frame(width: isSelected ? 16 : 14, height: isSelected ? 16 : 14)
                                     
                                     // Inner point (blue)
@@ -9657,7 +9657,7 @@ struct EnhancedNetWorthChart: View {
                                     
                                     // Middle ring
                                     Circle()
-                                        .fill(Color.white.opacity(isSelected ? 0.3 : 0.2))
+                                        .fill(Color(white: 0.45).opacity(isSelected ? 0.8 : 0.5))
                                         .frame(width: isSelected ? 16 : 14, height: isSelected ? 16 : 14)
                                     
                                     // Inner point (purple)
@@ -10098,7 +10098,7 @@ struct EnhancedIncomeExpenseBarChart: View {
                                 ZStack(alignment: .bottom) {
                                     ForEach(0..<numberOfGridLines, id: \.self) { index in
                                         Rectangle()
-                                            .fill(index == 0 ? Color.white.opacity(0.12) : Color.white.opacity(0.06))
+                                            .fill(index == 0 ? Color(white: 0.18).opacity(0.6) : Color(white: 0.12).opacity(0.5))
                                             .frame(width: totalBarsWidth, height: 1)
                                             .offset(y: -CGFloat(index) * gridLineSpacing)
                                     }
@@ -10132,7 +10132,7 @@ struct EnhancedIncomeExpenseBarChart: View {
                                         RoundedRectangle(cornerRadius: 8)
                                             .fill(
                                                 shouldGreyOut
-                                                    ? Color.white.opacity(0.15)
+                                                    ? Color(white: 0.24).opacity(0.5)
                                                     : Color(red: 0.3, green: 0.7, blue: 0.4)
                                             )
                                             .frame(width: barWidth, height: max(2, incomeHeight))
@@ -10157,7 +10157,7 @@ struct EnhancedIncomeExpenseBarChart: View {
                                         RoundedRectangle(cornerRadius: 8)
                                             .fill(
                                                 shouldGreyOut
-                                                    ? Color.white.opacity(0.15)
+                                                    ? Color(white: 0.24).opacity(0.5)
                                                     : Color(red: 0.9, green: 0.3, blue: 0.3)
                                             )
                                             .frame(width: barWidth, height: max(2, expenseHeight))
@@ -10186,7 +10186,7 @@ struct EnhancedIncomeExpenseBarChart: View {
                                         RoundedRectangle(cornerRadius: 8)
                                             .fill(
                                                 shouldGreyOut
-                                                    ? Color.white.opacity(0.15)
+                                                    ? Color(white: 0.24).opacity(0.5)
                                                     : balanceColor
                                             )
                                             .frame(width: barWidth, height: max(8, balanceHeight))
@@ -10334,7 +10334,7 @@ struct DonutChartView3D: View {
                 ForEach(Array(categories.enumerated()), id: \.element.id) { index, category in
                     let isSelected = selectedCategory == category.name
                     let shouldShowColor = selectedCategory == nil || isSelected
-                    let segmentColor = shouldShowColor ? category.color : Color.white.opacity(0.15)
+                    let segmentColor = shouldShowColor ? category.color : Color(white: 0.24).opacity(0.5)
                     
                     // Main segment with smooth radial-style gradient (Apple Watch style)
                     DonutSegmentShape(

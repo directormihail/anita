@@ -1,19 +1,111 @@
 /**
  * Category Detector
- * Detects transaction category from description text
- * Uses pattern matching and keyword detection
+ * Detects transaction category from description text (and optional merchant).
+ * Stripe Financial Connections only provides: id, amount, currency, description, transacted_at, status.
+ * There is NO merchant_name or raw_category in the Stripe API — we only have description (e.g. "Rocket Rides", "Typographic").
  */
 
+export interface BankTransactionCategorizeInput {
+  merchant_name?: string | null;
+  description?: string | null;
+  amount_cents: number;
+}
+
+/** Fallback when we cannot determine category: never use "Other". */
+const FALLBACK_EXPENSE = 'Shopping';
+const FALLBACK_INCOME = 'Freelance & Side Income';
+
 /**
- * Detect category from transaction description
- * Returns normalized category name
+ * Rule-based categorization for bank transactions (used when AI is unavailable or returns Other).
+ * Uses merchant_name + description (Stripe typically only sends description).
+ */
+export function categorizeBankTransactionByRules(
+  input: BankTransactionCategorizeInput
+): string {
+  const combined = [input.merchant_name, input.description].filter(Boolean).join(' ').trim();
+  const type: 'income' | 'expense' = input.amount_cents >= 0 ? 'income' : 'expense';
+  if (!combined) return type === 'income' ? FALLBACK_INCOME : FALLBACK_EXPENSE;
+
+  const lower = combined.toLowerCase();
+
+  // Explicit merchant/description rules (order matters: more specific first)
+  const merchantRules: Array<{ pattern: string; category: string; whenIncome?: boolean; whenExpense?: boolean }> = [
+    // Food delivery
+    { pattern: 'rocket delivery', category: 'Dining Out', whenExpense: true },
+    { pattern: 'rocket deliveries', category: 'Dining Out', whenExpense: true },
+    { pattern: 'doordash', category: 'Dining Out', whenExpense: true },
+    { pattern: 'uber eats', category: 'Dining Out', whenExpense: true },
+    { pattern: 'deliveroo', category: 'Dining Out', whenExpense: true },
+    { pattern: 'grubhub', category: 'Dining Out', whenExpense: true },
+    { pattern: 'just eat', category: 'Dining Out', whenExpense: true },
+    { pattern: 'foodpanda', category: 'Dining Out', whenExpense: true },
+    { pattern: 'food delivery', category: 'Dining Out', whenExpense: true },
+    // Ride-hailing / transport
+    { pattern: 'rocket rides', category: 'Rideshare & Taxi', whenExpense: true },
+    { pattern: 'uber', category: 'Rideshare & Taxi', whenExpense: true },
+    { pattern: 'lyft', category: 'Rideshare & Taxi', whenExpense: true },
+    { pattern: 'bolt', category: 'Rideshare & Taxi', whenExpense: true },
+    { pattern: 'free now', category: 'Rideshare & Taxi', whenExpense: true },
+    { pattern: 'taxi', category: 'Rideshare & Taxi', whenExpense: true },
+    // Income (company/payment names)
+    { pattern: 'typographic', category: 'Freelance & Side Income', whenIncome: true },
+    { pattern: 'salary', category: 'Salary', whenIncome: true },
+    { pattern: 'payroll', category: 'Salary', whenIncome: true },
+    { pattern: 'paypal', category: type === 'income' ? 'Freelance & Side Income' : 'Shopping' },
+    { pattern: 'stripe', category: type === 'income' ? 'Freelance & Side Income' : 'Shopping' },
+    { pattern: 'wise', category: type === 'income' ? 'Freelance & Side Income' : 'Shopping' },
+    { pattern: 'revolut', category: type === 'income' ? 'Freelance & Side Income' : 'Shopping' },
+    // Shopping / retail
+    { pattern: 'amazon', category: 'Shopping' },
+    { pattern: 'ebay', category: 'Shopping' },
+    { pattern: 'alibaba', category: 'Shopping' },
+    // Subscriptions
+    { pattern: 'spotify', category: 'Streaming Services' },
+    { pattern: 'netflix', category: 'Streaming Services' },
+    { pattern: 'disney', category: 'Streaming Services' },
+    { pattern: 'hulu', category: 'Streaming Services' },
+    { pattern: 'apple music', category: 'Streaming Services' },
+    { pattern: 'youtube premium', category: 'Streaming Services' },
+    { pattern: 'apple.com/bill', category: 'Software & Apps' },
+    { pattern: 'google play', category: 'Software & Apps' },
+    { pattern: 'adobe', category: 'Software & Apps' },
+    { pattern: 'microsoft', category: 'Software & Apps' },
+    { pattern: 'dropbox', category: 'Software & Apps' },
+    { pattern: 'icloud', category: 'Software & Apps' },
+    // Generic
+    { pattern: 'pos purchase', category: 'Shopping' },
+    { pattern: 'payment', category: type === 'income' ? 'Freelance & Side Income' : 'Shopping' },
+    { pattern: 'transfer', category: type === 'income' ? 'Freelance & Side Income' : 'Shopping' },
+  ];
+  for (const { pattern, category, whenIncome, whenExpense } of merchantRules) {
+    if (!lower.includes(pattern)) continue;
+    if (whenIncome !== undefined && !whenIncome && type === 'income') continue;
+    if (whenExpense !== undefined && !whenExpense && type === 'expense') continue;
+    return category;
+  }
+  // "delivery" by itself (expense) → often food delivery
+  if (type === 'expense' && (lower.includes('delivery') || lower.includes('delivered'))) {
+    return 'Dining Out';
+  }
+  // "rides" or "ride" (expense) → transport
+  if (type === 'expense' && (lower.includes('rides') || (lower.includes('ride') && !lower.includes('brides')))) {
+    return 'Rideshare & Taxi';
+  }
+
+  const out = detectCategoryFromDescription(combined, type);
+  return out === 'Other' ? (type === 'income' ? FALLBACK_INCOME : FALLBACK_EXPENSE) : out;
+}
+
+/**
+ * Detect category from transaction description.
+ * Returns a specific category; never returns "Other" (use fallback instead).
  */
 export function detectCategoryFromDescription(
   description: string,
   type: 'income' | 'expense'
 ): string {
   if (!description || description.trim().length === 0) {
-    return 'Other';
+    return type === 'income' ? FALLBACK_INCOME : FALLBACK_EXPENSE;
   }
 
   const lowercased = description.toLowerCase().trim();
@@ -45,8 +137,13 @@ export function detectCategoryFromDescription(
     }
   }
 
-  // Groceries
-  const groceryKeywords = ['grocery', 'groceries', 'supermarket', 'food store', 'food shopping'];
+  // Groceries (stores and keywords)
+  const groceryKeywords = [
+    'grocery', 'groceries', 'supermarket', 'food store', 'food shopping',
+    'aldi', 'lidl', 'tesco', 'sainsbury', 'asda', 'walmart', 'costco',
+    'whole foods', 'trader joe', 'kroger', 'safeway', 'publix', 'target',
+    'rewe', 'edeka', 'carrefour', 'auchan', 'colruyt', 'delhaize',
+  ];
   for (const keyword of groceryKeywords) {
     if (lowercased.includes(keyword)) {
       return 'Groceries';
@@ -56,7 +153,8 @@ export function detectCategoryFromDescription(
   // Transportation
   if (lowercased.includes('uber') || lowercased.includes('lyft') || 
       lowercased.includes('taxi') || lowercased.includes('cab') || 
-      lowercased.includes('rideshare')) {
+      lowercased.includes('rideshare') || lowercased.includes('ride share') ||
+      lowercased.includes('rides')) {
     return 'Rideshare & Taxi';
   }
   if (lowercased.includes('bus') || lowercased.includes('train') || 
@@ -196,6 +294,6 @@ export function detectCategoryFromDescription(
     return 'Salary';
   }
 
-  // Default for expenses
-  return 'Other';
+  // Default for expenses: never "Other"
+  return FALLBACK_EXPENSE;
 }

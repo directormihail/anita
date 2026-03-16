@@ -387,6 +387,38 @@ class NetworkService: ObservableObject {
         }
     }
     
+    /// Re-sync bank transactions from Stripe into the backend DB; then use getBankTransactions to read.
+    func refreshBankTransactions(userId: String) async throws {
+        let urlString = "\(baseURL)/api/v1/bank-transactions/refresh?userId=\(userId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? userId)"
+        guard let url = URL(string: urlString) else { throw NetworkError.invalidResponse }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw NetworkError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+    }
+    
+    func getBankTransactions(userId: String, from: String? = nil, to: String? = nil, limit: Int = 200) async throws -> GetBankTransactionsResponse {
+        var urlComponents = URLComponents(string: "\(baseURL)/api/v1/bank-transactions")!
+        var queryItems = [URLQueryItem(name: "userId", value: userId)]
+        if let from = from { queryItems.append(URLQueryItem(name: "from", value: from)) }
+        if let to = to { queryItems.append(URLQueryItem(name: "to", value: to)) }
+        queryItems.append(URLQueryItem(name: "limit", value: String(limit)))
+        urlComponents.queryItems = queryItems
+        guard let url = urlComponents.url else { throw NetworkError.invalidResponse }
+        let request = URLRequest(url: url)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            if let err = try? JSONDecoder().decode(APIError.self, from: data) {
+                throw NetworkError.apiError(err.message ?? err.error)
+            }
+            throw NetworkError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+        return try JSONDecoder().decode(GetBankTransactionsResponse.self, from: data)
+    }
+    
     func createTransaction(userId: String, type: String, amount: Double, category: String?, description: String, date: String?) async throws -> TransactionItem {
         let url = URL(string: "\(baseURL)/api/v1/save-transaction")!
         var request = URLRequest(url: url)
@@ -539,6 +571,26 @@ class NetworkService: ObservableObject {
             throw NetworkError.httpError(httpResponse.statusCode)
         }
     }
+
+    /// Migrate all server-side data from an old (e.g. anonymous) user id to a new authenticated user id.
+    func migrateUserData(fromUserId: String, toUserId: String) async throws {
+        let url = URL(string: "\(baseURL)/api/v1/migrate-user-data")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body: [String: String] = [
+            "fromUserId": fromUserId,
+            "toUserId": toUserId
+        ]
+        request.httpBody = try JSONEncoder().encode(body)
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        if !(200...299).contains(httpResponse.statusCode) {
+            throw NetworkError.httpError(httpResponse.statusCode)
+        }
+    }
     
     /// Permanently delete account and all data (App Store requirement). Requires authenticated user.
     func deleteAccount(userId: String) async throws -> DeleteAccountResponse {
@@ -619,7 +671,8 @@ class NetworkService: ObservableObject {
     
     // MARK: - Financial Metrics
     
-    func getFinancialMetrics(userId: String, month: Int? = nil, year: Int? = nil) async throws -> GetFinancialMetricsResponse {
+    /// When useBankData is true, backend computes metrics from bank_transactions (same data as the Transactions list in bank mode).
+    func getFinancialMetrics(userId: String, month: Int? = nil, year: Int? = nil, useBankData: Bool = false) async throws -> GetFinancialMetricsResponse {
         var urlComponents = URLComponents(string: "\(baseURL)/api/v1/financial-metrics")!
         var queryItems = [URLQueryItem(name: "userId", value: userId)]
         
@@ -628,6 +681,9 @@ class NetworkService: ObservableObject {
         }
         if let year = year {
             queryItems.append(URLQueryItem(name: "year", value: String(year)))
+        }
+        if useBankData {
+            queryItems.append(URLQueryItem(name: "dataSource", value: "bank"))
         }
         
         urlComponents.queryItems = queryItems

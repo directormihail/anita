@@ -45,6 +45,14 @@ class FinanceViewModel: ObservableObject {
     private let networkService = NetworkService.shared
     let userId: String
 
+    /// Backend user id: requires Supabase auth so all financial data is stored server-side and shared across devices.
+    private var effectiveUserId: String? {
+        guard let authed = UserManager.shared.currentUser, UserManager.shared.isAuthenticated else {
+            return nil
+        }
+        return authed.id
+    }
+
     // Must retain observer tokens or they are deallocated and notifications never fire
     private var transactionAddedObserver: NSObjectProtocol?
     private var xpStatsDidUpdateObserver: NSObjectProtocol?
@@ -80,6 +88,8 @@ class FinanceViewModel: ObservableObject {
         if let o = xpStatsDidUpdateObserver { NotificationCenter.default.removeObserver(o) }
     }
     
+    var usesBankDataOnly: Bool { UserManager.shared.usesBankDataOnly }
+    
     func loadData() {
         isLoading = true
         errorMessage = nil
@@ -87,6 +97,13 @@ class FinanceViewModel: ObservableObject {
         Task {
             do {
                 let calendar = Calendar.current
+                guard let userId = self.effectiveUserId else {
+                    await MainActor.run {
+                        self.errorMessage = "Please log in or sign up to see your finances on all devices."
+                        self.isLoading = false
+                    }
+                    return
+                }
                 let month = calendar.component(.month, from: selectedMonth)
                 let year = calendar.component(.year, from: selectedMonth)
                 
@@ -95,50 +112,195 @@ class FinanceViewModel: ObservableObject {
                 let previousMonth = calendar.component(.month, from: previousMonthDate)
                 let previousMonthYear = calendar.component(.year, from: previousMonthDate)
                 
-                // Load all data in parallel with month filtering
+                if usesBankDataOnly {
+                    // Bank mode: always use effectiveUserId so logged-in users share data across devices,
+                    // but anonymous users still see their own bank data.
+                    // Sync from Stripe first so indicators show correct data when bank is connected
+                    try? await networkService.refreshBankTransactions(userId: userId)
+                    let fromStr = String(format: "%04d-%02d-01", year, month)
+                    let comp = DateComponents(year: year, month: month, day: 1)
+                    guard let firstDay = calendar.date(from: comp),
+                          let lastDay = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: firstDay) else {
+                        await MainActor.run { self.isLoading = false }
+                        return
+                    }
+                    let lastDayNum = calendar.component(.day, from: lastDay)
+                    let toStr = String(format: "%04d-%02d-%02d", year, month, lastDayNum)
+                    let bankResponse = try await networkService.getBankTransactions(userId: userId, from: fromStr, to: toStr, limit: 1000)
+                    let mapped = bankResponse.transactions.map { $0.toTransactionItem() }
+                    async let metricsTask = networkService.getFinancialMetrics(userId: userId, month: month, year: year, useBankData: true)
+                    async let targetsTask = networkService.getTargets(userId: userId)
+                    async let assetsTask = networkService.getAssets(userId: userId)
+                    async let xpStatsTask = networkService.getXPStats(userId: userId)
+                    async let previousMonthMetricsTask = networkService.getFinancialMetrics(userId: userId, month: previousMonth, year: previousMonthYear, useBankData: true)
+                    let metrics = try await metricsTask
+                    let targetsResponse = try await targetsTask
+                    let assetsResponse = try await assetsTask
+                    let xpStatsResponse = try await xpStatsTask
+                    let previousMonthMetrics = try? await previousMonthMetricsTask
+                    // Load 12 months of balances so Funds Total (cumulative) is correct on first paint
+                    let balanceHistory: [MonthlyBalance] = await Self.fetchBalanceHistory(networkService: networkService, userId: userId, selectedMonth: selectedMonth, calendar: calendar, useBankData: true)
+                    await MainActor.run {
+                        self.transactions = mapped
+                        self.totalBalance = metrics.metrics.totalBalance
+                        self.monthlyIncome = metrics.metrics.monthlyIncome
+                        self.monthlyExpenses = metrics.metrics.monthlyExpenses
+                        self.monthlyBalance = metrics.metrics.monthlyBalance
+                        self.targets = targetsResponse.targets
+                        self.goals = targetsResponse.goals ?? []
+                        self.assets = assetsResponse.assets
+                        self.xpStats = XPStats.from(totalXP: xpStatsResponse.xpStats.total_xp)
+                        self.previousMonthIncome = previousMonthMetrics?.metrics.monthlyIncome ?? 0.0
+                        self.previousMonthExpenses = previousMonthMetrics?.metrics.monthlyExpenses ?? 0.0
+                        // Always set balance history (even partial) so Funds Total can use cumulative when we have 2+ months
+                        if !balanceHistory.isEmpty {
+                            self.monthlyBalanceHistory = balanceHistory.sorted { $0.month < $1.month }
+                        }
+                        if self.monthlyIncome == 0 && self.monthlyExpenses == 0 && !self.transactions.isEmpty {
+                            let (income, expenses, balance) = Self.metricsFromTransactions(self.transactions)
+                            self.monthlyIncome = income
+                            self.monthlyExpenses = expenses
+                            self.monthlyBalance = balance
+                            if self.totalBalance == 0 { self.totalBalance = balance }
+                        }
+                        if self.monthlyBalance == 0 && (self.monthlyIncome != 0 || self.monthlyExpenses != 0) {
+                            self.monthlyBalance = self.monthlyIncome - self.monthlyExpenses
+                        }
+                        if !self.hasLoadedHistoricalDataOnce { self.loadHistoricalData() }
+                        self.isLoading = false
+                    }
+                } else {
+                // Manual mode: also fetch bank metrics so we can show bank data when user has connected bank
                 async let metricsTask = networkService.getFinancialMetrics(userId: userId, month: month, year: year)
                 async let transactionsTask = networkService.getTransactions(userId: userId, month: month, year: year)
+                async let bankMetricsTask = networkService.getFinancialMetrics(userId: userId, month: month, year: year, useBankData: true)
                 async let targetsTask = networkService.getTargets(userId: userId)
                 async let assetsTask = networkService.getAssets(userId: userId)
                 async let xpStatsTask = networkService.getXPStats(userId: userId)
-                
-                // Load historical data for comparisons
                 async let previousMonthMetricsTask = networkService.getFinancialMetrics(userId: userId, month: previousMonth, year: previousMonthYear)
+                async let previousMonthBankMetricsTask = networkService.getFinancialMetrics(userId: userId, month: previousMonth, year: previousMonthYear, useBankData: true)
                 
                 let metrics = try await metricsTask
                 let transactionsResponse = try await transactionsTask
+                var bankMetrics = try? await bankMetricsTask
                 let targetsResponse = try await targetsTask
                 let assetsResponse = try await assetsTask
                 let xpStatsResponse = try await xpStatsTask
                 let previousMonthMetrics = try? await previousMonthMetricsTask
+                var previousMonthBankMetrics = try? await previousMonthBankMetricsTask
+                
+                let manualHasData = metrics.metrics.monthlyIncome > 0 || metrics.metrics.monthlyExpenses > 0
+                var bankHasData = (bankMetrics?.metrics.monthlyIncome ?? 0) > 0 || (bankMetrics?.metrics.monthlyExpenses ?? 0) > 0
+                var useBankForDisplay = !manualHasData && bankHasData
+                // When manual has no data, sync from Stripe and re-check bank so we show data as soon as it's available
+                if !manualHasData && !bankHasData {
+                    try? await networkService.refreshBankTransactions(userId: userId)
+                    let refetched = try? await networkService.getFinancialMetrics(userId: userId, month: month, year: year, useBankData: true)
+                    bankHasData = (refetched?.metrics.monthlyIncome ?? 0) > 0 || (refetched?.metrics.monthlyExpenses ?? 0) > 0
+                    useBankForDisplay = bankHasData
+                    if useBankForDisplay {
+                        bankMetrics = refetched
+                        previousMonthBankMetrics = try? await networkService.getFinancialMetrics(userId: userId, month: previousMonth, year: previousMonthYear, useBankData: true)
+                    }
+                }
+                var bankTransactionsForMonth: [TransactionItem]?
+                var finalBankMetrics = bankMetrics
+                var finalPreviousBankMetrics = previousMonthBankMetrics
+                var bankBalanceHistoryForTotal: [MonthlyBalance] = []
+                var manualBalanceHistoryForTotal: [MonthlyBalance] = []
+                if useBankForDisplay {
+                    if !bankHasData {
+                        try? await networkService.refreshBankTransactions(userId: userId)
+                        finalBankMetrics = try? await networkService.getFinancialMetrics(userId: userId, month: month, year: year, useBankData: true)
+                        finalPreviousBankMetrics = try? await networkService.getFinancialMetrics(userId: userId, month: previousMonth, year: previousMonthYear, useBankData: true)
+                    }
+                    bankBalanceHistoryForTotal = await Self.fetchBalanceHistory(networkService: networkService, userId: userId, selectedMonth: selectedMonth, calendar: calendar, useBankData: true)
+                } else {
+                    // Manual mode: load balance history so Funds Total = (month1 + month2 + … + selected) from first paint
+                    manualBalanceHistoryForTotal = await Self.fetchBalanceHistory(networkService: networkService, userId: userId, selectedMonth: selectedMonth, calendar: calendar, useBankData: false)
+                }
+                // Whenever we have ANY bank data, load bank transactions for the selected month so the list can
+                // include both manual and bank activity.
+                if bankHasData {
+                    let fromStr = String(format: "%04d-%02d-01", year, month)
+                    let comp = DateComponents(year: year, month: month, day: 1)
+                    if let firstDay = calendar.date(from: comp),
+                       let lastDay = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: firstDay) {
+                        let lastDayNum = calendar.component(.day, from: lastDay)
+                        let toStr = String(format: "%04d-%02d-%02d", year, month, lastDayNum)
+                        bankTransactionsForMonth = try? await networkService.getBankTransactions(userId: userId, from: fromStr, to: toStr, limit: 1000).transactions.map { $0.toTransactionItem() }
+                    }
+                }
                 
                 await MainActor.run {
-                    self.totalBalance = metrics.metrics.totalBalance
-                    self.monthlyIncome = metrics.metrics.monthlyIncome
-                    self.monthlyExpenses = metrics.metrics.monthlyExpenses
-                    self.monthlyBalance = metrics.metrics.monthlyBalance
-                    // Only ever store the selected month's transactions so the list never shows other months.
-                    let fromAPI = transactionsResponse.transactions
-                    let fromAPIInSelectedMonth = fromAPI.filter { Self.isTransactionInMonth($0, month: month, year: year) }
-                    let apiIds = Set(fromAPIInSelectedMonth.map(\.id))
-                    let onlyLocal = self.transactions.filter { !apiIds.contains($0.id) }
-                    let onlyLocalInSelectedMonth = onlyLocal.filter { Self.isTransactionInMonth($0, month: month, year: year) }
-                    self.transactions = onlyLocalInSelectedMonth + fromAPIInSelectedMonth
-                    self.targets = targetsResponse.targets
-                    self.goals = targetsResponse.goals ?? []
-                    self.assets = assetsResponse.assets
-                    self.xpStats = XPStats.from(totalXP: xpStatsResponse.xpStats.total_xp)
-                    
-                    // Set historical comparison data
-                    self.previousMonthIncome = previousMonthMetrics?.metrics.monthlyIncome ?? 0.0
-                    self.previousMonthExpenses = previousMonthMetrics?.metrics.monthlyExpenses ?? 0.0
-                    
-                    // Load balance history in background so Funds Total (cumulative) is correct when user selects a past month
-                    if !self.hasLoadedHistoricalDataOnce {
-                        self.loadHistoricalData()
+                    if useBankForDisplay, let bank = finalBankMetrics?.metrics {
+                        self.totalBalance = bank.totalBalance
+                        self.monthlyIncome = bank.monthlyIncome
+                        self.monthlyExpenses = bank.monthlyExpenses
+                        self.monthlyBalance = bank.monthlyBalance
+                        self.previousMonthIncome = finalPreviousBankMetrics?.metrics.monthlyIncome ?? 0.0
+                        self.previousMonthExpenses = finalPreviousBankMetrics?.metrics.monthlyExpenses ?? 0.0
+                        if !bankBalanceHistoryForTotal.isEmpty {
+                            self.monthlyBalanceHistory = bankBalanceHistoryForTotal
+                        }
+                        if let list = bankTransactionsForMonth { self.transactions = list }
+                        self.targets = targetsResponse.targets
+                        self.goals = targetsResponse.goals ?? []
+                        self.assets = assetsResponse.assets
+                        self.xpStats = XPStats.from(totalXP: xpStatsResponse.xpStats.total_xp)
+                        if self.monthlyIncome == 0 && self.monthlyExpenses == 0 && !self.transactions.isEmpty {
+                            let (income, expenses, balance) = Self.metricsFromTransactions(self.transactions)
+                            self.monthlyIncome = income
+                            self.monthlyExpenses = expenses
+                            self.monthlyBalance = balance
+                            if self.totalBalance == 0 { self.totalBalance = balance }
+                        }
+                        if self.monthlyBalance == 0 && (self.monthlyIncome != 0 || self.monthlyExpenses != 0) {
+                            self.monthlyBalance = self.monthlyIncome - self.monthlyExpenses
+                        }
+                        if !self.hasLoadedHistoricalDataOnce { self.loadHistoricalData(useBankData: true) }
+                    } else {
+                        // Combine manual + bank metrics so top cards reflect ALL activity.
+                        let manualMetrics = metrics.metrics
+                        let bank = bankMetrics?.metrics
+                        self.totalBalance = manualMetrics.totalBalance + (bank?.totalBalance ?? 0.0)
+                        self.monthlyIncome = manualMetrics.monthlyIncome + (bank?.monthlyIncome ?? 0.0)
+                        self.monthlyExpenses = manualMetrics.monthlyExpenses + (bank?.monthlyExpenses ?? 0.0)
+                        self.monthlyBalance = manualMetrics.monthlyBalance + (bank?.monthlyBalance ?? 0.0)
+                        self.previousMonthIncome = previousMonthMetrics?.metrics.monthlyIncome ?? 0.0
+                        self.previousMonthExpenses = previousMonthMetrics?.metrics.monthlyExpenses ?? 0.0
+                        if !manualBalanceHistoryForTotal.isEmpty {
+                            self.monthlyBalanceHistory = manualBalanceHistoryForTotal.sorted { $0.month < $1.month }
+                        }
+                        let fromAPI = transactionsResponse.transactions
+                        let fromAPIInSelectedMonth = fromAPI.filter { Self.isTransactionInMonth($0, month: month, year: year) }
+                        let apiIds = Set(fromAPIInSelectedMonth.map(\.id))
+                        let onlyLocal = self.transactions.filter { !apiIds.contains($0.id) }
+                        let onlyLocalInSelectedMonth = onlyLocal.filter { Self.isTransactionInMonth($0, month: month, year: year) }
+                        var merged = onlyLocalInSelectedMonth + fromAPIInSelectedMonth
+                        if let bankList = bankTransactionsForMonth {
+                            let existingIds = Set(merged.map(\.id))
+                            merged.append(contentsOf: bankList.filter { !existingIds.contains($0.id) })
+                        }
+                        self.transactions = merged
+                        self.targets = targetsResponse.targets
+                        self.goals = targetsResponse.goals ?? []
+                        self.assets = assetsResponse.assets
+                        self.xpStats = XPStats.from(totalXP: xpStatsResponse.xpStats.total_xp)
+                        if self.monthlyIncome == 0 && self.monthlyExpenses == 0 && !self.transactions.isEmpty {
+                            let (income, expenses, balance) = Self.metricsFromTransactions(self.transactions)
+                            self.monthlyIncome = income
+                            self.monthlyExpenses = expenses
+                            self.monthlyBalance = balance
+                            if self.totalBalance == 0 { self.totalBalance = balance }
+                        }
+                        if self.monthlyBalance == 0 && (self.monthlyIncome != 0 || self.monthlyExpenses != 0) {
+                            self.monthlyBalance = self.monthlyIncome - self.monthlyExpenses
+                        }
+                        if !self.hasLoadedHistoricalDataOnce { self.loadHistoricalData(useBankData: false) }
                     }
-                    
                     self.isLoading = false
+                }
                 }
             } catch {
                 await MainActor.run {
@@ -166,7 +328,55 @@ class FinanceViewModel: ObservableObject {
     func refresh() {
         loadData()
     }
+    
+    /// Call from pull-to-refresh: in bank mode re-syncs from Stripe then reloads; otherwise just reloads.
+    func refreshAsync() async {
+        if usesBankDataOnly {
+            guard let userId = effectiveUserId else {
+                await MainActor.run {
+                    self.errorMessage = "Please log in to refresh bank transactions."
+                }
+                return
+            }
+            try? await networkService.refreshBankTransactions(userId: userId)
+        }
+        loadData()
+    }
 
+    /// Fetch 12 months of balance history so Funds Total (cumulative) can be computed on first load.
+    private static func fetchBalanceHistory(networkService: NetworkService, userId: String, selectedMonth: Date, calendar: Calendar, useBankData: Bool) async -> [MonthlyBalance] {
+        var monthInfos: [(Int, Int)] = []
+        for i in 0..<12 {
+            if let monthDate = calendar.date(byAdding: .month, value: -i, to: selectedMonth) {
+                monthInfos.append((calendar.component(.month, from: monthDate), calendar.component(.year, from: monthDate)))
+            }
+        }
+        let results: [MonthlyBalance?] = await withTaskGroup(of: MonthlyBalance?.self) { group in
+            for (m, y) in monthInfos {
+                group.addTask {
+                    guard let monthStart = calendar.date(from: DateComponents(year: y, month: m, day: 1)) else { return nil }
+                    do {
+                        let metrics = try await networkService.getFinancialMetrics(userId: userId, month: m, year: y, useBankData: useBankData)
+                        return MonthlyBalance(id: "\(y)-\(m)", month: monthStart, balance: metrics.metrics.monthlyBalance)
+                    } catch {
+                        return nil
+                    }
+                }
+            }
+            var arr: [MonthlyBalance?] = []
+            for await r in group { arr.append(r) }
+            return arr
+        }
+        return results.compactMap { $0 }.sorted { $0.month < $1.month }
+    }
+    
+    /// Compute income, expenses, and balance from a list of transactions (so top card matches the list when API returns zeros).
+    private static func metricsFromTransactions(_ transactions: [TransactionItem]) -> (income: Double, expenses: Double, balance: Double) {
+        let income = transactions.filter { $0.type.lowercased() == "income" }.reduce(0.0) { $0 + $1.amount }
+        let expenses = transactions.filter { $0.type.lowercased() == "expense" }.reduce(0.0) { $0 + $1.amount }
+        return (income, expenses, income - expenses)
+    }
+    
     /// True if the transaction's date falls in the given calendar month/year (used to show only selected month).
     private static func isTransactionInMonth(_ transaction: TransactionItem, month: Int, year: Int) -> Bool {
         guard let d = parseTransactionDate(transaction.date) else { return false }
@@ -333,7 +543,9 @@ class FinanceViewModel: ObservableObject {
     }
     
     func addAsset(name: String, type: String, currentValue: Double, description: String?) async throws {
-        let userId = self.userId
+        guard let userId = effectiveUserId else {
+            throw NetworkError.apiError("Please log in to add assets.")
+        }
         
         let newAsset = try await networkService.createAsset(
             userId: userId,
@@ -352,7 +564,9 @@ class FinanceViewModel: ObservableObject {
     }
     
     func addTarget(title: String, description: String?, targetAmount: Double, currentAmount: Double? = nil, currency: String? = nil, targetDate: String? = nil, targetType: String? = nil, category: String? = nil, priority: String? = nil) async throws {
-        let userId = self.userId
+        guard let userId = effectiveUserId else {
+            throw NetworkError.apiError("Please log in to add goals.")
+        }
         
         let newTarget = try await networkService.createTarget(
             userId: userId,
@@ -381,7 +595,9 @@ class FinanceViewModel: ObservableObject {
     }
     
     func addTransaction(type: String, amount: Double, category: String?, description: String, date: Date?) async throws {
-        let userId = self.userId
+        guard let userId = effectiveUserId else {
+            throw NetworkError.apiError("Please log in to add transactions.")
+        }
         
         // Format date as ISO string if provided
         let dateString: String?
@@ -418,7 +634,9 @@ class FinanceViewModel: ObservableObject {
     }
     
     func updateTransaction(transactionId: String, type: String? = nil, amount: Double? = nil, category: String? = nil, description: String? = nil, date: Date? = nil) async throws {
-        let userId = self.userId
+        guard let userId = effectiveUserId else {
+            throw NetworkError.apiError("Please log in to update transactions.")
+        }
         
         // Format date as ISO string if provided
         let dateString: String?
@@ -455,7 +673,9 @@ class FinanceViewModel: ObservableObject {
     }
     
     func deleteTransaction(transactionId: String) async throws {
-        let userId = self.userId
+        guard let userId = effectiveUserId else {
+            throw NetworkError.apiError("Please log in to delete transactions.")
+        }
         
         print("[FinanceViewModel] Deleting transaction \(transactionId)")
         
@@ -476,7 +696,9 @@ class FinanceViewModel: ObservableObject {
     }
     
     func updateAsset(assetId: String, currentValue: Double? = nil, name: String? = nil, type: String? = nil, description: String? = nil) async throws {
-        let userId = self.userId
+        guard let userId = effectiveUserId else {
+            throw NetworkError.apiError("Please log in to update assets.")
+        }
         
         print("[FinanceViewModel] Updating asset \(assetId)")
         
@@ -503,7 +725,9 @@ class FinanceViewModel: ObservableObject {
     }
     
     func deleteAsset(assetId: String) async throws {
-        let userId = self.userId
+        guard let userId = effectiveUserId else {
+            throw NetworkError.apiError("Please log in to delete assets.")
+        }
         
         print("[FinanceViewModel] Deleting asset \(assetId)")
         
@@ -524,7 +748,9 @@ class FinanceViewModel: ObservableObject {
     }
     
     func deleteTarget(targetId: String) async throws {
-        let userId = self.userId
+        guard let userId = effectiveUserId else {
+            throw NetworkError.apiError("Please log in to delete goals.")
+        }
         
         print("[FinanceViewModel] Deleting target \(targetId)")
         
@@ -546,11 +772,11 @@ class FinanceViewModel: ObservableObject {
         refresh()
     }
     
-    // Load historical data for charts (based on comparison period)
-    func loadHistoricalData() {
+    // Load historical data for charts (based on comparison period). When useBankData is nil, uses usesBankDataOnly.
+    func loadHistoricalData(useBankData: Bool? = nil) {
         // Prevent multiple simultaneous loads
         guard !isHistoricalDataLoading else { return }
-        
+        let useBank = useBankData ?? usesBankDataOnly
         Task {
             await MainActor.run {
                 self.isHistoricalDataLoading = true
@@ -583,7 +809,7 @@ class FinanceViewModel: ObservableObject {
                 for (monthDate, month, year) in monthInfos {
                     group.addTask {
                         do {
-                            let metrics = try await self.networkService.getFinancialMetrics(userId: uid, month: month, year: year)
+                            let metrics = try await self.networkService.getFinancialMetrics(userId: uid, month: month, year: year, useBankData: useBank)
                             let monthStart = calendar.date(from: DateComponents(year: year, month: month, day: 1)) ?? monthDate
                             // Use monthlyBalance (includes transfers to/from goals) so Funds Total is consistent across months
                             let balanceForTotal = metrics.metrics.monthlyBalance
@@ -758,56 +984,98 @@ class FinanceViewModel: ObservableObject {
         return assetsValue + goalsValue + targetsValue
     }
     
-    /// Funds Total to display: always cumulative through the selected month (so next month can be less than previous if available funds are negative).
-    /// Uses monthlyBalance for the selected month so transfers to/from goals are included.
+    /// Funds Total to display.
+    /// Definition (from earlier logic and history fetching):
+    ///   Funds Total = sum of each month's ending Available Funds (monthlyBalance)
+    ///   from the first month we have data up to and including the selected month.
+    /// This uses `cumulativeTotalBalance`, which is built from `monthlyBalanceHistory`
+    /// populated by `loadHistoricalData` / `fetchBalanceHistory`.
     var displayTotalBalance: Double {
         return cumulativeTotalBalance
     }
     
-    // Calculate cumulative total balance up to selected month
-    // This sums all monthly balances from the first month up to and including the selected month.
-    // Uses monthlyBalance for the selected month (includes transfers to/from goals) so that when
-    // available funds go negative, the next month's Funds Total is less than the previous.
+    /// Monthly income to display in the top card.
+    /// Prefers the sum of the visible transaction list for the selected month so it always matches what the user sees.
+    var displayMonthlyIncome: Double {
+        let txIncome = transactionsForSelectedMonth
+            .filter { $0.type.lowercased() == "income" }
+            .reduce(0.0) { $0 + $1.amount }
+        if txIncome > 0 {
+            return txIncome
+        }
+        return monthlyIncome
+    }
+    
+    /// Monthly expenses to display in the top card.
+    /// Prefers the sum of the visible transaction list for the selected month so it always matches what the user sees.
+    var displayMonthlyExpenses: Double {
+        let txExpenses = transactionsForSelectedMonth
+            .filter { $0.type.lowercased() == "expense" }
+            .reduce(0.0) { $0 + $1.amount }
+        if txExpenses > 0 {
+            return txExpenses
+        }
+        return monthlyExpenses
+    }
+    
+    /// Available Funds for display: this month's step only (income − expenses − transfers to goal + transfers from goal).
+    /// Prefers computing from the visible transaction list so it exactly matches the user's transactions.
+    var displayAvailableFunds: Double {
+        if !transactionsForSelectedMonth.isEmpty {
+            let income = transactionsForSelectedMonth
+                .filter { $0.type.lowercased() == "income" }
+                .reduce(0.0) { $0 + $1.amount }
+            let expenses = transactionsForSelectedMonth
+                .filter { $0.type.lowercased() == "expense" }
+                .reduce(0.0) { $0 + $1.amount }
+            let transfersToGoal = transactionsForSelectedMonth
+                .filter { $0.type.lowercased() == "transfer" && $0.category.lowercased().contains("to goal") }
+                .reduce(0.0) { $0 + $1.amount }
+            let transfersFromGoal = transactionsForSelectedMonth
+                .filter { $0.type.lowercased() == "transfer" && $0.category.lowercased().contains("from goal") }
+                .reduce(0.0) { $0 + $1.amount }
+            return income - expenses - transfersToGoal + transfersFromGoal
+        }
+        let derived = monthlyIncome - monthlyExpenses
+        if monthlyBalance == 0 && derived != 0 {
+            return derived
+        }
+        return monthlyBalance
+    }
+    
+    // Funds Total = sum of each month's ending balance from first month through selected month only (no future months).
+    // If we don't have multi-month history, use all-time totalBalance so "Funds Total" includes previous months (not just current).
     var cumulativeTotalBalance: Double {
         let calendar = Calendar.current
         let selectedMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: selectedMonth)) ?? selectedMonth
-        
-        // Get all monthly balances sorted chronologically
         let sortedHistory = monthlyBalanceHistory.sorted { $0.month < $1.month }
+        let currentMonthBalance = monthlyBalance
         
-        // Use monthlyBalance (income - expenses - transfers to goal + transfers from goal) for the selected month
-        let selectedMonthBalance = monthlyBalance
-        
-        // If no history available yet, return just the selected month's balance
-        if sortedHistory.isEmpty {
-            return selectedMonthBalance
-        }
-        
-        // Sum all balances from history that are BEFORE the selected month
-        let previousMonthsBalance = sortedHistory
-            .filter { balance in
-                balance.month < selectedMonthStart
-            }
-            .reduce(0.0) { $0 + $1.balance }
-        
-        // Check if the selected month is already in history
-        let hasSelectedMonthInHistory = sortedHistory.contains { balance in
-            calendar.isDate(balance.month, equalTo: selectedMonthStart, toGranularity: .month)
-        }
-        
-        let isViewingCurrentMonth = calendar.isDate(selectedMonthStart, equalTo: Date(), toGranularity: .month)
-        
-        if hasSelectedMonthInHistory && !isViewingCurrentMonth {
-            // Past month: use history
-            return sortedHistory
-                .filter { balance in
-                    balance.month <= selectedMonthStart
-                }
-                .reduce(0.0) { $0 + $1.balance }
+        // Ensure selected month is in the list (so we always have a value)
+        let hasSelectedInHistory = sortedHistory.contains { calendar.isDate($0.month, equalTo: selectedMonthStart, toGranularity: .month) }
+        let effectiveHistory: [MonthlyBalance]
+        if hasSelectedInHistory {
+            effectiveHistory = sortedHistory
         } else {
-            // Current month or not in history: use live monthlyBalance so new transactions/transfers update Funds Total in real time
-            return previousMonthsBalance + selectedMonthBalance
+            let y = calendar.component(.year, from: selectedMonthStart)
+            let m = calendar.component(.month, from: selectedMonthStart)
+            let entry = MonthlyBalance(id: "\(y)-\(m)", month: selectedMonthStart, balance: currentMonthBalance)
+            effectiveHistory = (sortedHistory + [entry]).sorted { $0.month < $1.month }
         }
+        
+        // When we have no history or only one month, use all-time totalBalance so Funds Total includes previous months
+        if effectiveHistory.isEmpty {
+            return totalBalance != 0 ? totalBalance : currentMonthBalance
+        }
+        if effectiveHistory.count < 2 {
+            return totalBalance != 0 ? totalBalance : currentMonthBalance
+        }
+        
+        // Sum only months up to and including selected (never future months)
+        let sumUpToSelected = effectiveHistory
+            .filter { $0.month <= selectedMonthStart }
+            .reduce(0.0) { $0 + $1.balance }
+        return sumUpToSelected
     }
     
     // Calculate percentage change for month-to-month comparison

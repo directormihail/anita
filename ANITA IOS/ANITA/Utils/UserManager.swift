@@ -20,7 +20,11 @@ class UserManager: ObservableObject {
     private let preferredLanguageKey = OnboardingSurveyResponse.preferredLanguageKey
     private let userCurrencyKeyBase = "anita_user_currency"
     private let numberFormatKeyBase = "anita_number_format"
+    private let transactionDataSourceKeyBase = "anita_transaction_data_source"
     private let supabaseService = SupabaseService.shared
+    
+    /// "manual" = user adds transactions by hand. "bank" = transactions from linked bank only, no manual add.
+    @Published var transactionDataSource: String = "manual"
     
     @Published var isAuthenticated = false
     @Published var currentUser: User?
@@ -30,9 +34,40 @@ class UserManager: ObservableObject {
     /// True when app was opened via password recovery link; user must set a new password before using the app.
     @Published var recoveryModeNeedsPassword = false
     
+    /// True when user chose "Connect bank" at onboarding: transactions come from bank only, manual add is disabled.
+    var usesBankDataOnly: Bool { transactionDataSource == "bank" }
+    
+    func setTransactionDataSource(_ value: String) {
+        let v = (value == "bank") ? "bank" : "manual"
+        transactionDataSource = v
+        UserDefaults.standard.set(v, forKey: prefKey(transactionDataSourceKeyBase))
+    }
+    
     /// UserDefaults key scoped to current account so profile name and onboarding don't leak between accounts.
     func prefKey(_ base: String) -> String {
         "\(base)_\(userId)"
+    }
+    
+    // MARK: - Test bank connection flow (global flag, set before auth)
+    private static let pendingTestBankFlowKey = "anita_pending_test_bank_connection_flow"
+    
+    static var pendingTestBankConnectionFlow: Bool {
+        UserDefaults.standard.bool(forKey: pendingTestBankFlowKey)
+    }
+    
+    static func setPendingTestBankConnectionFlow(_ value: Bool) {
+        UserDefaults.standard.set(value, forKey: pendingTestBankFlowKey)
+    }
+    
+    /// Call after onboarding completes in the test-bank flow. If user chose bank, go straight to chat; otherwise show subscriptions.
+    func clearPendingTestBankConnectionFlowAndShowPlans() {
+        Self.setPendingTestBankConnectionFlow(false)
+        if transactionDataSource == "bank" {
+            shouldShowPostSignupPlans = false
+        } else {
+            UserDefaults.standard.set(true, forKey: prefKey(postSignupPlansPendingKey))
+            shouldShowPostSignupPlans = true
+        }
     }
     
     private init() {
@@ -40,6 +75,7 @@ class UserManager: ObservableObject {
         migrateLegacyUnkeyedStorageIfNeeded()
         hasCompletedOnboarding = UserDefaults.standard.bool(forKey: prefKey(onboardingCompletedKey))
         shouldShowPostSignupPlans = UserDefaults.standard.bool(forKey: prefKey(postSignupPlansPendingKey))
+        transactionDataSource = UserDefaults.standard.string(forKey: prefKey(transactionDataSourceKeyBase)) ?? "manual"
         // Hydrate display name so @Published is in sync and all UI updates without re-login
         profileDisplayName = UserDefaults.standard.string(forKey: prefKey(profileNameKeyBase))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         // If we already have a saved token, start in authenticated state and let checkAuthStatus() refine user details.
@@ -90,6 +126,7 @@ class UserManager: ObservableObject {
             preferredLanguageKey,
             userCurrencyKeyBase,
             numberFormatKeyBase,
+            transactionDataSourceKeyBase,
             "anita_date_format",
             onboardingCompletedKey,
             onboardingSyncedKey,
@@ -108,6 +145,15 @@ class UserManager: ObservableObject {
                 } else if let bool = value as? Bool {
                     UserDefaults.standard.set(bool, forKey: newK)
                 }
+            }
+        }
+
+        // Also migrate server-side data (manual + bank transactions) so nothing disappears after sign-up/login.
+        Task {
+            do {
+                try await NetworkService.shared.migrateUserData(fromUserId: oldUserId, toUserId: newUserId)
+            } catch {
+                print("[UserManager] ⚠️ Failed to migrate server data from \(oldUserId) to \(newUserId): \(error.localizedDescription)")
             }
         }
     }
@@ -137,7 +183,12 @@ class UserManager: ObservableObject {
             migrateStorage(from: oldUserId, to: newUserId)
             self.currentUser = authResponse.user
             self.isAuthenticated = true
-            self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: prefKey(onboardingCompletedKey))
+            if Self.pendingTestBankConnectionFlow {
+                self.hasCompletedOnboarding = false
+                UserDefaults.standard.set(false, forKey: prefKey(onboardingCompletedKey))
+            } else {
+                self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: prefKey(onboardingCompletedKey))
+            }
         }
         await syncSavedOnboardingToSupabaseIfNeeded()
         syncGlobalCurrencyFromPerUser()
@@ -156,8 +207,14 @@ class UserManager: ObservableObject {
             if !hasCompletedOnboarding {
                 UserDefaults.standard.set(false, forKey: prefKey(onboardingCompletedKey))
             }
-            UserDefaults.standard.set(true, forKey: prefKey(postSignupPlansPendingKey))
-            self.shouldShowPostSignupPlans = true
+            if Self.pendingTestBankConnectionFlow {
+                self.hasCompletedOnboarding = false
+                UserDefaults.standard.set(false, forKey: prefKey(onboardingCompletedKey))
+                // Post-signup plans will be shown after they finish onboarding + bank step
+            } else {
+                UserDefaults.standard.set(true, forKey: prefKey(postSignupPlansPendingKey))
+                self.shouldShowPostSignupPlans = true
+            }
         }
         await syncSavedOnboardingToSupabaseIfNeeded()
         syncGlobalCurrencyFromPerUser()
@@ -196,7 +253,12 @@ class UserManager: ObservableObject {
             migrateStorage(from: oldUserId, to: newUserId)
             self.currentUser = authResponse.user
             self.isAuthenticated = true
-            self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: prefKey(onboardingCompletedKey))
+            if Self.pendingTestBankConnectionFlow {
+                self.hasCompletedOnboarding = false
+                UserDefaults.standard.set(false, forKey: prefKey(onboardingCompletedKey))
+            } else {
+                self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: prefKey(onboardingCompletedKey))
+            }
         }
         await syncSavedOnboardingToSupabaseIfNeeded()
         syncGlobalCurrencyFromPerUser()
@@ -211,7 +273,12 @@ class UserManager: ObservableObject {
             migrateStorage(from: oldUserId, to: newUserId)
             self.currentUser = authResponse.user
             self.isAuthenticated = true
-            self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: prefKey(onboardingCompletedKey))
+            if Self.pendingTestBankConnectionFlow {
+                self.hasCompletedOnboarding = false
+                UserDefaults.standard.set(false, forKey: prefKey(onboardingCompletedKey))
+            } else {
+                self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: prefKey(onboardingCompletedKey))
+            }
         }
         await syncSavedOnboardingToSupabaseIfNeeded()
         syncGlobalCurrencyFromPerUser()
@@ -239,6 +306,7 @@ class UserManager: ObservableObject {
                     self.currentUser = user
                     self.isAuthenticated = true
                     self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: prefKey(onboardingCompletedKey))
+                    self.transactionDataSource = UserDefaults.standard.string(forKey: prefKey(transactionDataSourceKeyBase)) ?? "manual"
                 }
                 syncGlobalCurrencyFromPerUser()
                 await syncSavedOnboardingToSupabaseIfNeeded()

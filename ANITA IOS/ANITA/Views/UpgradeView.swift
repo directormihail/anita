@@ -299,6 +299,16 @@ struct UpgradeView: View {
     
     /// Purchase a subscription via Apple In-App Purchase
     private func purchasePlan(productId: String) async {
+        // If StoreKit thinks this product is already purchased, treat this as a restore instead of a new purchase.
+        if storeKitService.isPurchased(productId) {
+            await restorePurchases()
+            await MainActor.run {
+                storeKitService.errorMessage = nil
+                showSuccessAlert = true
+            }
+            return
+        }
+
         guard let product = storeKitService.getProduct(productId) else {
             await MainActor.run {
                 storeKitService.errorMessage = storeKitService.products.isEmpty

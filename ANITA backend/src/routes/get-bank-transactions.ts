@@ -1,12 +1,18 @@
 /**
  * Get Bank Transactions API Route
  * Returns transactions from linked bank accounts (Stripe Financial Connections) for the given user.
+ *
+ * Category source: Each row's `category` is stored in DB. It is set only by
+ * categorizeUncategorizedBankTransactions (see CATEGORY_FLOW.md). If you see wrong/missing
+ * categories, pull-to-refresh to re-sync and re-categorize, or wait for the background
+ * categorization triggered when this endpoint returns uncategorized rows.
  */
 
 import { Request, Response } from 'express';
 import { createClient } from '@supabase/supabase-js';
 import { applySecurityHeaders } from '../utils/securityHeaders';
 import * as logger from '../utils/logger';
+import { categorizeUncategorizedBankTransactions } from '../utils/categorizeBankTransactions';
 
 function getSupabaseClient() {
   const supabaseUrl = process.env.SUPABASE_URL;
@@ -30,7 +36,7 @@ export async function handleGetBankTransactions(req: Request, res: Response): Pr
     const userId = (req.query.userId as string)?.trim?.();
     const from = (req.query.from as string)?.trim?.(); // ISO date or YYYY-MM-DD
     const to = (req.query.to as string)?.trim?.();
-    const limit = Math.min(parseInt(String(req.query.limit), 10) || 100, 500);
+    const limit = Math.min(parseInt(String(req.query.limit), 10) || 100, 1000);
 
     if (!userId) {
       res.status(400).json({
@@ -47,6 +53,11 @@ export async function handleGetBankTransactions(req: Request, res: Response): Pr
       res.status(500).json({ error: 'Database not configured', requestId });
       return;
     }
+
+    // Inclusive date range so the full selected month is included
+    // from date-only → start of day UTC; to date-only → end of day UTC
+    const fromInclusive = from && /^\d{4}-\d{2}-\d{2}$/.test(from) ? `${from}T00:00:00.000Z` : from;
+    const toInclusive = to && /^\d{4}-\d{2}-\d{2}$/.test(to) ? `${to}T23:59:59.999Z` : to;
 
     let query = supabase
       .from('bank_transactions')
@@ -65,11 +76,11 @@ export async function handleGetBankTransactions(req: Request, res: Response): Pr
       .order('transacted_at', { ascending: false })
       .limit(limit);
 
-    if (from) {
-      query = query.gte('transacted_at', from);
+    if (fromInclusive) {
+      query = query.gte('transacted_at', fromInclusive);
     }
-    if (to) {
-      query = query.lte('transacted_at', to);
+    if (toInclusive) {
+      query = query.lte('transacted_at', toInclusive);
     }
 
     const { data: transactions, error } = await query;
@@ -80,8 +91,28 @@ export async function handleGetBankTransactions(req: Request, res: Response): Pr
       return;
     }
 
+    const list = transactions ?? [];
+    const hasUncategorized = list.some((r: { category?: string | null }) => {
+      const cat = (r.category ?? '').trim().toLowerCase();
+      return cat === '' || ['other', 'uncategorized', 'unclassified'].includes(cat);
+    });
+    if (hasUncategorized) {
+      setImmediate(() => {
+        const supabase = getSupabaseClient();
+        if (supabase) {
+          categorizeUncategorizedBankTransactions(supabase, userId, requestId).catch((err) => {
+            logger.warn('Background categorization after get-bank-transactions failed', {
+              requestId,
+              userId,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          });
+        }
+      });
+    }
+
     res.status(200).json({
-      transactions: transactions ?? [],
+      transactions: list,
       requestId,
     });
   } catch (err) {

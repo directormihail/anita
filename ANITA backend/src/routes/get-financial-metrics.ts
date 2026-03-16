@@ -40,6 +40,7 @@ export async function handleGetFinancialMetrics(req: Request, res: Response): Pr
     const userId = req.query.userId as string;
     const month = req.query.month as string; // Format: "2024-01" (YYYY-MM)
     const year = req.query.year as string;
+    const dataSource = (req.query.dataSource as string)?.toLowerCase(); // 'bank' = use bank_transactions
 
     if (!userId) {
       res.status(400).json({
@@ -56,6 +57,71 @@ export async function handleGetFinancialMetrics(req: Request, res: Response): Pr
       res.status(500).json({
         error: 'Database not configured',
         message: 'Supabase is not properly configured',
+        requestId
+      });
+      return;
+    }
+
+    if (dataSource === 'bank') {
+      // Compute metrics from bank_transactions (Stripe Financial Connections)
+      const monthNum = month ? parseInt(month, 10) : new Date().getUTCMonth() + 1;
+      const yearNum = year ? parseInt(year, 10) : new Date().getUTCFullYear();
+      const monthStart = new Date(Date.UTC(yearNum, monthNum - 1, 1, 0, 0, 0, 0)).toISOString();
+      const monthEnd = new Date(Date.UTC(yearNum, monthNum, 0, 23, 59, 59, 999)).toISOString();
+
+      const { data: allBankTx, error: allBankError } = await supabase
+        .from('bank_transactions')
+        .select('amount_cents, transacted_at')
+        .eq('user_id', userId)
+        .order('transacted_at', { ascending: true });
+
+      if (allBankError) {
+        logger.error('Error fetching bank transactions for metrics', { error: allBankError.message, requestId, userId });
+        res.status(500).json({
+          error: 'Database error',
+          message: 'Failed to fetch bank transactions',
+          requestId
+        });
+        return;
+      }
+
+      const allBank = (allBankTx || []).map((r: { amount_cents: number; transacted_at: string }) => ({
+        amount: (Number(r.amount_cents) || 0) / 100,
+        amountCents: Number(r.amount_cents) || 0,
+        at: r.transacted_at
+      }));
+
+      const totalIncome = allBank.filter(t => t.amountCents > 0).reduce((sum, t) => sum + t.amount, 0);
+      const totalExpenses = allBank.filter(t => t.amountCents < 0).reduce((sum, t) => sum + Math.abs(t.amount), 0);
+      const totalBalance = totalIncome - totalExpenses;
+
+      const inMonth = (at: string) => at >= monthStart && at <= monthEnd;
+      const monthlyBank = allBank.filter(t => inMonth(t.at));
+      const monthlyIncome = monthlyBank.filter(t => t.amountCents > 0).reduce((sum, t) => sum + t.amount, 0);
+      const monthlyExpenses = monthlyBank.filter(t => t.amountCents < 0).reduce((sum, t) => sum + Math.abs(t.amount), 0);
+      const monthlyBalance = monthlyIncome - monthlyExpenses;
+
+      logger.info('Financial metrics from bank', {
+        requestId,
+        userId,
+        month: monthNum,
+        year: yearNum,
+        monthlyIncome,
+        monthlyExpenses,
+        monthlyBalance,
+        monthlyTxCount: monthlyBank.length
+      });
+
+      res.status(200).json({
+        success: true,
+        metrics: {
+          totalBalance,
+          totalIncome,
+          totalExpenses,
+          monthlyIncome,
+          monthlyExpenses,
+          monthlyBalance
+        },
         requestId
       });
       return;

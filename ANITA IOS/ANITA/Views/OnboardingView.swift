@@ -30,6 +30,9 @@ struct OnboardingView: View {
     @State private var selectedCurrency: String = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
     @State private var showingFomo: Bool = false
     
+    /// When true, adds a final "Connect your bank" step before completion; "Get started" on that step completes onboarding.
+    var includeBankConnectionStep: Bool = false
+    
     let onComplete: (OnboardingSurveyResponse) -> Void
     
     private let languages: [LanguageOption] = [
@@ -96,9 +99,10 @@ struct OnboardingView: View {
         .init(id: "CHF", symbol: "CHF", name: "Swiss Franc")
     ]
     
-    // Pages: language + name + currency + questions
-    private var totalPages: Int { 3 + questions.count }
+    // Pages: language + name + currency + questions [+ optional bank step]
+    private var totalPages: Int { 3 + questions.count + (includeBankConnectionStep ? 1 : 0) }
     
+    private var isBankStepPage: Bool { includeBankConnectionStep && pageIndex == totalPages - 1 }
     private var isLastPage: Bool { pageIndex == totalPages - 1 }
     private var isFirstPage: Bool { pageIndex == 0 }
     
@@ -126,9 +130,12 @@ struct OnboardingView: View {
         if pageIndex == 2 {
             return !selectedCurrency.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
-        if pageIndex >= 3 && pageIndex <= questions.count + 2 {
+        if pageIndex >= 3 && pageIndex < 3 + questions.count {
             let question = questions[pageIndex - 3]
             return answers[question.id] != nil
+        }
+        if isBankStepPage {
+            return true
         }
         return hasAnsweredAllQuestions
     }
@@ -172,30 +179,35 @@ struct OnboardingView: View {
                     
                     // Single page at a time — no swipe; only Next/Back buttons change page
                     Group {
-                        switch pageIndex {
-                        case 0: languagePage
-                        case 1: namePage
-                        case 2: currencyPage
-                        default:
-                            if pageIndex >= 3 && pageIndex < 3 + questions.count {
-                                questionPage(questions[pageIndex - 3])
-                            } else {
-                                languagePage
+                        if isBankStepPage {
+                            bankConnectionStepView
+                        } else {
+                            switch pageIndex {
+                            case 0: languagePage
+                            case 1: namePage
+                            case 2: currencyPage
+                            default:
+                                if pageIndex >= 3 && pageIndex < 3 + questions.count {
+                                    questionPage(questions[pageIndex - 3])
+                                } else {
+                                    languagePage
+                                }
                             }
                         }
                     }
                     .animation(.spring(response: 0.4, dampingFraction: 0.8), value: pageIndex)
                     
-                    // Nav buttons
-                    HStack(spacing: 16) {
-                        if !isFirstPage {
-                            backButton
+                    // Nav buttons (hidden on bank step — only "Connect bank" or "Use manual input" continue)
+                    if !isBankStepPage {
+                        HStack(spacing: 16) {
+                            if !isFirstPage {
+                                backButton
+                            }
+                            nextButton
                         }
-                        
-                        nextButton
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 40)
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 40)
                 }
             }
         }
@@ -1109,7 +1121,16 @@ struct OnboardingView: View {
             let impact = UIImpactFeedbackGenerator(style: .medium)
             impact.impactOccurred()
             
-            if !isLastPage {
+            if isBankStepPage {
+                let survey = OnboardingSurveyResponse(
+                    languageCode: selectedLanguage?.id ?? "en",
+                    userName: trimmedUserName,
+                    currencyCode: selectedCurrency,
+                    answers: answers,
+                    completedAt: Date()
+                )
+                onComplete(survey)
+            } else if !isLastPage {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                     pageIndex = min(pageIndex + 1, totalPages - 1)
                 }
@@ -1120,10 +1141,10 @@ struct OnboardingView: View {
             }
         } label: {
             HStack {
-                Text(isLastPage ? getStartedTitle : nextTitle)
+                Text((isLastPage && !includeBankConnectionStep) || isBankStepPage ? getStartedTitle : nextTitle)
                     .font(.system(size: 17, weight: .semibold))
                 
-                if !isLastPage {
+                if !isLastPage && !isBankStepPage {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 16, weight: .semibold))
                 }
@@ -1152,6 +1173,130 @@ struct OnboardingView: View {
         .buttonStyle(PremiumButtonStyle())
         .disabled(!isNextEnabled)
         .opacity(isNextEnabled ? 1.0 : 0.45)
+    }
+    
+    @ViewBuilder
+    private var bankConnectionStepView: some View {
+        VStack(spacing: 0) {
+            Spacer()
+            VStack(spacing: 20) {
+                Text("Connect your bank")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                Text("Link your bank to sync transactions and balances. You can skip and do this later in Settings.")
+                    .font(.system(size: 17, weight: .regular))
+                    .foregroundColor(.white.opacity(0.85))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+                BankConnectionOnboardingStep(onFinish: {
+                    let survey = OnboardingSurveyResponse(
+                        languageCode: selectedLanguage?.id ?? "en",
+                        userName: trimmedUserName,
+                        currencyCode: selectedCurrency,
+                        answers: answers,
+                        completedAt: Date()
+                    )
+                    onComplete(survey)
+                })
+            }
+            .padding(.horizontal, 24)
+            Spacer()
+        }
+    }
+}
+
+// MARK: - Bank connection step (used when includeBankConnectionStep is true)
+private struct BankConnectionOnboardingStep: View {
+    var onFinish: () -> Void
+    @State private var isConnecting = false
+    @State private var errorMessage: String?
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            Button {
+                UserManager.shared.setTransactionDataSource("bank")
+                connectBank()
+            } label: {
+                HStack {
+                    if isConnecting {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    } else {
+                        Image(systemName: "link.badge.plus")
+                            .font(.system(size: 20, weight: .semibold))
+                        Text("Connect bank")
+                            .font(.system(size: 17, weight: .semibold))
+                    }
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(Color.white.opacity(0.12))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                        )
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(isConnecting)
+            
+            Button {
+                UserManager.shared.setTransactionDataSource("manual")
+                onFinish()
+            } label: {
+                HStack {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 20, weight: .semibold))
+                    Text("Use manual input")
+                        .font(.system(size: 17, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(Color.white.opacity(0.08))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                        )
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(isConnecting)
+            
+            if let msg = errorMessage {
+                Text(msg)
+                    .font(.system(size: 14))
+                    .foregroundColor(.orange)
+                    .multilineTextAlignment(.center)
+            }
+        }
+    }
+    
+    private func connectBank() {
+        let userManager = UserManager.shared
+        let userId = userManager.userId
+        let userEmail = userManager.currentUser?.email
+        guard !userId.isEmpty else {
+            errorMessage = "Please sign in first."
+            return
+        }
+        errorMessage = nil
+        isConnecting = true
+        Task { @MainActor in
+            defer { isConnecting = false }
+            do {
+                try await BankConnectionTester.shared.startTestFlow(userId: userId, userEmail: userEmail) {
+                    onFinish()
+                }
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
     }
 }
 

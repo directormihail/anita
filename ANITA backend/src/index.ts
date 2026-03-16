@@ -55,6 +55,8 @@ import { handleCreateFinancialConnectionsSession } from './routes/create-financi
 import { handleStripeWebhook } from './routes/stripe-webhook';
 import { handleGetBankAccounts } from './routes/get-bank-accounts';
 import { handleGetBankTransactions } from './routes/get-bank-transactions';
+import { handleRefreshBankTransactions } from './routes/refresh-bank-transactions';
+import { handleMigrateUserData } from './routes/migrate-user-data';
 import { applySecurityHeaders } from './utils/securityHeaders';
 import { requestIdMiddleware } from './middleware/requestId';
 import { getPrivacyPayload, getTermsPayload } from './legal/content';
@@ -165,8 +167,11 @@ app.post('/api/v1/delete-asset', handleDeleteAsset);
 app.post('/api/v1/support', handleSubmitSupport);
 app.post('/api/v1/feedback', handleSubmitFeedback);
 app.post('/api/v1/financial-connections/session', handleCreateFinancialConnectionsSession);
+app.post('/api/v1/migrate-user-data', handleMigrateUserData);
 app.get('/api/v1/bank-accounts', handleGetBankAccounts);
 app.get('/api/v1/bank-transactions', handleGetBankTransactions);
+app.post('/api/v1/bank-transactions/refresh', handleRefreshBankTransactions);
+app.get('/api/v1/bank-transactions/refresh', handleRefreshBankTransactions);
 
 // Legacy routes (redirect to v1 for backward compatibility)
 app.post('/api/chat-completion', handleChatCompletion);

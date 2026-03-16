@@ -20,10 +20,18 @@ final class BankConnectionTester: ObservableObject {
     
     private init() {}
     
-    /// 1) Fetches client_secret from backend. 2) Presents FinancialConnectionsSheet on main thread.
-    func startTestFlow(userId: String, userEmail: String?) async throws {
+    /// 1) Fetches client_secret from backend. 2) Presents FinancialConnectionsSheet on main thread. Calls onDismiss when sheet is dismissed (completed, canceled, or failed).
+    func startTestFlow(userId: String, userEmail: String?, onDismiss: (() -> Void)? = nil) async throws {
+        // Prefer authenticated Supabase id when available so bank data is sharable across devices,
+        // but still allow anonymous testing using the provided userId.
+        let resolvedUserId: String
+        if UserManager.shared.isAuthenticated, let current = UserManager.shared.currentUser {
+            resolvedUserId = current.id
+        } else {
+            resolvedUserId = userId
+        }
         let response = try await NetworkService.shared.createFinancialConnectionsSession(
-            userId: userId,
+            userId: resolvedUserId,
             userEmail: userEmail
         )
         
@@ -32,15 +40,16 @@ final class BankConnectionTester: ObservableObject {
         }
         
         #if canImport(StripeFinancialConnections)
-        await presentSheetOnMain(clientSecret: clientSecret)
+        await presentSheetOnMain(clientSecret: clientSecret, onDismiss: onDismiss)
         #else
         print("[BankConnectionTester] Session created. Add StripeFinancialConnections to target to show the window.")
+        onDismiss?()
         #endif
     }
     
     #if canImport(StripeFinancialConnections)
     @MainActor
-    private func presentSheetOnMain(clientSecret: String) async {
+    private func presentSheetOnMain(clientSecret: String, onDismiss: (() -> Void)? = nil) async {
         StripeAPI.defaultPublishableKey = Config.stripePublishableKey
         sheet = FinancialConnectionsSheet(
             financialConnectionsSessionClientSecret: clientSecret,
@@ -49,6 +58,7 @@ final class BankConnectionTester: ObservableObject {
         
         guard let rootVC = topMostViewController() else {
             print("[BankConnectionTester] No root view controller.")
+            onDismiss?()
             return
         }
         
@@ -63,6 +73,7 @@ final class BankConnectionTester: ObservableObject {
             @unknown default:
                 break
             }
+            onDismiss?()
         }
     }
     

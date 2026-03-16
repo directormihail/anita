@@ -38,39 +38,42 @@ struct CategoryAnalyticsView: View {
                             .tint(Color(red: 0.4, green: 0.49, blue: 0.92))
                             .padding()
                     } else if let data = viewModel.categoryData {
-                        // Donut Chart
-                        ZStack {
-                            DonutChartView(categories: data.categories)
-                                .frame(height: 280)
-                                .padding(.horizontal, 20)
-                            
-                            // Center text
-                            VStack(spacing: 4) {
-                                Text("\(data.categoryCount)")
-                                    .font(.system(size: 48, weight: .bold))
-                                    .foregroundColor(.white)
+                        // Unified liquid-glass card: donut + list
+                        VStack(spacing: 20) {
+                            // Donut Chart
+                            ZStack {
+                                DonutChartView(categories: data.categories)
+                                    .frame(height: 260)
                                 
-                                Text(AppL10n.t("finance.categories"))
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.8))
+                                // Center text
+                                VStack(spacing: 4) {
+                                    Text("\(data.categoryCount)")
+                                        .font(.system(size: 48, weight: .bold))
+                                        .foregroundColor(.white)
+                                    
+                                    Text(AppL10n.t("finance.categories"))
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.8))
+                                }
                             }
-                        }
-                        .padding(.vertical, 20)
-                        
-                        // Category List
-                        VStack(spacing: 0) {
-                            ForEach(data.categories) { category in
-                                CategoryRow(category: category)
-                                
-                                if category.id != data.categories.last?.id {
-                                    Divider()
-                                        .background(Color.white.opacity(0.1))
-                                        .padding(.leading, 76)
+                            .padding(.top, 16)
+                            
+                            // Category List
+                            VStack(spacing: 0) {
+                                ForEach(data.categories) { category in
+                                    CategoryRow(category: category)
+                                    
+                                    if category.id != data.categories.last?.id {
+                                        Divider()
+                                            .background(Color(white: 0.22).opacity(0.5))
+                                            .padding(.leading, 76)
+                                    }
                                 }
                             }
                         }
-                        .liquidGlass(cornerRadius: 12)
                         .padding(.horizontal, 20)
+                        .padding(.vertical, 20)
+                        .liquidGlass(cornerRadius: 24)
                         
                         if let errorMessage = viewModel.errorMessage {
                             Text(errorMessage)
