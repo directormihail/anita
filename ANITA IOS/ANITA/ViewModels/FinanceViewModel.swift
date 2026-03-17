@@ -21,6 +21,9 @@ class FinanceViewModel: ObservableObject {
     @Published var assets: [Asset] = []
     @Published var xpStats: XPStats?
     @Published var isLoading = false
+    /// True after `loadData()` has successfully completed at least once for the current app session.
+    /// Used by the UI to avoid showing placeholder / stale values before the first real payload arrives.
+    @Published var hasLoadedOnce = false
     @Published var errorMessage: String?
     @Published var selectedMonth: Date = {
         // Set to first day of current month to avoid timezone issues
@@ -90,6 +93,23 @@ class FinanceViewModel: ObservableObject {
     
     var usesBankDataOnly: Bool { UserManager.shared.usesBankDataOnly }
     
+    // MARK: - Bank sync throttling (once per day, background-only)
+    private static let lastBankSyncKey = "anita_last_bank_sync_date"
+    
+    /// Returns true if we should trigger a background bank sync (at most once per calendar day).
+    static func shouldPerformDailyBankSync() -> Bool {
+        let defaults = UserDefaults.standard
+        if let last = defaults.object(forKey: lastBankSyncKey) as? Date {
+            let cal = Calendar.current
+            if cal.isDateInToday(last) { return false }
+        }
+        return true
+    }
+    
+    static func markBankSyncPerformed() {
+        UserDefaults.standard.set(Date(), forKey: lastBankSyncKey)
+    }
+    
     func loadData() {
         isLoading = true
         errorMessage = nil
@@ -115,8 +135,8 @@ class FinanceViewModel: ObservableObject {
                 if usesBankDataOnly {
                     // Bank mode: always use effectiveUserId so logged-in users share data across devices,
                     // but anonymous users still see their own bank data.
-                    // Sync from Stripe first so indicators show correct data when bank is connected
-                    try? await networkService.refreshBankTransactions(userId: userId)
+                    // IMPORTANT: Do NOT sync from Stripe here – we want fast loads using
+                    // the cached metrics/transactions that are already in our database.
                     let fromStr = String(format: "%04d-%02d-01", year, month)
                     let comp = DateComponents(year: year, month: month, day: 1)
                     guard let firstDay = calendar.date(from: comp),
@@ -167,6 +187,7 @@ class FinanceViewModel: ObservableObject {
                             self.monthlyBalance = self.monthlyIncome - self.monthlyExpenses
                         }
                         if !self.hasLoadedHistoricalDataOnce { self.loadHistoricalData() }
+                        self.hasLoadedOnce = true
                         self.isLoading = false
                     }
                 } else {
@@ -192,28 +213,16 @@ class FinanceViewModel: ObservableObject {
                 let manualHasData = metrics.metrics.monthlyIncome > 0 || metrics.metrics.monthlyExpenses > 0
                 var bankHasData = (bankMetrics?.metrics.monthlyIncome ?? 0) > 0 || (bankMetrics?.metrics.monthlyExpenses ?? 0) > 0
                 var useBankForDisplay = !manualHasData && bankHasData
-                // When manual has no data, sync from Stripe and re-check bank so we show data as soon as it's available
-                if !manualHasData && !bankHasData {
-                    try? await networkService.refreshBankTransactions(userId: userId)
-                    let refetched = try? await networkService.getFinancialMetrics(userId: userId, month: month, year: year, useBankData: true)
-                    bankHasData = (refetched?.metrics.monthlyIncome ?? 0) > 0 || (refetched?.metrics.monthlyExpenses ?? 0) > 0
-                    useBankForDisplay = bankHasData
-                    if useBankForDisplay {
-                        bankMetrics = refetched
-                        previousMonthBankMetrics = try? await networkService.getFinancialMetrics(userId: userId, month: previousMonth, year: previousMonthYear, useBankData: true)
-                    }
-                }
+                // We no longer trigger a Stripe/bank sync in the hot path.
+                // If both manual and bank metrics are empty, we keep showing zeros/transactions
+                // from our DB and let a separate daily background sync refresh bank data.
                 var bankTransactionsForMonth: [TransactionItem]?
                 var finalBankMetrics = bankMetrics
                 var finalPreviousBankMetrics = previousMonthBankMetrics
                 var bankBalanceHistoryForTotal: [MonthlyBalance] = []
                 var manualBalanceHistoryForTotal: [MonthlyBalance] = []
                 if useBankForDisplay {
-                    if !bankHasData {
-                        try? await networkService.refreshBankTransactions(userId: userId)
-                        finalBankMetrics = try? await networkService.getFinancialMetrics(userId: userId, month: month, year: year, useBankData: true)
-                        finalPreviousBankMetrics = try? await networkService.getFinancialMetrics(userId: userId, month: previousMonth, year: previousMonthYear, useBankData: true)
-                    }
+                    // Use whatever bank metrics are already cached in our DB; do not force a sync here.
                     bankBalanceHistoryForTotal = await Self.fetchBalanceHistory(networkService: networkService, userId: userId, selectedMonth: selectedMonth, calendar: calendar, useBankData: true)
                 } else {
                     // Manual mode: load balance history so Funds Total = (month1 + month2 + … + selected) from first paint
@@ -299,6 +308,7 @@ class FinanceViewModel: ObservableObject {
                         }
                         if !self.hasLoadedHistoricalDataOnce { self.loadHistoricalData(useBankData: false) }
                     }
+                    self.hasLoadedOnce = true
                     self.isLoading = false
                 }
                 }
@@ -329,17 +339,9 @@ class FinanceViewModel: ObservableObject {
         loadData()
     }
     
-    /// Call from pull-to-refresh: in bank mode re-syncs from Stripe then reloads; otherwise just reloads.
+    /// Call from pull-to-refresh. We no longer force a bank sync here; instead we rely on
+    /// a separate daily background sync so that refresh stays fast and uses cached data.
     func refreshAsync() async {
-        if usesBankDataOnly {
-            guard let userId = effectiveUserId else {
-                await MainActor.run {
-                    self.errorMessage = "Please log in to refresh bank transactions."
-                }
-                return
-            }
-            try? await networkService.refreshBankTransactions(userId: userId)
-        }
         loadData()
     }
 

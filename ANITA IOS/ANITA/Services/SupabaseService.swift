@@ -390,12 +390,16 @@ class SupabaseService {
     }
     
     /// Refresh access token using refresh token. Call when access token is expired or getCurrentUser returns 401.
+    /// Supabase token endpoint returns only tokens (no user object), so we decode TokenRefreshResponse, not AuthResponse.
     private func refreshSession() async throws -> Bool {
         guard let refresh = refreshToken, !refresh.isEmpty else { return false }
         guard !supabaseUrl.isEmpty, !supabaseAnonKey.isEmpty else { return false }
         
         let baseUrl = supabaseUrl.hasSuffix("/") ? String(supabaseUrl.dropLast()) : supabaseUrl
-        let url = URL(string: "\(baseUrl)/auth/v1/token?grant_type=refresh_token")!
+        guard let url = URL(string: "\(baseUrl)/auth/v1/token?grant_type=refresh_token") else {
+            print("[Supabase] Invalid refresh URL")
+            return false
+        }
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -410,10 +414,17 @@ class SupabaseService {
         
         if httpResponse.statusCode == 200 {
             let decoder = JSONDecoder()
-            let authResponse = try decoder.decode(AuthResponse.self, from: data)
-            setSession(accessToken: authResponse.accessToken, refreshToken: authResponse.refreshToken)
-            print("[Supabase] Session refreshed successfully")
-            return true
+            do {
+                let tokenResponse = try decoder.decode(TokenRefreshResponse.self, from: data)
+                await MainActor.run {
+                    setSession(accessToken: tokenResponse.accessToken, refreshToken: tokenResponse.refreshToken)
+                }
+                print("[Supabase] Session refreshed successfully")
+                return true
+            } catch {
+                print("[Supabase] Refresh decode error: \(error)")
+                return false
+            }
         }
         
         let errorString = String(data: data, encoding: .utf8) ?? "Unknown error"
@@ -834,6 +845,21 @@ class SupabaseService {
 }
 
 // MARK: - Models
+
+/// Response from Supabase /auth/v1/token?grant_type=refresh_token (no user object).
+struct TokenRefreshResponse: Codable {
+    let accessToken: String
+    let tokenType: String
+    let expiresIn: Int
+    let refreshToken: String
+    
+    enum CodingKeys: String, CodingKey {
+        case accessToken = "access_token"
+        case tokenType = "token_type"
+        case expiresIn = "expires_in"
+        case refreshToken = "refresh_token"
+    }
+}
 
 struct AuthResponse: Codable {
     let accessToken: String

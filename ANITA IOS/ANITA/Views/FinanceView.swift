@@ -204,6 +204,7 @@ struct FinanceView: View {
     @State private var animatedProgress: Double = 0 // Smooth progress for the bar
     @State private var healthScoreTimer: Timer?
     @State private var animationDebounceTimer: Timer?
+    @State private var loadingArcPhase: Bool = false
     
     // MARK: - Helper Functions
     
@@ -454,18 +455,46 @@ struct FinanceView: View {
         .padding(.bottom, 4)
     }
     
+    /// Minimal metric tile: label + value only (clean fintech style).
+    private func financeMetricPill(label: String, value: String, valueColor: Color) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundColor(.white.opacity(0.45))
+                .tracking(0.8)
+            Text(value)
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundColor(valueColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white.opacity(0.035))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
+                )
+        )
+    }
+    
+    @ViewBuilder
     private var balanceCardView: some View {
-        // Use computed property that updates reactively
+        // If we are still loading the finance payload or have not yet completed a successful load,
+        // show a stable placeholder card with no amounts to avoid flashing incorrect data.
+        let isStillLoading = viewModel.isLoading || !viewModel.hasLoadedOnce
+        
+        // When we do have data, prefer the computed values that are consistent with the visible list.
         let healthScore = currentHealthScore
-        // Available Funds = computed display value so it always matches income/expenses and transfers for the selected month.
         let availableFunds = viewModel.displayAvailableFunds
         
-        // Use animated score for display (integer for counting effect)
         let displayScore = Int(animatedHealthScore)
-        // Use smooth progress for the bar animation
         let progressPercentage = animatedProgress / 100.0
         
-        // Determine health score color based on actual score (not animated)
         let scoreColor: Color
         if healthScore.score >= 70 {
             scoreColor = .green
@@ -475,250 +504,220 @@ struct FinanceView: View {
             scoreColor = .red
         }
         
-        let balanceColor: Color = availableFunds >= 0 ? .green : .red
-        
-        // Determine health score status based on actual score (not animated)
-        let statusText: String
-        if healthScore.score >= 80 {
-            statusText = AppL10n.t("finance.score_excellent")
-        } else if healthScore.score >= 60 {
-            statusText = AppL10n.t("finance.score_good")
-        } else if healthScore.score >= 40 {
-            statusText = AppL10n.t("finance.score_fair")
-        } else {
-            statusText = AppL10n.t("finance.score_needs_work")
-        }
-        
         return VStack(spacing: 0) {
             // Health Score Section
             VStack(spacing: 12) {
-                Text(AppL10n.t("finance.health_score"))
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundColor(.white)
-                    .tracking(0.8)
-                
-                // Semicircle progress with score (premium iOS speedometer style)
-                ZStack(alignment: .bottom) {
-                    // Background semicircle track (refined iOS style)
-                    Circle()
-                        .trim(from: 0.0, to: 0.5)
-                        .stroke(
-                            LinearGradient(
-                                colors: [
-                                    Color(white: 0.20).opacity(0.6),
-                                    Color(white: 0.14).opacity(0.5),
-                                    Color(white: 0.20).opacity(0.6)
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            ),
-                            style: StrokeStyle(lineWidth: 10, lineCap: .round)
-                        )
-                        .rotationEffect(.degrees(180))
-                        .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
-                        .offset(y: 12)
-                    
-                    // Progress semicircle with red-to-orange-to-green gradient (animated)
-                    Circle()
-                        .trim(from: 0.0, to: 0.5 * progressPercentage)
-                        .stroke(
-                            LinearGradient(
-                                gradient: Gradient(stops: [
-                                    .init(color: .red, location: 0.0),
-                                    .init(color: .orange, location: 0.5),
-                                    .init(color: .green, location: 1.0)
-                                ]),
-                                startPoint: .trailing,
-                                endPoint: .leading
-                            ),
-                            style: StrokeStyle(lineWidth: 10, lineCap: .round)
-                        )
-                        .rotationEffect(.degrees(180))
-                        .shadow(color: scoreColor.opacity(0.4), radius: 8, x: 0, y: 2)
-                        .shadow(color: scoreColor.opacity(0.2), radius: 4, x: 0, y: 1)
-                        .offset(y: 12)
-                    
-                    // Inner glow effect with matching gradient (animated)
-                    Circle()
-                        .trim(from: 0.0, to: 0.5 * progressPercentage)
-                        .stroke(
-                            LinearGradient(
-                                gradient: Gradient(stops: [
-                                    .init(color: .red.opacity(0.4), location: 0.0),
-                                    .init(color: .orange.opacity(0.4), location: 0.5),
-                                    .init(color: .green.opacity(0.4), location: 1.0)
-                                ]),
-                                startPoint: .trailing,
-                                endPoint: .leading
-                            ),
-                            style: StrokeStyle(lineWidth: 4, lineCap: .round)
-                        )
-                        .rotationEffect(.degrees(180))
-                        .blur(radius: 4)
-                        .offset(y: 12)
-                    
-                    // Score number and status as one unified piece (animated)
-                    VStack(spacing: 2) {
-                        VStack(spacing: 0) {
-                            Text("\(displayScore)")
-                                .font(.system(size: 67, weight: .bold, design: .rounded))
-                                .foregroundColor(scoreColor)
-                                .digit3D(baseColor: scoreColor)
-                                .offset(y: 3)
-                            
-                            Text("/100")
-                                .font(.system(size: 16, weight: .heavy, design: .rounded))
-                                .foregroundColor(.white.opacity(0.5))
-                                .tracking(0.5)
-                                .digit3D(baseColor: .white.opacity(0.5))
-                                .frame(maxWidth: .infinity)
-                                .multilineTextAlignment(.center)
-                                .fixedSize(horizontal: false, vertical: true)
+                if !isStillLoading {
+                    Text(AppL10n.t("finance.health_score").uppercased())
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundColor(.white.opacity(0.4))
+                        .tracking(1.4)
+                }
+
+                if isStillLoading {
+                    // Dedicated, centered loading state (does not affect final health view layout).
+                    VStack(spacing: 10) {
+                        ZStack {
+                            Circle()
+                                .strokeBorder(
+                                    AngularGradient(
+                                        gradient: Gradient(colors: [
+                                            Color(red: 1.00, green: 0.35, blue: 0.55),
+                                            Color(red: 1.00, green: 0.80, blue: 0.45),
+                                            Color(red: 0.45, green: 0.93, blue: 0.72),
+                                            Color(red: 0.55, green: 0.80, blue: 1.00),
+                                            Color(red: 1.00, green: 0.35, blue: 0.55)
+                                        ]),
+                                        center: .center
+                                    ),
+                                    lineWidth: 4.5
+                                )
+                                .frame(width: 92, height: 92)
+                                .blur(radius: 1.2)
+                                .opacity(0.9)
+                                .rotationEffect(.degrees(loadingArcPhase ? 360 : 0))
+                                .animation(
+                                    .linear(duration: 2.0).repeatForever(autoreverses: false),
+                                    value: loadingArcPhase
+                                )
+
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(0.26),
+                                            Color.white.opacity(0.10)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 68, height: 68)
+                                .shadow(color: Color.black.opacity(0.55), radius: 14, x: 0, y: 10)
+
+                            Image(systemName: "waveform.path.ecg")
+                                .font(.system(size: 26, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.98))
+                                .shadow(color: Color(red: 0.95, green: 0.35, blue: 0.45).opacity(0.6), radius: 18, x: 0, y: 6)
                         }
-                        .frame(maxWidth: .infinity)
-                        .multilineTextAlignment(.center)
-                        
-                        Text(statusText)
-                            .font(.system(size: 14, weight: .medium, design: .rounded))
-                            .foregroundColor(scoreColor)
+                        .scaleEffect(loadingArcPhase ? 1.04 : 0.94)
+                        .animation(
+                            .easeInOut(duration: 1.1).repeatForever(autoreverses: true),
+                            value: loadingArcPhase
+                        )
+
+                        Text("Preparing your finance view")
+                            .font(.system(size: 15, weight: .medium, design: .rounded))
+                            .foregroundColor(.white.opacity(0.94))
+                            .multilineTextAlignment(.center)
+
+                        Text("Analyzing your latest income, expenses, and goals…")
+                            .font(.system(size: 12, weight: .regular, design: .rounded))
+                            .foregroundColor(.white.opacity(0.6))
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    .offset(y: -30)
-                }
-                .frame(width: 320, height: 180)
-                .onAppear {
-                    // When card appears, show score if data is already loaded (e.g. returning to tab)
-                    if !viewModel.isLoading {
-                        let freshScore = viewModel.calculateHealthScore()
-                        startHealthScoreAnimation(to: freshScore.score)
-                    }
-                }
-                .onChange(of: viewModel.isLoading) { oldValue, newValue in
-                    // When loading finishes, update health score once (income/expenses are ready)
-                    if oldValue == true && newValue == false {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                            let freshScore = viewModel.calculateHealthScore()
-                            startHealthScoreAnimation(to: freshScore.score)
+                    .frame(maxWidth: .infinity, minHeight: 180, alignment: .center)
+                } else {
+                    // Premium health score: larger full ring + soft glow (no status label).
+                    VStack(spacing: 0) {
+                        ZStack {
+                            Circle()
+                                .stroke(scoreColor.opacity(0.15), lineWidth: 22)
+                                .frame(width: 192, height: 192)
+                                .blur(radius: 16)
+                            Circle()
+                                .stroke(
+                                    Color.white.opacity(0.05),
+                                    style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                                )
+                                .frame(width: 172, height: 172)
+                            Circle()
+                                .trim(from: 0, to: progressPercentage)
+                                .stroke(
+                                    AngularGradient(
+                                        gradient: Gradient(stops: [
+                                            .init(color: Color(red: 1.0, green: 0.25, blue: 0.35), location: 0.0),
+                                            .init(color: Color(red: 1.0, green: 0.55, blue: 0.28), location: 0.38),
+                                            .init(color: Color(red: 0.22, green: 0.78, blue: 0.42), location: 0.72),
+                                            .init(color: Color(red: 1.0, green: 0.25, blue: 0.35), location: 1.0)
+                                        ]),
+                                        center: .center
+                                    ),
+                                    style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                                )
+                                .frame(width: 172, height: 172)
+                                .rotationEffect(.degrees(-90))
+                                .shadow(color: scoreColor.opacity(0.4), radius: 6, x: 0, y: 0)
+                            VStack(spacing: 0) {
+                                Text("\(displayScore)")
+                                    .font(.system(size: 56, weight: .heavy, design: .rounded))
+                                    .foregroundColor(scoreColor)
+                                    .shadow(color: scoreColor.opacity(0.5), radius: 10, x: 0, y: 0)
+                                Text("/100")
+                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.4))
+                            }
                         }
+                        .frame(height: 188)
                     }
-                }
-                .onChange(of: healthScoreDataHash) { oldValue, newValue in
-                    // When income, expenses, or month change (and not loading), update score
-                    if oldValue != newValue && !viewModel.isLoading {
-                        triggerHealthScoreAnimation()
-                    }
-                }
-                .onDisappear {
-                    // Clean up timers when view disappears
-                    healthScoreTimer?.invalidate()
-                    healthScoreTimer = nil
-                    animationDebounceTimer?.invalidate()
-                    animationDebounceTimer = nil
+                    .padding(.bottom, 4)
                 }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.top, 12)
-            .padding(.bottom, 2)
+            .frame(maxWidth: .infinity, minHeight: isStillLoading ? 200 : 0, alignment: .center)
+            .padding(.top, isStillLoading ? 20 : 14)
+            .padding(.bottom, 4)
             
-            // Metrics Grid: Income, Expenses, Balance, Total Balance
-            VStack(spacing: 0) {
-                // First row: Income and Expenses
-                HStack(spacing: 0) {
-                    // Income
-                    VStack(spacing: 10) {
-                        Text(AppL10n.t("finance.income"))
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
-                            .foregroundColor(.white)
-                            .tracking(0.8)
-                        
-                        Text(formatCurrency(viewModel.displayMonthlyIncome))
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
-                            .foregroundColor(.green)
-                            .digit3D(baseColor: .green)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 20)
-                    
-                    // Divider
-                    Rectangle()
-                        .fill(Color(white: 0.20).opacity(0.6))
-                        .frame(width: 0.5)
-                        .padding(.vertical, 8)
-                    
-                    // Expenses
-                    VStack(spacing: 10) {
-                        Text(AppL10n.t("finance.expenses"))
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
-                            .foregroundColor(.white)
-                            .tracking(0.8)
-                        
-                        Text(formatCurrency(viewModel.displayMonthlyExpenses))
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
-                            .foregroundColor(.red)
-                            .digit3D(baseColor: .red)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 20)
-                }
-                
-                // Horizontal divider
+            if !isStillLoading {
                 Rectangle()
-                    .fill(Color(white: 0.20).opacity(0.6))
+                    .fill(Color.white.opacity(0.06))
                     .frame(height: 0.5)
-                    .padding(.horizontal, 20)
-                
-                // Second row: Balance and Total Balance
-                HStack(spacing: 0) {
-                    // Balance
-                    VStack(spacing: 10) {
-                        Text(AppL10n.t("finance.balance"))
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
-                            .foregroundColor(.white)
-                            .tracking(0.8)
-                        
-                        Text(formatCurrency(availableFunds))
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
-                            .foregroundColor(balanceColor)
-                            .digit3D(baseColor: balanceColor)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 4)
+            }
+            
+            // Metrics grid
+            if !isStillLoading {
+                let greenAccent = Color(red: 0.18, green: 0.78, blue: 0.38)
+                let redAccent = Color(red: 1.0, green: 0.22, blue: 0.28)
+                VStack(spacing: 12) {
+                    HStack(spacing: 12) {
+                        financeMetricPill(
+                            label: AppL10n.t("finance.income").uppercased(),
+                            value: formatCurrency(viewModel.displayMonthlyIncome),
+                            valueColor: greenAccent
+                        )
+                        financeMetricPill(
+                            label: AppL10n.t("finance.expenses").uppercased(),
+                            value: formatCurrency(viewModel.displayMonthlyExpenses),
+                            valueColor: redAccent
+                        )
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 20)
-                    
-                    // Divider
-                    Rectangle()
-                        .fill(Color(white: 0.20).opacity(0.6))
-                        .frame(width: 0.5)
-                        .padding(.vertical, 8)
-                    
-                    // Total Balance
-                    VStack(spacing: 10) {
-                        Text(AppL10n.t("finance.total_balance"))
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
-                            .foregroundColor(.white)
-                            .tracking(0.8)
-                        
-                        Text(formatCurrency(viewModel.displayTotalBalance))
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
-                            .digit3D(baseColor: .white)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
+                    HStack(spacing: 12) {
+                        financeMetricPill(
+                            label: AppL10n.t("finance.balance").uppercased(),
+                            value: formatCurrency(availableFunds),
+                            valueColor: availableFunds >= 0 ? greenAccent : redAccent
+                        )
+                        financeMetricPill(
+                            label: AppL10n.t("finance.total_balance").uppercased(),
+                            value: formatCurrency(viewModel.displayTotalBalance),
+                            valueColor: .white
+                        )
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 20)
                 }
+                .padding(.top, 12)
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 20)
-        .padding(.vertical, 24)
-        .liquidGlass(cornerRadius: 22)
+        .padding(.vertical, 28)
+        .liquidGlass(cornerRadius: 24)
+        .overlay(
+            RoundedRectangle(cornerRadius: 24)
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.1),
+                            Color.white.opacity(0.03),
+                            Color.white.opacity(0.06)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.5
+                )
+        )
         .padding(.horizontal, 20)
+        // Attach lifecycle to the whole card so SwiftUI sees a single concrete View type.
+        .onAppear {
+            if !viewModel.isLoading && viewModel.hasLoadedOnce {
+                let freshScore = viewModel.calculateHealthScore()
+                startHealthScoreAnimation(to: freshScore.score)
+            }
+            loadingArcPhase = viewModel.isLoading || !viewModel.hasLoadedOnce
+        }
+        .onChange(of: viewModel.isLoading) { oldValue, newValue in
+            if oldValue == true && newValue == false && viewModel.hasLoadedOnce {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    let freshScore = viewModel.calculateHealthScore()
+                    startHealthScoreAnimation(to: freshScore.score)
+                }
+            }
+            loadingArcPhase = newValue || !viewModel.hasLoadedOnce
+        }
+        .onChange(of: healthScoreDataHash) { oldValue, newValue in
+            if oldValue != newValue && !viewModel.isLoading && viewModel.hasLoadedOnce {
+                triggerHealthScoreAnimation()
+            }
+        }
+        .onDisappear {
+            healthScoreTimer?.invalidate()
+            healthScoreTimer = nil
+            animationDebounceTimer?.invalidate()
+            animationDebounceTimer = nil
+            loadingArcPhase = false
+        }
     }
     
     private var trendsAndComparisonsView: some View {
