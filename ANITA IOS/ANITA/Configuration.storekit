@@ -4,7 +4,21 @@
 
   ],
   "products" : [
-
+    {
+      "displayPrice" : "29.99",
+      "familyShareable" : false,
+      "internalID" : "1A2B3C4D",
+      "localizations" : [
+        {
+          "description" : "Pro lifetime access",
+          "displayName" : "Pro Lifetime",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.anita.pro.lifetime",
+      "referenceName" : "Pro Lifetime",
+      "type" : "NonConsumable"
+    }
   ],
   "settings" : {
 

@@ -21,7 +21,7 @@ struct PostSignupPlansView: View {
         if let subscription = databaseSubscription, subscription.status == "active" {
             return (subscription.plan == "premium" || subscription.plan == "pro" || subscription.plan == "ultimate") ? "premium" : "free"
         }
-        if storeKitService.isPurchased("com.anita.pro.monthly") {
+        if storeKitService.isPurchased("com.anita.pro.monthly") || storeKitService.isPurchased("com.anita.pro.lifetime") {
             return "premium"
         }
         return "free"

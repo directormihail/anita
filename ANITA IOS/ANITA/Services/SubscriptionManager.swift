@@ -51,7 +51,7 @@ class SubscriptionManager: ObservableObject {
             subscriptionPlan = (sub.plan == "premium" || sub.plan == "pro" || sub.plan == "ultimate") ? "premium" : "free"
         } catch {
             // Offline or backend error: use StoreKit as fallback
-            let purchased = storeKitService.isPurchased("com.anita.pro.monthly")
+            let purchased = storeKitService.isPurchased("com.anita.pro.monthly") || storeKitService.isPurchased("com.anita.pro.lifetime")
             isPremium = purchased
             subscriptionPlan = purchased ? "premium" : "free"
         }

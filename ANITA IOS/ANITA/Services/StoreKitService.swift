@@ -19,7 +19,8 @@ class StoreKitService: ObservableObject {
     
     // Product IDs - these should match your App Store Connect product IDs
     private let productIDs = [
-        "com.anita.pro.monthly"  // Pro Plan - €4.99/month
+        "com.anita.pro.monthly",  // Pro Plan - recurring (monthly)
+        "com.anita.pro.lifetime"  // Pro Plan - one-time lifetime
     ]
     
     private init() {
