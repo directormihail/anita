@@ -103,14 +103,7 @@ struct ResetPasswordView: View {
                         .padding(.vertical, 16)
                         .background(Color(white: 0.1).opacity(0.3))
                     }
-                    .background {
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color(white: 0.1).opacity(0.2))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
-                            )
-                    }
+                    .financeSolidGlassTile(cornerRadius: 12)
                     .padding(.horizontal, 24)
                     .padding(.bottom, 24)
                     
@@ -150,8 +143,7 @@ struct ResetPasswordView: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 50)
-                        .background(Color(white: 0.2).opacity(0.4))
-                        .cornerRadius(12)
+                        .financeSolidGlassSection(cornerRadius: 12)
                     }
                     .disabled(viewModel.isLoading || password.isEmpty || confirmPassword.isEmpty)
                     .opacity((viewModel.isLoading || password.isEmpty || confirmPassword.isEmpty) ? 0.5 : 1.0)

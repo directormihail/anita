@@ -20,8 +20,9 @@ final class BankConnectionTester: ObservableObject {
     
     private init() {}
     
-    /// 1) Fetches client_secret from backend. 2) Presents FinancialConnectionsSheet on main thread. Calls onDismiss when sheet is dismissed (completed, canceled, or failed).
-    func startTestFlow(userId: String, userEmail: String?, onDismiss: (() -> Void)? = nil) async throws {
+    /// 1) Fetches client_secret from backend. 2) Presents FinancialConnectionsSheet on main thread.
+    /// - Returns: `true` if the user successfully completed linking; `false` if canceled, failed, or unavailable.
+    func startTestFlow(userId: String, userEmail: String?) async throws -> Bool {
         // Prefer authenticated Supabase id when available so bank data is sharable across devices,
         // but still allow anonymous testing using the provided userId.
         let resolvedUserId: String
@@ -40,16 +41,16 @@ final class BankConnectionTester: ObservableObject {
         }
         
         #if canImport(StripeFinancialConnections)
-        await presentSheetOnMain(clientSecret: clientSecret, onDismiss: onDismiss)
+        return await presentSheetOnMain(clientSecret: clientSecret)
         #else
         print("[BankConnectionTester] Session created. Add StripeFinancialConnections to target to show the window.")
-        onDismiss?()
+        return false
         #endif
     }
     
     #if canImport(StripeFinancialConnections)
     @MainActor
-    private func presentSheetOnMain(clientSecret: String, onDismiss: (() -> Void)? = nil) async {
+    private func presentSheetOnMain(clientSecret: String) async -> Bool {
         StripeAPI.defaultPublishableKey = Config.stripePublishableKey
         sheet = FinancialConnectionsSheet(
             financialConnectionsSessionClientSecret: clientSecret,
@@ -58,22 +59,28 @@ final class BankConnectionTester: ObservableObject {
         
         guard let rootVC = topMostViewController() else {
             print("[BankConnectionTester] No root view controller.")
-            onDismiss?()
-            return
+            return false
         }
         
-        sheet?.present(from: rootVC) { result in
-            switch result {
-            case .completed:
-                print("[BankConnectionTester] Completed.")
-            case .canceled:
-                print("[BankConnectionTester] Canceled.")
-            case .failed(let error):
-                print("[BankConnectionTester] Failed: \(error.localizedDescription)")
-            @unknown default:
-                break
+        return await withCheckedContinuation { continuation in
+            sheet?.present(from: rootVC) { result in
+                let success: Bool
+                switch result {
+                case .completed:
+                    print("[BankConnectionTester] Completed.")
+                    UserManager.shared.markBankSyncEstablished()
+                    success = true
+                case .canceled:
+                    print("[BankConnectionTester] Canceled.")
+                    success = false
+                case .failed(let error):
+                    print("[BankConnectionTester] Failed: \(error.localizedDescription)")
+                    success = false
+                @unknown default:
+                    success = false
+                }
+                continuation.resume(returning: success)
             }
-            onDismiss?()
         }
     }
     

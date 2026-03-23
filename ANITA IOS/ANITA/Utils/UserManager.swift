@@ -21,10 +21,14 @@ class UserManager: ObservableObject {
     private let userCurrencyKeyBase = "anita_user_currency"
     private let numberFormatKeyBase = "anita_number_format"
     private let transactionDataSourceKeyBase = "anita_transaction_data_source"
+    private let bankSyncEstablishedKeyBase = "anita_bank_sync_established"
     private let supabaseService = SupabaseService.shared
     
     /// "manual" = user adds transactions by hand. "bank" = transactions from linked bank only, no manual add.
     @Published var transactionDataSource: String = "manual"
+    
+    /// True after Stripe Financial Connections completes, or when finance data shows linked bank activity for this account.
+    @Published private(set) var hasEstablishedBankSync: Bool = false
     
     @Published var isAuthenticated = false
     @Published var currentUser: User?
@@ -37,15 +41,50 @@ class UserManager: ObservableObject {
     /// True when user chose "Connect bank" at onboarding: transactions come from bank only, manual add is disabled.
     var usesBankDataOnly: Bool { transactionDataSource == "bank" }
     
+    /// True when manual transaction entry must be blocked (bank-only mode or a bank link has been established).
+    var blocksManualTransactions: Bool { usesBankDataOnly || hasEstablishedBankSync }
+    
     func setTransactionDataSource(_ value: String) {
         let v = (value == "bank") ? "bank" : "manual"
         transactionDataSource = v
         UserDefaults.standard.set(v, forKey: prefKey(transactionDataSourceKeyBase))
+        // When user connects a bank, we want Finance to show a longer loading state
+        // until the backend import/metrics are ready (avoid showing cached partial values).
+        if v == "bank" {
+            setJustConnectedBank(true)
+        } else {
+            clearJustConnectedBank()
+        }
     }
     
     /// UserDefaults key scoped to current account so profile name and onboarding don't leak between accounts.
     func prefKey(_ base: String) -> String {
         "\(base)_\(userId)"
+    }
+    
+    // MARK: - Just connected bank flag
+    private static let justConnectedBankKeyBase = "anita_just_connected_bank"
+
+    var isJustConnectedBank: Bool {
+        UserDefaults.standard.bool(forKey: prefKey(Self.justConnectedBankKeyBase))
+    }
+
+    func setJustConnectedBank(_ value: Bool) {
+        UserDefaults.standard.set(value, forKey: prefKey(Self.justConnectedBankKeyBase))
+    }
+
+    func clearJustConnectedBank() {
+        setJustConnectedBank(false)
+    }
+    
+    private func reloadBankSyncEstablishedFromStorage() {
+        hasEstablishedBankSync = UserDefaults.standard.bool(forKey: prefKey(bankSyncEstablishedKeyBase))
+    }
+    
+    func markBankSyncEstablished() {
+        guard !hasEstablishedBankSync else { return }
+        hasEstablishedBankSync = true
+        UserDefaults.standard.set(true, forKey: prefKey(bankSyncEstablishedKeyBase))
     }
     
     // MARK: - Test bank connection flow (global flag, set before auth)
@@ -76,6 +115,7 @@ class UserManager: ObservableObject {
         hasCompletedOnboarding = UserDefaults.standard.bool(forKey: prefKey(onboardingCompletedKey))
         shouldShowPostSignupPlans = UserDefaults.standard.bool(forKey: prefKey(postSignupPlansPendingKey))
         transactionDataSource = UserDefaults.standard.string(forKey: prefKey(transactionDataSourceKeyBase)) ?? "manual"
+        reloadBankSyncEstablishedFromStorage()
         // Hydrate display name so @Published is in sync and all UI updates without re-login
         profileDisplayName = UserDefaults.standard.string(forKey: prefKey(profileNameKeyBase))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         // If we already have a saved token, start in authenticated state and let checkAuthStatus() refine user details.
@@ -127,6 +167,7 @@ class UserManager: ObservableObject {
             userCurrencyKeyBase,
             numberFormatKeyBase,
             transactionDataSourceKeyBase,
+            bankSyncEstablishedKeyBase,
             "anita_date_format",
             onboardingCompletedKey,
             onboardingSyncedKey,
@@ -189,6 +230,8 @@ class UserManager: ObservableObject {
             } else {
                 self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: prefKey(onboardingCompletedKey))
             }
+            self.transactionDataSource = UserDefaults.standard.string(forKey: prefKey(transactionDataSourceKeyBase)) ?? "manual"
+            self.reloadBankSyncEstablishedFromStorage()
         }
         await syncSavedOnboardingToSupabaseIfNeeded()
         syncGlobalCurrencyFromPerUser()
@@ -215,6 +258,8 @@ class UserManager: ObservableObject {
                 UserDefaults.standard.set(true, forKey: prefKey(postSignupPlansPendingKey))
                 self.shouldShowPostSignupPlans = true
             }
+            self.transactionDataSource = UserDefaults.standard.string(forKey: prefKey(transactionDataSourceKeyBase)) ?? "manual"
+            self.reloadBankSyncEstablishedFromStorage()
         }
         await syncSavedOnboardingToSupabaseIfNeeded()
         syncGlobalCurrencyFromPerUser()
@@ -259,6 +304,8 @@ class UserManager: ObservableObject {
             } else {
                 self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: prefKey(onboardingCompletedKey))
             }
+            self.transactionDataSource = UserDefaults.standard.string(forKey: prefKey(transactionDataSourceKeyBase)) ?? "manual"
+            self.reloadBankSyncEstablishedFromStorage()
         }
         await syncSavedOnboardingToSupabaseIfNeeded()
         syncGlobalCurrencyFromPerUser()
@@ -279,6 +326,8 @@ class UserManager: ObservableObject {
             } else {
                 self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: prefKey(onboardingCompletedKey))
             }
+            self.transactionDataSource = UserDefaults.standard.string(forKey: prefKey(transactionDataSourceKeyBase)) ?? "manual"
+            self.reloadBankSyncEstablishedFromStorage()
         }
         await syncSavedOnboardingToSupabaseIfNeeded()
         syncGlobalCurrencyFromPerUser()
@@ -289,10 +338,12 @@ class UserManager: ObservableObject {
         supabaseService.signOut()
         // Clear stored anonymous id so next sign-in doesn't migrate previous account's data into a new account
         UserDefaults.standard.removeObject(forKey: userIdKey)
+        UserDefaults.standard.removeObject(forKey: "anita_chat_welcome_hook_last_index")
         Task { @MainActor in
             self.currentUser = nil
             self.isAuthenticated = false
             self.shouldShowPostSignupPlans = UserDefaults.standard.bool(forKey: prefKey(postSignupPlansPendingKey))
+            self.reloadBankSyncEstablishedFromStorage()
             await SubscriptionManager.shared.refresh()
         }
     }
@@ -307,6 +358,7 @@ class UserManager: ObservableObject {
                     self.isAuthenticated = true
                     self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: prefKey(onboardingCompletedKey))
                     self.transactionDataSource = UserDefaults.standard.string(forKey: prefKey(transactionDataSourceKeyBase)) ?? "manual"
+                    self.reloadBankSyncEstablishedFromStorage()
                 }
                 syncGlobalCurrencyFromPerUser()
                 await syncSavedOnboardingToSupabaseIfNeeded()
@@ -571,7 +623,8 @@ class UserManager: ObservableObject {
         let keys = [
             profileNameKeyBase, onboardingCompletedKey, onboardingSyncedKey, preferencesSyncedKey,
             postSignupPlansPendingKey, onboardingSurveyKey, preferredLanguageKey,
-            userCurrencyKeyBase, numberFormatKeyBase, "anita_date_format", "anita_email_notifications"
+            userCurrencyKeyBase, numberFormatKeyBase, transactionDataSourceKeyBase, bankSyncEstablishedKeyBase,
+            Self.justConnectedBankKeyBase, "anita_date_format", "anita_email_notifications"
         ]
         for base in keys {
             UserDefaults.standard.removeObject(forKey: "\(base)_\(userId)")

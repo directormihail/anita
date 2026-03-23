@@ -16,6 +16,7 @@ private enum BillingOption: Hashable {
 }
 
 struct UpgradeView: View {
+    let onSkip: (() -> Void)?
     @StateObject private var storeKitService = StoreKitService.shared
     @Environment(\.dismiss) private var dismiss
     @State private var showSuccessAlert = false
@@ -23,6 +24,10 @@ struct UpgradeView: View {
     @State private var isLoadingSubscription = false
     @State private var isRestoring = false
     @State private var selectedBillingOption: BillingOption = .monthly
+
+    init(onSkip: (() -> Void)? = nil) {
+        self.onSkip = onSkip
+    }
 
     private func selectionHaptic() {
         let impact = UIImpactFeedbackGenerator(style: .light)
@@ -119,17 +124,14 @@ struct UpgradeView: View {
                     Button(action: {
                         dismiss()
                     }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 15, weight: .semibold))
-                            Text(AppL10n.t("common.back"))
-                                .font(.system(size: 15, weight: .medium, design: .rounded))
-                        }
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.white.opacity(0.9))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .liquidGlass(cornerRadius: 12)
+                        .padding(12)
+                        .liquidGlass(cornerRadius: 14)
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(AppL10n.t("common.back"))
                     
                     Spacer()
                 }
@@ -198,7 +200,7 @@ struct UpgradeView: View {
                         .padding(.top, 12)
                         
                         // Subscription window (Premium on top, then Monthly vs Lifetime)
-                        VStack(spacing: 14) {
+                        VStack(spacing: 12) {
                             PremiumFeaturesCard()
 
                             HStack(spacing: 12) {
@@ -262,6 +264,7 @@ struct UpgradeView: View {
                                     .stroke(Color.white.opacity(0.25), lineWidth: 1)
                             )
                             .shadow(color: Color.blue.opacity(0.18), radius: 16, x: 0, y: 8)
+                            .padding(.top, 2)
                         }
                         .frame(maxWidth: 520)
                         .frame(maxWidth: .infinity, alignment: .center)
@@ -312,6 +315,30 @@ struct UpgradeView: View {
                         }
                         .padding(.horizontal, 20)
                         .padding(.top, 20)
+
+                        // Secondary "skip" to improve conversion (lets user continue on Free plan).
+                        // Only show when the caller provides onSkip.
+                        if onSkip != nil {
+                            Button {
+                                onSkip?()
+                                dismiss()
+                            } label: {
+                                Text(AppL10n.t("common.skip"))
+                                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.78))
+                                    .frame(height: 44)
+                                    .frame(width: 220)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .fill(Color.white.opacity(0.06))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 14)
+                                                    .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                                            )
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
                         
                         // Legal & subscription terms — natural footer
                         VStack(spacing: 10) {
@@ -574,7 +601,7 @@ private struct PremiumFeaturesCard: View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 12) {
                 Image(systemName: "crown.fill")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(
                         LinearGradient(
                             colors: [
@@ -592,6 +619,7 @@ private struct PremiumFeaturesCard: View {
 
                 Spacer()
             }
+            .padding(.bottom, 1)
 
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(features) { feature in
@@ -629,14 +657,16 @@ private struct PaymentOptionCard: View {
     let onSelect: () -> Void
 
     private var isSelected: Bool { selectedOption == option }
+    private var showPurchasedBadge: Bool { isPurchased && isSelected }
 
     var body: some View {
         Button(action: onSelect) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top) {
                     Text(title)
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
                         .foregroundColor(.white.opacity(0.75))
+                        .lineLimit(1)
 
                     Spacer()
 
@@ -645,7 +675,7 @@ private struct PaymentOptionCard: View {
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(isSelected ? .white.opacity(0.95) : .white.opacity(0.55))
 
-                        if isPurchased {
+                        if showPurchasedBadge {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 9, weight: .bold))
                                 .foregroundColor(.green.opacity(0.95))
@@ -656,8 +686,11 @@ private struct PaymentOptionCard: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(price)
-                        .font(.system(size: 26, weight: .bold, design: .rounded))
+                        .font(.system(size: 41, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
 
                     Text(priceSuffix)
                         .font(.system(size: 14, weight: .regular, design: .rounded))
@@ -675,7 +708,7 @@ private struct PaymentOptionCard: View {
         }
         .buttonStyle(.plain)
         .disabled(isLocked)
-        .frame(height: 116)
+        .frame(height: 124)
         .background(
             ZStack {
                 if isSelected {
@@ -705,6 +738,7 @@ private struct PaymentOptionCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .scaleEffect(isSelected ? 1.0 : 0.99)
+        .shadow(color: isSelected ? Color.blue.opacity(0.16) : .clear, radius: 12, x: 0, y: 6)
         .animation(.spring(response: 0.25, dampingFraction: 0.85), value: isSelected)
     }
 }
@@ -1887,6 +1921,10 @@ struct SubscriptionPlanPlaceholder: View {
 struct PremiumGateView: View {
     var onUpgrade: () -> Void
     
+    /// Same blues as Upgrade `Continue` / premium accents (`PremiumFeaturesCard`).
+    private let paywallBlueTop = Color(red: 0.11, green: 0.62, blue: 1.0)
+    private let paywallBlueBottom = Color(red: 0.20, green: 0.47, blue: 1.0)
+    
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "crown.fill")
@@ -1894,8 +1932,8 @@ struct PremiumGateView: View {
                 .foregroundStyle(
                     LinearGradient(
                         colors: [
-                            Color(red: 0.91, green: 0.72, blue: 0.2),
-                            Color(red: 0.91, green: 0.72, blue: 0.2).opacity(0.8)
+                            paywallBlueTop.opacity(0.98),
+                            Color.white.opacity(0.82)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -1919,10 +1957,7 @@ struct PremiumGateView: View {
                     RoundedRectangle(cornerRadius: 14)
                         .fill(
                             LinearGradient(
-                                colors: [
-                                    Color(red: 0.91, green: 0.72, blue: 0.2).opacity(0.4),
-                                    Color(red: 0.91, green: 0.72, blue: 0.2).opacity(0.25)
-                                ],
+                                colors: [paywallBlueTop, paywallBlueBottom],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
@@ -1930,14 +1965,35 @@ struct PremiumGateView: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(Color(red: 0.91, green: 0.72, blue: 0.2).opacity(0.6), lineWidth: 1)
+                        .stroke(Color.white.opacity(0.25), lineWidth: 1)
                 )
             }
             .buttonStyle(.plain)
         }
         .padding(24)
         .frame(maxWidth: .infinity)
-        .liquidGlass(cornerRadius: 20)
+        .background {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color(white: 0.12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    paywallBlueTop.opacity(0.20),
+                                    paywallBlueBottom.opacity(0.11)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                )
+        }
+        .shadow(color: Color.black.opacity(0.25), radius: 6, x: 0, y: 3)
         .padding(.horizontal, 20)
     }
 }

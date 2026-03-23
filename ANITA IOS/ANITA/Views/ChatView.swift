@@ -12,14 +12,18 @@ private let aiConsentKey = "anita_ai_consent_given"
 struct ChatView: View {
     @StateObject private var viewModel = ChatViewModel()
     @StateObject private var subscriptionManager = SubscriptionManager.shared
+    @ObservedObject private var userManager = UserManager.shared
     @FocusState private var isInputFocused: Bool
     @State private var isSidebarPresented = false
     @State private var showUpgradeView = false
     @State private var showAIConsentSheet = false
-    
-    // Check if we should show the welcome screen (no messages yet)
-    private var showWelcomeScreen: Bool {
-        viewModel.messages.isEmpty
+    @State private var isConnectingBankSync = false
+    @State private var bankLinkError: String?
+    @State private var showBankLinkErrorAlert = false
+    @State private var showBankConnectConfirm = false
+    /// Quick-start grid stays visible until the user sends their first message; greeting sits under the buttons.
+    private var showQuickStartChrome: Bool {
+        !viewModel.messages.contains { $0.role == "user" }
     }
     
     /// Before sending to AI we must have user consent (App Store AI disclosure). If not yet given, show sheet; on Continue, set consent and send.
@@ -29,6 +33,15 @@ struct ChatView: View {
         } else {
             showAIConsentSheet = true
         }
+    }
+    
+    private func resolvedWelcomeHookText(for message: ChatMessage) -> String {
+        if !viewModel.welcomeHookBody.isEmpty { return viewModel.welcomeHookBody }
+        let lead = viewModel.welcomeTypewriterLead
+        if !lead.isEmpty, message.content.hasPrefix(lead) {
+            return String(message.content.dropFirst(lead.count))
+        }
+        return message.content
     }
     
     var body: some View {
@@ -81,8 +94,8 @@ struct ChatView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NewConversation"))) { _ in
-            // Start a new conversation by clearing messages
             viewModel.startNewConversation()
+            viewModel.ensureWelcomeGreetingIfNeeded()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenConversation"))) { notification in
             if let conversationId = notification.object as? String {
@@ -93,6 +106,9 @@ struct ChatView: View {
         }
         .onAppear {
             Task { await subscriptionManager.refresh() }
+            if viewModel.currentConversationId == nil, viewModel.messages.isEmpty {
+                viewModel.ensureWelcomeGreetingIfNeeded()
+            }
             // If we have a current conversation but no messages loaded, try to load them
             if let conversationId = viewModel.currentConversationId, viewModel.messages.isEmpty {
                 Task {
@@ -100,8 +116,6 @@ struct ChatView: View {
                     await viewModel.loadMessages(conversationId: conversationId)
                 }
             }
-            // First time on welcome chat after registration: show system notification permission dialog
-            // Notifications: we no longer request permission on first open. User can enable in Settings when they want.
         }
         .sheet(isPresented: $showUpgradeView) {
             UpgradeView()
@@ -129,14 +143,46 @@ struct ChatView: View {
                 Task { await SubscriptionManager.shared.refresh() }
             }
         }
+        .alert(
+            AppL10n.t("bank.connect_deletes_manual_title"),
+            isPresented: $showBankConnectConfirm
+        ) {
+            Button(AppL10n.t("common.cancel"), role: .cancel) {}
+            Button(AppL10n.t("bank.connect_deletes_manual_continue")) {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                Task {
+                    await BankLinkFlow.run(
+                        subscriptionManager: subscriptionManager,
+                        userManager: userManager,
+                        onNeedsPremium: { showUpgradeView = true },
+                        isConnecting: $isConnectingBankSync,
+                        errorMessage: $bankLinkError,
+                        onRefresh: {}
+                    )
+                    if let err = bankLinkError, !err.isEmpty {
+                        showBankLinkErrorAlert = true
+                    }
+                }
+            }
+        } message: {
+            Text(
+                "\(AppL10n.t("bank.connect_deletes_manual_intro"))\n\n\(AppL10n.t("bank.connect_deletes_manual_warning"))"
+            )
+        }
+        .alert(AppL10n.t("chat.error"), isPresented: $showBankLinkErrorAlert) {
+            Button(AppL10n.t("common.ok"), role: .cancel) {
+                bankLinkError = nil
+            }
+        } message: {
+            Text(bankLinkError ?? "")
+        }
     }
     
     private var mainContentView: some View {
         VStack(spacing: 0) {
-            // Top navigation bar
+            // Top navigation bar — title/subtitle are geometrically centered; menu & upgrade sit in a side rail.
                 ZStack {
-                    HStack {
-                        // Hamburger menu with notification dot
+                    HStack(alignment: .center, spacing: 0) {
                         Button(action: {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                 isSidebarPresented.toggle()
@@ -150,192 +196,81 @@ struct ChatView: View {
                         }
                         .padding(.leading, 16)
                         
-                        Spacer()
+                        Spacer(minLength: 0)
                         
-                        // ANITA text
+                        Group {
+                            if subscriptionManager.isPremium {
+                                ChatHeaderBankConnectButton(
+                                    isConnecting: isConnectingBankSync,
+                                    bankLinked: userManager.hasEstablishedBankSync,
+                                    action: {
+                                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                        showBankConnectConfirm = true
+                                    }
+                                )
+                            } else {
+                                ChatHeaderUpgradeGlassPill(onUpgrade: { showUpgradeView = true })
+                            }
+                        }
+                        .padding(.trailing, 16)
+                    }
+                    
+                    VStack(spacing: 2) {
                         Text("ANITA")
                             .font(.system(size: 18, weight: .bold))
                             .foregroundColor(.white)
-                            .padding(.trailing, 16)
-                    }
-                    
-                    // Plan information - centered (from database via SubscriptionManager)
-                    HStack(spacing: 8) {
+                            .textCase(.uppercase)
+                            .kerning(1.2)
                         Text(subscriptionManager.subscriptionDisplayName)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white)
-                        
-                        Button(action: {
-                            showUpgradeView = true
-                        }) {
-                            ZStack(alignment: .topTrailing) {
-                                Text(AppL10n.t("chat.upgrade"))
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 8)
-                                
-                                // Beautiful yellow notification badge
-                                ZStack {
-                                    // Outer glow
-                                    Circle()
-                                        .fill(Color.yellow.opacity(0.4))
-                                        .frame(width: 10, height: 10)
-                                        .blur(radius: 2)
-                                    
-                                    // Main badge
-                                    Circle()
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [
-                                                    Color(red: 1.0, green: 0.85, blue: 0.1),
-                                                    Color(red: 1.0, green: 0.75, blue: 0.0)
-                                                ],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
-                                        )
-                                        .frame(width: 8, height: 8)
-                                        .overlay {
-                                            Circle()
-                                                .stroke(Color.white.opacity(0.3), lineWidth: 0.5)
-                                        }
-                                        .shadow(color: Color.yellow.opacity(0.6), radius: 2, x: 0, y: 1)
-                                }
-                                .offset(x: 2, y: -2)
-                            }
-                        }
-                        .liquidGlass(cornerRadius: 8)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(Color.white.opacity(0.5))
+                            .textCase(.uppercase)
+                            .kerning(1)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
                     }
+                    .multilineTextAlignment(.center)
+                    .allowsHitTesting(false)
                 }
                 .padding(.top, 8)
                 .padding(.bottom, 12)
                 .background(Color.black)
                 
-                // Messages list or Welcome screen
+                // Messages list and/or quick-start welcome (greeting bubble + task grid until first user message)
                 ScrollViewReader { proxy in
                     ScrollView {
-                        if showWelcomeScreen {
-                            // Premium filled welcome screen
-                            ScrollView {
-                                VStack(spacing: 0) {
-                                    // Premium welcome card - more substantial
-                                    VStack(spacing: 18) {
-                                        VStack(spacing: 8) {
-                                            Text(AppL10n.t("chat.welcome_title"))
-                                                .font(.system(size: 32, weight: .bold, design: .rounded))
-                                                .foregroundStyle(
-                                                    LinearGradient(
-                                                        colors: [
-                                                            Color.white.opacity(0.98),
-                                                            Color.white.opacity(0.9)
-                                                        ],
-                                                        startPoint: .topLeading,
-                                                        endPoint: .bottomTrailing
-                                                    )
+                        if showQuickStartChrome {
+                            VStack(spacing: 0) {
+                                if !viewModel.messages.isEmpty {
+                                    LazyVStack(alignment: .leading, spacing: 16) {
+                                        ForEach(viewModel.messages) { message in
+                                            if message.id == ChatViewModel.welcomeGreetingMessageId {
+                                                TypewriterWelcomeMessageView(
+                                                    leadLine: viewModel.welcomeTypewriterLead,
+                                                    hookText: resolvedWelcomeHookText(for: message),
+                                                    message: message,
+                                                    viewModel: viewModel
                                                 )
-                                                .multilineTextAlignment(.center)
-                                            
-                                            Text(AppL10n.t("chat.welcome_subtitle"))
-                                                .font(.system(size: 17, weight: .medium, design: .rounded))
-                                                .foregroundColor(.white.opacity(0.75))
-                                                .multilineTextAlignment(.center)
-                                        }
-                                        
-                                        Divider()
-                                            .background(Color.white.opacity(0.15))
-                                            .padding(.vertical, 4)
-                                        
-                                        // Simple explanation text
-                                        Text(AppL10n.t("chat.welcome_body"))
-                                            .font(.system(size: 15, weight: .regular, design: .rounded))
-                                            .foregroundColor(.white.opacity(0.65))
-                                            .multilineTextAlignment(.center)
-                                            .lineSpacing(5)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.horizontal, 28)
-                                    .padding(.vertical, 32)
-                                    .liquidGlass(cornerRadius: 16)
-                                    .padding(.horizontal, 20)
-                                    .padding(.top, 12)
-                                    
-                                    // Free tier: upgrade banner (same size as task buttons)
-                                    if !subscriptionManager.isPremium {
-                                        ChatUpgradeBanner(onUpgrade: { showUpgradeView = true })
-                                            .padding(.horizontal, 20)
-                                            .padding(.top, 12)
-                                    }
-                                    
-                                    // Task options in 2x2 grid
-                                    VStack(spacing: 12) {
-                                        // Row 1
-                                        HStack(spacing: 12) {
-                                            EnhancedTaskButton(
-                                                icon: "plus",
-                                                iconColor: Color.green,
-                                                title: AppL10n.t("chat.add_income"),
-                                                action: {
-                                                    viewModel.inputText = AppL10n.t("chat.add_income")
-                                                    requestSendMessage()
-                                                }
-                                            )
-                                            
-                                            EnhancedTaskButton(
-                                                icon: "minus",
-                                                iconColor: Color.red,
-                                                title: AppL10n.t("chat.add_expense"),
-                                                action: {
-                                                    viewModel.inputText = AppL10n.t("chat.add_expense")
-                                                    requestSendMessage()
-                                                }
-                                            )
-                                        }
-                                        
-                                        // Row 2
-                                        HStack(spacing: 12) {
-                                            EnhancedTaskButton(
-                                                icon: "target",
-                                                iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                                title: AppL10n.t("chat.set_target"),
-                                                action: {
-                                                    if !subscriptionManager.isPremium {
-                                                        showUpgradeView = true
-                                                    } else {
-                                                        viewModel.inputText = AppL10n.t("chat.set_target")
-                                                        requestSendMessage()
-                                                    }
-                                                }
-                                            )
-                                            
-                                            EnhancedTaskButton(
-                                                icon: "chart.pie.fill",
-                                                iconColor: Color.orange,
-                                                title: AppL10n.t("chat.analytics"),
-                                                action: {
-                                                    if !subscriptionManager.isPremium {
-                                                        showUpgradeView = true
-                                                    } else {
-                                                        viewModel.inputText = AppL10n.t("chat.analytics")
-                                                        requestSendMessage()
-                                                    }
-                                                }
-                                            )
+                                                .id(viewModel.welcomeHookBody + viewModel.welcomeTypewriterLead)
+                                            } else {
+                                                MessageBubble(message: message, viewModel: viewModel)
+                                                    .id(message.id)
+                                            }
                                         }
                                     }
-                                    .padding(.horizontal, 20)
-                                    .padding(.top, 12)
-                                    .padding(.bottom, 12)
-                                    
-                                    Text(AppL10n.t("chat.notifications_hint"))
-                                        .font(.caption)
-                                        .foregroundColor(.white.opacity(0.4))
-                                        .padding(.top, 8)
-                                    
-                                    Spacer(minLength: 12)
+                                    .padding(.horizontal, 12)
+                                    .padding(.top, 16)
+                                    .padding(.bottom, 8)
                                 }
+                                
+                                Text(AppL10n.t("chat.notifications_hint"))
+                                    .font(.caption)
+                                    .foregroundColor(.white.opacity(0.4))
+                                    .padding(.top, 8)
+                                
+                                Spacer(minLength: 12)
                             }
+                            .padding(.top, 12)
                         } else {
                             // Messages list
                             LazyVStack(alignment: .leading, spacing: 16) {
@@ -366,8 +301,11 @@ struct ChatView: View {
                                 }
                             }
                     )
-                    .onChange(of: viewModel.messages.count) { oldValue, newValue in
-                        if !showWelcomeScreen, let lastMessage = viewModel.messages.last {
+                    .onChange(of: viewModel.messages.count) { _, _ in
+                        guard let lastMessage = viewModel.messages.last else { return }
+                        if showQuickStartChrome {
+                            proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                        } else {
                             withAnimation {
                                 proxy.scrollTo(lastMessage.id, anchor: .bottom)
                             }
@@ -377,6 +315,35 @@ struct ChatView: View {
                 
                 // Input area - matching image design
                 VStack(spacing: 0) {
+                    if showQuickStartChrome {
+                        ChatInputQuickActionsScrollBar(
+                            blockManualTransactionChips: userManager.blocksManualTransactions,
+                            onAddIncome: {
+                                viewModel.inputText = AppL10n.t("chat.add_income")
+                                requestSendMessage()
+                            },
+                            onAddExpense: {
+                                viewModel.inputText = AppL10n.t("chat.add_expense")
+                                requestSendMessage()
+                            },
+                            onSetTarget: {
+                                if !subscriptionManager.isPremium {
+                                    showUpgradeView = true
+                                } else {
+                                    viewModel.inputText = AppL10n.t("chat.set_target")
+                                    requestSendMessage()
+                                }
+                            },
+                            onAnalytics: {
+                                if !subscriptionManager.isPremium {
+                                    showUpgradeView = true
+                                } else {
+                                    viewModel.inputText = AppL10n.t("chat.analytics")
+                                    requestSendMessage()
+                                }
+                            }
+                        )
+                    }
                     HStack(spacing: 12) {
                         // Text input
                         TextField(AppL10n.t("chat.ask_finance"), text: $viewModel.inputText, axis: .vertical)
@@ -397,8 +364,7 @@ struct ChatView: View {
                                 .font(.system(size: 14))
                                 .foregroundColor((viewModel.isLoading || viewModel.inputText.isEmpty) ? .gray : .white)
                                 .frame(width: 40, height: 40)
-                                .background(Color(white: 0.12), in: Circle())
-                                .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
+                                .financeSolidGlassCircle()
                         }
                         .disabled(viewModel.isLoading || viewModel.inputText.isEmpty)
                     }
@@ -429,11 +395,14 @@ struct ChatView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(12)
-                    .background(Color.red.opacity(0.2))
-                    .cornerRadius(8)
+                    .financeSolidGlassSection(cornerRadius: 10)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.red.opacity(0.5), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.red.opacity(0.14))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(Color.red.opacity(0.55), lineWidth: 1)
                     )
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
@@ -442,8 +411,53 @@ struct ChatView: View {
         }
     }
 
-// Enhanced Task Button Component - Matching FinanceView design with smaller icons and full text
-struct EnhancedTaskButton: View {
+// MARK: - Scrollable quick actions above chat input (same look as legacy grid tiles)
+private struct ChatInputQuickActionsScrollBar: View {
+    var blockManualTransactionChips: Bool = false
+    let onAddIncome: () -> Void
+    let onAddExpense: () -> Void
+    let onSetTarget: () -> Void
+    let onAnalytics: () -> Void
+    
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                if !blockManualTransactionChips {
+                    EnhancedTaskScrollChip(
+                        icon: "plus",
+                        iconColor: Color.green,
+                        title: AppL10n.t("chat.add_income"),
+                        action: onAddIncome
+                    )
+                    EnhancedTaskScrollChip(
+                        icon: "minus",
+                        iconColor: Color.red,
+                        title: AppL10n.t("chat.add_expense"),
+                        action: onAddExpense
+                    )
+                }
+                EnhancedTaskScrollChip(
+                    icon: "target",
+                    iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
+                    title: AppL10n.t("chat.set_target"),
+                    action: onSetTarget
+                )
+                EnhancedTaskScrollChip(
+                    icon: "chart.pie.fill",
+                    iconColor: Color.orange,
+                    title: AppL10n.t("chat.analytics"),
+                    action: onAnalytics
+                )
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+        }
+        .background(Color.black)
+    }
+}
+
+/// Compact liquid-glass pills for the input toolbar (`cornerRadius` ≤ 11 → app compact glass tile).
+private struct EnhancedTaskScrollChip: View {
     let icon: String
     let iconColor: Color
     let title: String
@@ -451,81 +465,59 @@ struct EnhancedTaskButton: View {
     
     var body: some View {
         Button(action: {
-            let impact = UIImpactFeedbackGenerator(style: .medium)
+            let impact = UIImpactFeedbackGenerator(style: .light)
             impact.impactOccurred()
             action()
         }) {
-            HStack(spacing: 10) {
-                // Icon with premium glass effect matching FinanceView
+            HStack(spacing: 6) {
                 ZStack {
                     Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color(white: 0.2).opacity(0.3),
-                                    Color(white: 0.15).opacity(0.2)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 40, height: 40)
+                        .fill(iconColor.opacity(0.22))
+                        .frame(width: 24, height: 24)
                         .overlay {
                             Circle()
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white.opacity(0.2),
-                                            Color.white.opacity(0.1)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 1
-                                )
+                                .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
                         }
-                    
                     Image(systemName: icon)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(
                             LinearGradient(
-                                colors: [
-                                    iconColor.opacity(0.95),
-                                    iconColor.opacity(0.8)
-                                ],
+                                colors: [iconColor.opacity(0.98), iconColor.opacity(0.78)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
                 }
-                .frame(width: 40)
+                .frame(width: 24, height: 24)
                 
-                // Title text - ensure all letters are visible with proper scaling
                 Text(title)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .foregroundColor(.white.opacity(0.95))
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundColor(.white.opacity(0.93))
                     .lineLimit(1)
                     .allowsTightening(true)
-                    .minimumScaleFactor(0.75)
-                
-                Spacer(minLength: 0)
+                    .minimumScaleFactor(0.78)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: 64)
-            .padding(.leading, 14)
-            .padding(.trailing, 16)
-            .liquidGlass(cornerRadius: 16)
+            .padding(.leading, 8)
+            .padding(.trailing, 11)
+            .padding(.vertical, 8)
+            .frame(minHeight: 44)
+            .liquidGlass(cornerRadius: 11)
+            .overlay(
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+            )
         }
         .buttonStyle(EnhancedTaskButtonStyle())
+        .accessibilityLabel(title)
     }
 }
 
 struct EnhancedTaskButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
-            .opacity(configuration.isPressed ? 0.9 : 1.0)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .opacity(configuration.isPressed ? 0.92 : 1.0)
+            .animation(.spring(response: 0.22, dampingFraction: 0.78), value: configuration.isPressed)
     }
 }
 
@@ -557,6 +549,190 @@ struct QuickActionButtonStyle: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
             .opacity(configuration.isPressed ? 0.8 : 1.0)
             .animation(.spring(response: 0.2, dampingFraction: 0.6), value: configuration.isPressed)
+    }
+}
+
+// MARK: - Typewriter welcome (quick-start greeting only)
+/// Uses plain `Text` for the hook (not `TextFormatter.formatResponse`) so partial strings while typing don’t get mangled or cut off.
+private struct TypewriterWelcomeMessageView: View {
+    let leadLine: String
+    let hookText: String
+    let message: ChatMessage
+    @ObservedObject var viewModel: ChatViewModel
+    
+    @State private var visibleUnitCount = 0
+    @State private var selectedFeedback: String?
+    @State private var showCopyConfirmation = false
+    @State private var typingTask: Task<Void, Never>?
+    
+    init(leadLine: String, hookText: String, message: ChatMessage, viewModel: ChatViewModel) {
+        self.leadLine = leadLine
+        self.hookText = hookText
+        self.message = message
+        self.viewModel = viewModel
+        _selectedFeedback = State(initialValue: message.feedbackType)
+    }
+    
+    private var sequences: [String] {
+        Self.splitComposedSequences(hookText)
+    }
+    
+    private var visibleHookText: String {
+        let seq = sequences
+        guard visibleUnitCount > 0, !seq.isEmpty else { return "" }
+        let n = min(visibleUnitCount, seq.count)
+        return seq.prefix(n).joined()
+    }
+    
+    private var typingComplete: Bool {
+        !sequences.isEmpty && visibleUnitCount >= sequences.count
+    }
+    
+    private var trimmedLead: String {
+        leadLine.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                if !trimmedLead.isEmpty {
+                    Text(trimmedLead)
+                        .font(.system(size: 22, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: UIScreen.main.bounds.width - 48, alignment: .leading)
+                        .padding(.bottom, 14)
+                        .transaction { $0.animation = nil }
+                }
+                
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(visibleHookText)
+                        .font(.system(size: 16, weight: .regular))
+                        .foregroundColor(.white.opacity(0.9))
+                        .lineSpacing(7)
+                        .multilineTextAlignment(.leading)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: UIScreen.main.bounds.width - 56, alignment: .leading)
+                        .transaction { $0.animation = nil }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                        }
+                }
+                .padding(.vertical, 16)
+                .padding(.horizontal, 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(Color.white.opacity(0.065))
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(Color.white.opacity(0.09), lineWidth: 1)
+                    }
+                }
+                
+                if typingComplete {
+                    HStack(spacing: 16) {
+                        FeedbackButton(
+                            icon: "hand.thumbsup",
+                            isSelected: selectedFeedback == "like",
+                            action: {
+                                let newFeedback = selectedFeedback == "like" ? nil : "like"
+                                selectedFeedback = newFeedback
+                                Task {
+                                    await viewModel.saveFeedback(
+                                        messageId: message.id,
+                                        feedbackType: newFeedback
+                                    )
+                                }
+                            }
+                        )
+                        FeedbackButton(
+                            icon: "hand.thumbsdown",
+                            isSelected: selectedFeedback == "dislike",
+                            action: {
+                                let newFeedback = selectedFeedback == "dislike" ? nil : "dislike"
+                                selectedFeedback = newFeedback
+                                Task {
+                                    await viewModel.saveFeedback(
+                                        messageId: message.id,
+                                        feedbackType: newFeedback
+                                    )
+                                }
+                            }
+                        )
+                        Button(action: {
+                            UIPasteboard.general.string = message.content
+                            showCopyConfirmation = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                showCopyConfirmation = false
+                            }
+                        }) {
+                            Image(systemName: showCopyConfirmation ? "checkmark" : "doc.on.doc")
+                                .font(.system(size: 16))
+                                .foregroundColor(showCopyConfirmation ? .white : .gray)
+                                .frame(width: 32, height: 32)
+                                .liquidGlass(cornerRadius: 16)
+                        }
+                    }
+                    .padding(.top, 12)
+                    .transaction { $0.animation = nil }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .transaction { $0.animation = nil }
+        .onAppear(perform: startTyping)
+        .onDisappear {
+            typingTask?.cancel()
+            typingTask = nil
+        }
+        .onChange(of: hookText) { _, _ in
+            restartTyping()
+        }
+    }
+    
+    private func restartTyping() {
+        typingTask?.cancel()
+        visibleUnitCount = 0
+        startTyping()
+    }
+    
+    private func startTyping() {
+        typingTask?.cancel()
+        let seq = Self.splitComposedSequences(hookText)
+        guard !seq.isEmpty else {
+            visibleUnitCount = 0
+            return
+        }
+        typingTask = Task {
+            for i in 1...seq.count {
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    visibleUnitCount = i
+                }
+                if i < seq.count {
+                    let pause = Self.delayNanos(after: seq[i - 1])
+                    try? await Task.sleep(nanoseconds: pause)
+                }
+            }
+        }
+    }
+    
+    private static func delayNanos(after unit: String) -> UInt64 {
+        if unit == "\n" { return 95_000_000 }
+        if unit == " " { return 14_000_000 }
+        if let c = unit.first, ".!?".contains(c) { return 52_000_000 }
+        return 28_000_000
+    }
+    
+    private static func splitComposedSequences(_ s: String) -> [String] {
+        var out: [String] = []
+        s.enumerateSubstrings(in: s.startIndex..<s.endIndex, options: .byComposedCharacterSequences) { substring, _, _, _ in
+            if let substring { out.append(String(substring)) }
+        }
+        return out
     }
 }
 
@@ -823,74 +999,119 @@ struct CheckLimitButtonStyle: ButtonStyle {
     }
 }
 
-// Free-tier upgrade banner — same size as task buttons (height 64, cornerRadius 16)
-struct ChatUpgradeBanner: View {
-    var onUpgrade: () -> Void
-    private static let premiumGold = Color(red: 0.91, green: 0.72, blue: 0.2)
+/// Premium header — “Connect” pill before bank link; gold crown in glass circle when linked (matches Upgrade header crown).
+private struct ChatHeaderBankConnectButton: View {
+    let isConnecting: Bool
+    let bankLinked: Bool
+    let action: () -> Void
+    
+    /// rgba(0, 80, 255, 0.2)
+    private let pillFill = Color(red: 0, green: 80 / 255, blue: 1).opacity(0.2)
+    private let borderBlue = Color(red: 0, green: 122 / 255, blue: 1)
+    private let glowColor = Color(red: 0, green: 122 / 255, blue: 1).opacity(0.5)
+    /// `UpgradeView` premium crown gold
+    private let premiumGold = Color(red: 0.91, green: 0.72, blue: 0.2)
     
     var body: some View {
-        HStack(spacing: 10) {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(white: 0.2).opacity(0.3),
-                                Color(white: 0.15).opacity(0.2)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 40, height: 40)
-                    .overlay {
-                        Circle()
-                            .stroke(
+        Group {
+            if bankLinked {
+                ZStack {
+                    if isConnecting {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white.opacity(0.9)))
+                            .scaleEffect(0.88)
+                    } else {
+                        Image(systemName: "crown.fill")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(
                                 LinearGradient(
                                     colors: [
-                                        Color.white.opacity(0.2),
-                                        Color.white.opacity(0.1)
+                                        premiumGold.opacity(0.95),
+                                        premiumGold.opacity(0.75)
                                     ],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
+                                )
+                            )
+                            .shadow(color: premiumGold.opacity(0.35), radius: 8, x: 0, y: 0)
+                    }
+                }
+                .frame(width: 32, height: 32)
+                .liquidGlass(cornerRadius: 16)
+                .allowsHitTesting(false)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(AppL10n.t("bank.sync_bank")). \(AppL10n.t("chat.header_bank_pill_linked"))")
+            } else {
+                Button(action: action) {
+                    HStack(spacing: 6) {
+                        if isConnecting {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white.opacity(0.95)))
+                                .scaleEffect(0.78)
+                                .frame(width: 14, height: 14)
+                        } else {
+                            Image(systemName: "link")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.95))
+                        }
+                        Text(AppL10n.t("chat.header_bank_pill_connect"))
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background {
+                        Capsule(style: .continuous)
+                            .fill(pillFill)
+                            .overlay(
+                                Capsule(style: .continuous)
+                                    .strokeBorder(borderBlue, lineWidth: 1)
                             )
                     }
-                Image(systemName: "crown.fill")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [Self.premiumGold.opacity(0.95), Self.premiumGold.opacity(0.8)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                }
+                .buttonStyle(.plain)
+                .shadow(color: glowColor, radius: 5, x: 0, y: 0)
+                .disabled(isConnecting)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(AppL10n.t("bank.sync_bank")). \(AppL10n.t("chat.header_bank_pill_connect"))")
+                .accessibilityHint(AppL10n.t("bank.sync_bank_hint"))
             }
-            .frame(width: 40)
-            Text(AppL10n.t("chat.upgrade_banner_short"))
-                .font(.system(size: 15, weight: .medium, design: .rounded))
-                .foregroundColor(.white.opacity(0.9))
-                .lineSpacing(5)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-            Button(action: onUpgrade) {
-                Text(AppL10n.t("paywall.upgrade_button"))
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundColor(.black.opacity(0.9))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(Capsule().fill(Self.premiumGold))
-            }
-            .buttonStyle(.plain)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: 64)
-        .padding(.leading, 14)
-        .padding(.trailing, 16)
-        .liquidGlass(cornerRadius: 16)
+    }
+}
+
+/// Matches `UpgradeView` primary Continue CTA — same paywall blue gradient, rim, and shadow.
+private struct ChatHeaderUpgradeGlassPill: View {
+    var onUpgrade: () -> Void
+    
+    private static let gradientTop = Color(red: 0.11, green: 0.62, blue: 1.0)
+    private static let gradientBottom = Color(red: 0.20, green: 0.47, blue: 1.0)
+    
+    var body: some View {
+        Button(action: onUpgrade) {
+            Text(AppL10n.t("chat.upgrade"))
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(.white)
+                .padding(.vertical, 6)
+                .padding(.horizontal, 16)
+                .background {
+                    Capsule(style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [Self.gradientTop, Self.gradientBottom],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .stroke(Color.white.opacity(0.25), lineWidth: 1)
+                        )
+                }
+        }
+        .buttonStyle(.plain)
+        .shadow(color: Color.blue.opacity(0.18), radius: 10, x: 0, y: 5)
     }
 }
 

@@ -461,8 +461,13 @@ class SupabaseService {
         }
         
         // Get the root view controller for Google Sign-In
-        guard let windowScene = await UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let rootViewController = await windowScene.windows.first?.rootViewController else {
+        let rootViewController: UIViewController? = await MainActor.run {
+            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene else {
+                return nil
+            }
+            return windowScene.windows.first?.rootViewController
+        }
+        guard let rootViewController else {
             throw SupabaseError.authFailed("Could not find root view controller")
         }
         
@@ -480,7 +485,10 @@ class SupabaseService {
         GIDSignIn.sharedInstance.configuration = configuration
         
         // Perform native Google Sign-In
-        let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController)
+        // `withPresenting:` touches UIKit view hierarchy, so keep it on the main actor.
+        let result = try await Task { @MainActor in
+            try await GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController)
+        }.value
         
         guard let idToken = result.user.idToken?.tokenString else {
             throw SupabaseError.authFailed("No ID token received from Google")

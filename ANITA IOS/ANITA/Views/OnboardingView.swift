@@ -1208,14 +1208,24 @@ struct OnboardingView: View {
 // MARK: - Bank connection step (used when includeBankConnectionStep is true)
 private struct BankConnectionOnboardingStep: View {
     var onFinish: () -> Void
+    @StateObject private var subscriptionManager = SubscriptionManager.shared
     @State private var isConnecting = false
+    @State private var showUpgradeSheet = false
+    @State private var shouldConnectBankAfterUpgrade = false
+    @State private var isSkipAllowedInUpgradeSheet = false
     @State private var errorMessage: String?
+    @State private var showDeleteManualConfirm = false
     
     var body: some View {
         VStack(spacing: 16) {
             Button {
-                UserManager.shared.setTransactionDataSource("bank")
-                connectBank()
+                if subscriptionManager.isPremium {
+                    showDeleteManualConfirm = true
+                } else {
+                    isSkipAllowedInUpgradeSheet = false
+                    shouldConnectBankAfterUpgrade = true
+                    showUpgradeSheet = true
+                }
             } label: {
                 HStack {
                     if isConnecting {
@@ -1233,19 +1243,42 @@ private struct BankConnectionOnboardingStep: View {
                 .frame(height: 52)
                 .background(
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(Color.white.opacity(0.12))
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.11, green: 0.62, blue: 1.0),
+                                    Color(red: 0.20, green: 0.47, blue: 1.0)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                         .overlay(
                             RoundedRectangle(cornerRadius: 14)
-                                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                .stroke(Color.white.opacity(0.25), lineWidth: 1)
                         )
                 )
+                .shadow(color: Color.blue.opacity(0.18), radius: 12, x: 0, y: 6)
             }
             .buttonStyle(.plain)
             .disabled(isConnecting)
             
             Button {
-                UserManager.shared.setTransactionDataSource("manual")
-                onFinish()
+                // In the global "test bank connection" flow, we want the manual button
+                // to show the exact same UI as the bank-connection path.
+                // Otherwise the app would route to PostSignupPlansView ("Choose your plan").
+                if UserManager.pendingTestBankConnectionFlow {
+                    if subscriptionManager.isPremium {
+                        showDeleteManualConfirm = true
+                    } else {
+                        isSkipAllowedInUpgradeSheet = true
+                        shouldConnectBankAfterUpgrade = true
+                        showUpgradeSheet = true
+                    }
+                } else {
+                    UserManager.shared.setTransactionDataSource("manual")
+                    onFinish()
+                }
             } label: {
                 HStack {
                     Image(systemName: "square.and.pencil")
@@ -1275,9 +1308,48 @@ private struct BankConnectionOnboardingStep: View {
                     .multilineTextAlignment(.center)
             }
         }
+        .alert(
+            AppL10n.t("bank.connect_deletes_manual_title"),
+            isPresented: $showDeleteManualConfirm
+        ) {
+            Button(AppL10n.t("common.cancel"), role: .cancel) {}
+            Button(AppL10n.t("bank.connect_deletes_manual_continue")) {
+                connectBankConfirmed()
+            }
+        } message: {
+            Text(
+                "\(AppL10n.t("bank.connect_deletes_manual_intro"))\n\n\(AppL10n.t("bank.connect_deletes_manual_warning"))"
+            )
+        }
+        .sheet(isPresented: $showUpgradeSheet) {
+            UpgradeView(onSkip: isSkipAllowedInUpgradeSheet ? {
+                // User can proceed without paying (Free tier).
+                shouldConnectBankAfterUpgrade = false
+                // IMPORTANT: Stop the test-bank-flow logic from routing us to PostSignupPlansView.
+                // ContentView shows PostSignupPlansView when `pendingTestBankConnectionFlow` is true.
+                UserManager.setPendingTestBankConnectionFlow(false)
+                UserManager.shared.shouldShowPostSignupPlans = false
+                UserManager.shared.setTransactionDataSource("manual")
+                onFinish()
+            } : nil)
+        }
+        .onChange(of: showUpgradeSheet) { oldValue, newValue in
+            guard oldValue == true, newValue == false else { return }
+            Task { @MainActor in
+                await subscriptionManager.refresh()
+                if shouldConnectBankAfterUpgrade, subscriptionManager.isPremium {
+                    shouldConnectBankAfterUpgrade = false
+                    showDeleteManualConfirm = true
+                } else {
+                    shouldConnectBankAfterUpgrade = false
+                }
+                isSkipAllowedInUpgradeSheet = false
+            }
+        }
     }
     
-    private func connectBank() {
+    /// Runs after user accepts the warning that manual transactions will be deleted.
+    private func connectBankConfirmed() {
         let userManager = UserManager.shared
         let userId = userManager.userId
         let userEmail = userManager.currentUser?.email
@@ -1290,9 +1362,22 @@ private struct BankConnectionOnboardingStep: View {
         Task { @MainActor in
             defer { isConnecting = false }
             do {
-                try await BankConnectionTester.shared.startTestFlow(userId: userId, userEmail: userEmail) {
-                    onFinish()
+                let linked = try await BankConnectionTester.shared.startTestFlow(userId: userId, userEmail: userEmail)
+                if linked {
+                    UserManager.shared.setTransactionDataSource("bank")
+                    do {
+                        try await NetworkService.shared.deleteManualTransactionsOnBankLink(userId: userId)
+                    } catch {
+                        print("[Onboarding] deleteManualTransactionsOnBankLink failed: \(error.localizedDescription)")
+                    }
+                    do {
+                        try await NetworkService.shared.refreshBankTransactions(userId: userId)
+                    } catch {
+                        print("[Onboarding] refreshBankTransactions failed: \(error.localizedDescription)")
+                    }
+                    NotificationCenter.default.post(name: .anitaBankSyncCompleted, object: nil)
                 }
+                onFinish()
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -1398,11 +1483,9 @@ private struct SelectableCard: View {
                         .font(.system(size: 17, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
                     Spacer()
-                    if isSelected {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.95))
-                    }
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white.opacity(isSelected ? 0.95 : 0.25))
                 }
                 
                 if !subtitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -1414,22 +1497,12 @@ private struct SelectableCard: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background {
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(
-                        LinearGradient(
-                            colors: isSelected
-                            ? [Color(white: 0.25).opacity(0.5), Color(white: 0.18).opacity(0.35)]
-                            : [Color(white: 0.15).opacity(0.3), Color(white: 0.1).opacity(0.2)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(isSelected ? Color.white.opacity(0.25) : Color.white.opacity(0.12), lineWidth: isSelected ? 1.5 : 1)
-                    )
-            }
+            .financeSolidGlassTile(cornerRadius: 14)
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(isSelected ? Color.white.opacity(0.22) : Color.white.opacity(0.10), lineWidth: isSelected ? 1.2 : 0.7)
+            )
+            .shadow(color: Color.black.opacity(0.25), radius: 12, x: 0, y: 6)
         }
         .buttonStyle(.plain)
     }
@@ -1446,13 +1519,10 @@ private struct CurrencyOptionCard: View {
         Button(action: onTap) {
             HStack(spacing: 16) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(isSelected ? Color.white.opacity(0.18) : Color.white.opacity(0.08))
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.clear)
                         .frame(width: 56, height: 56)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(isSelected ? Color.white.opacity(0.35) : Color.white.opacity(0.12), lineWidth: 1)
-                        )
+                        .financeSolidGlassTile(cornerRadius: 12)
                     Text(symbol)
                         .font(.system(size: code == "CHF" ? 16 : 28, weight: .semibold))
                         .foregroundColor(.white.opacity(0.95))
@@ -1477,14 +1547,11 @@ private struct CurrencyOptionCard: View {
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 16)
-            .background {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(white: 0.12).opacity(isSelected ? 0.5 : 0.25))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.white.opacity(isSelected ? 0.25 : 0.1), lineWidth: 1)
-                    )
-            }
+            .financeSolidGlassTile(cornerRadius: 16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.white.opacity(isSelected ? 0.34 : 0.1), lineWidth: isSelected ? 1.1 : 0.65)
+            )
         }
         .buttonStyle(.plain)
     }
@@ -1498,38 +1565,31 @@ private struct SelectableRow: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(isSelected ? Color.white.opacity(0.22) : Color.white.opacity(0.10))
-                        .frame(width: 28, height: 28)
-                        .overlay(
-                            Circle()
-                                .stroke(isSelected ? Color.white.opacity(0.28) : Color.white.opacity(0.12), lineWidth: 1)
-                        )
-                    
-                    if isSelected {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(.white.opacity(0.95))
-                    }
-                }
-                
                 Text(title)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
                     .foregroundColor(.white.opacity(0.95))
                 
                 Spacer()
+                
+                // Selected indicator on the right side only (no grey arrows).
+                ZStack {
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.95))
+                    }
+                }
+                // Keep right-side layout stable even when not selected.
+                .frame(width: 22, height: 22, alignment: .center)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
-            .background {
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(Color(white: 0.12).opacity(isSelected ? 0.35 : 0.22))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(Color.white.opacity(isSelected ? 0.22 : 0.10), lineWidth: 1)
-                    )
-            }
+            .financeSolidGlassTile(cornerRadius: 16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(isSelected ? Color.white.opacity(0.22) : Color.white.opacity(0.10), lineWidth: isSelected ? 1.2 : 0.7)
+            )
+            .shadow(color: Color.black.opacity(0.25), radius: 12, x: 0, y: 6)
         }
         .buttonStyle(.plain)
     }

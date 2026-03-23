@@ -8,6 +8,14 @@
 import Foundation
 import SwiftUI
 
+/// How Insights (`loadHistoricalData`) loads each month — must stay aligned with combined top cards in `loadData`.
+private enum HistoricalMetricsMode {
+    case manualOnly
+    case bankOnly
+    /// Manual + bank metrics summed per month (user on manual mode with linked bank).
+    case mergedManualAndBank
+}
+
 @MainActor
 class FinanceViewModel: ObservableObject {
     @Published var totalBalance: Double = 0.0
@@ -113,6 +121,10 @@ class FinanceViewModel: ObservableObject {
     func loadData() {
         isLoading = true
         errorMessage = nil
+        // After bank link, manual rows are archived server-side; drop stale in-memory manual txs so they cannot re-merge into the list.
+        if UserManager.shared.hasEstablishedBankSync && !usesBankDataOnly {
+            transactions = []
+        }
         
         Task {
             do {
@@ -137,6 +149,19 @@ class FinanceViewModel: ObservableObject {
                     // but anonymous users still see their own bank data.
                     // IMPORTANT: Do NOT sync from Stripe here – we want fast loads using
                     // the cached metrics/transactions that are already in our database.
+                    // However, right after the user connects a bank, the backend import/metrics
+                    // may still be updating. In that case, force a refresh once and keep
+                    // Finance in the loading state until the backend is ready.
+                    if UserManager.shared.isJustConnectedBank {
+                        do {
+                            try await networkService.refreshBankTransactions(userId: userId)
+                            UserManager.shared.clearJustConnectedBank()
+                        } catch {
+                            // Keep the flag until the next successful load attempt.
+                            print("[FinanceViewModel] refreshBankTransactions failed: \(error.localizedDescription)")
+                        }
+                    }
+
                     let fromStr = String(format: "%04d-%02d-01", year, month)
                     let comp = DateComponents(year: year, month: month, day: 1)
                     guard let firstDay = calendar.date(from: comp),
@@ -158,6 +183,9 @@ class FinanceViewModel: ObservableObject {
                     let assetsResponse = try await assetsTask
                     let xpStatsResponse = try await xpStatsTask
                     let previousMonthMetrics = try? await previousMonthMetricsTask
+                    let bankActivityFromServer = !mapped.isEmpty
+                        || metrics.metrics.monthlyIncome > 0
+                        || metrics.metrics.monthlyExpenses > 0
                     // Load 12 months of balances so Funds Total (cumulative) is correct on first paint
                     let balanceHistory: [MonthlyBalance] = await Self.fetchBalanceHistory(networkService: networkService, userId: userId, selectedMonth: selectedMonth, calendar: calendar, useBankData: true)
                     await MainActor.run {
@@ -187,6 +215,7 @@ class FinanceViewModel: ObservableObject {
                             self.monthlyBalance = self.monthlyIncome - self.monthlyExpenses
                         }
                         if !self.hasLoadedHistoricalDataOnce { self.loadHistoricalData() }
+                        if bankActivityFromServer { UserManager.shared.markBankSyncEstablished() }
                         self.hasLoadedOnce = true
                         self.isLoading = false
                     }
@@ -203,22 +232,22 @@ class FinanceViewModel: ObservableObject {
                 
                 let metrics = try await metricsTask
                 let transactionsResponse = try await transactionsTask
-                var bankMetrics = try? await bankMetricsTask
+                let bankMetrics = try? await bankMetricsTask
                 let targetsResponse = try await targetsTask
                 let assetsResponse = try await assetsTask
                 let xpStatsResponse = try await xpStatsTask
                 let previousMonthMetrics = try? await previousMonthMetricsTask
-                var previousMonthBankMetrics = try? await previousMonthBankMetricsTask
+                let previousMonthBankMetrics = try? await previousMonthBankMetricsTask
                 
                 let manualHasData = metrics.metrics.monthlyIncome > 0 || metrics.metrics.monthlyExpenses > 0
-                var bankHasData = (bankMetrics?.metrics.monthlyIncome ?? 0) > 0 || (bankMetrics?.metrics.monthlyExpenses ?? 0) > 0
-                var useBankForDisplay = !manualHasData && bankHasData
+                let bankHasData = (bankMetrics?.metrics.monthlyIncome ?? 0) > 0 || (bankMetrics?.metrics.monthlyExpenses ?? 0) > 0
+                let useBankForDisplay = !manualHasData && bankHasData
                 // We no longer trigger a Stripe/bank sync in the hot path.
                 // If both manual and bank metrics are empty, we keep showing zeros/transactions
                 // from our DB and let a separate daily background sync refresh bank data.
                 var bankTransactionsForMonth: [TransactionItem]?
-                var finalBankMetrics = bankMetrics
-                var finalPreviousBankMetrics = previousMonthBankMetrics
+                let finalBankMetrics = bankMetrics
+                let finalPreviousBankMetrics = previousMonthBankMetrics
                 var bankBalanceHistoryForTotal: [MonthlyBalance] = []
                 var manualBalanceHistoryForTotal: [MonthlyBalance] = []
                 if useBankForDisplay {
@@ -241,6 +270,8 @@ class FinanceViewModel: ObservableObject {
                     }
                 }
                 
+                let bankActivityFromServer = bankHasData || !(bankTransactionsForMonth?.isEmpty ?? true)
+                
                 await MainActor.run {
                     if useBankForDisplay, let bank = finalBankMetrics?.metrics {
                         self.totalBalance = bank.totalBalance
@@ -252,7 +283,8 @@ class FinanceViewModel: ObservableObject {
                         if !bankBalanceHistoryForTotal.isEmpty {
                             self.monthlyBalanceHistory = bankBalanceHistoryForTotal
                         }
-                        if let list = bankTransactionsForMonth { self.transactions = list }
+                        // Always replace list in bank-display mode (avoid keeping pre-bank manual txs if bank fetch is empty or slow).
+                        self.transactions = bankTransactionsForMonth ?? []
                         self.targets = targetsResponse.targets
                         self.goals = targetsResponse.goals ?? []
                         self.assets = assetsResponse.assets
@@ -284,8 +316,14 @@ class FinanceViewModel: ObservableObject {
                         let fromAPI = transactionsResponse.transactions
                         let fromAPIInSelectedMonth = fromAPI.filter { Self.isTransactionInMonth($0, month: month, year: year) }
                         let apiIds = Set(fromAPIInSelectedMonth.map(\.id))
-                        let onlyLocal = self.transactions.filter { !apiIds.contains($0.id) }
-                        let onlyLocalInSelectedMonth = onlyLocal.filter { Self.isTransactionInMonth($0, month: month, year: year) }
+                        // Without this, cached manual rows stay visible forever once bank sync hides them from the API (`onlyLocal` re-attach).
+                        let onlyLocalInSelectedMonth: [TransactionItem]
+                        if UserManager.shared.hasEstablishedBankSync {
+                            onlyLocalInSelectedMonth = []
+                        } else {
+                            let onlyLocal = self.transactions.filter { !apiIds.contains($0.id) }
+                            onlyLocalInSelectedMonth = onlyLocal.filter { Self.isTransactionInMonth($0, month: month, year: year) }
+                        }
                         var merged = onlyLocalInSelectedMonth + fromAPIInSelectedMonth
                         if let bankList = bankTransactionsForMonth {
                             let existingIds = Set(merged.map(\.id))
@@ -306,8 +344,9 @@ class FinanceViewModel: ObservableObject {
                         if self.monthlyBalance == 0 && (self.monthlyIncome != 0 || self.monthlyExpenses != 0) {
                             self.monthlyBalance = self.monthlyIncome - self.monthlyExpenses
                         }
-                        if !self.hasLoadedHistoricalDataOnce { self.loadHistoricalData(useBankData: false) }
+                        if !self.hasLoadedHistoricalDataOnce { self.loadHistoricalData() }
                     }
+                    if bankActivityFromServer { UserManager.shared.markBankSyncEstablished() }
                     self.hasLoadedOnce = true
                     self.isLoading = false
                 }
@@ -774,11 +813,22 @@ class FinanceViewModel: ObservableObject {
         refresh()
     }
     
-    // Load historical data for charts (based on comparison period). When useBankData is nil, uses usesBankDataOnly.
+    // Load historical data for charts (based on comparison period).
+    /// - Parameter useBankData: `nil` = infer from account (bank-only vs manual vs manual+bank merged when `hasEstablishedBankSync`).
     func loadHistoricalData(useBankData: Bool? = nil) {
-        // Prevent multiple simultaneous loads
         guard !isHistoricalDataLoading else { return }
-        let useBank = useBankData ?? usesBankDataOnly
+        
+        let mode: HistoricalMetricsMode
+        if let explicit = useBankData {
+            mode = explicit ? .bankOnly : .manualOnly
+        } else if usesBankDataOnly {
+            mode = .bankOnly
+        } else if UserManager.shared.hasEstablishedBankSync {
+            mode = .mergedManualAndBank
+        } else {
+            mode = .manualOnly
+        }
+        
         Task {
             await MainActor.run {
                 self.isHistoricalDataLoading = true
@@ -787,7 +837,13 @@ class FinanceViewModel: ObservableObject {
             let calendar = Calendar.current
             let monthsToLoad = 12
             let selectedMonth = await MainActor.run { self.selectedMonth }
-            let uid = userId
+            let uid = await MainActor.run { self.effectiveUserId ?? self.userId }
+            guard !uid.isEmpty else {
+                await MainActor.run {
+                    self.isHistoricalDataLoading = false
+                }
+                return
+            }
             
             // Build list of (monthDate, month, year) for all months to load
             var monthInfos: [(Date, Int, Int)] = []
@@ -809,22 +865,54 @@ class FinanceViewModel: ObservableObject {
             }
             let results: [MonthMetricsResult] = await withTaskGroup(of: MonthMetricsResult?.self) { group in
                 for (monthDate, month, year) in monthInfos {
+                    let modeCopy = mode
                     group.addTask {
-                        do {
-                            let metrics = try await self.networkService.getFinancialMetrics(userId: uid, month: month, year: year, useBankData: useBank)
-                            let monthStart = calendar.date(from: DateComponents(year: year, month: month, day: 1)) ?? monthDate
-                            // Use monthlyBalance (includes transfers to/from goals) so Funds Total is consistent across months
-                            let balanceForTotal = metrics.metrics.monthlyBalance
+                        let monthStart = calendar.date(from: DateComponents(year: year, month: month, day: 1)) ?? monthDate
+                        switch modeCopy {
+                        case .manualOnly:
+                            do {
+                                let metrics = try await self.networkService.getFinancialMetrics(userId: uid, month: month, year: year, useBankData: false)
+                                return MonthMetricsResult(
+                                    id: "\(year)-\(month)",
+                                    monthStart: monthStart,
+                                    income: metrics.metrics.monthlyIncome,
+                                    expenses: metrics.metrics.monthlyExpenses,
+                                    balance: metrics.metrics.monthlyBalance
+                                )
+                            } catch {
+                                print("[FinanceViewModel] Error loading historical data for \(year)-\(month): \(error.localizedDescription)")
+                                return nil
+                            }
+                        case .bankOnly:
+                            do {
+                                let metrics = try await self.networkService.getFinancialMetrics(userId: uid, month: month, year: year, useBankData: true)
+                                return MonthMetricsResult(
+                                    id: "\(year)-\(month)",
+                                    monthStart: monthStart,
+                                    income: metrics.metrics.monthlyIncome,
+                                    expenses: metrics.metrics.monthlyExpenses,
+                                    balance: metrics.metrics.monthlyBalance
+                                )
+                            } catch {
+                                print("[FinanceViewModel] Error loading historical data (bank) for \(year)-\(month): \(error.localizedDescription)")
+                                return nil
+                            }
+                        case .mergedManualAndBank:
+                            async let manualTask = try? await self.networkService.getFinancialMetrics(userId: uid, month: month, year: year, useBankData: false)
+                            async let bankTask = try? await self.networkService.getFinancialMetrics(userId: uid, month: month, year: year, useBankData: true)
+                            let m = await manualTask
+                            let b = await bankTask
+                            if m == nil && b == nil { return nil }
+                            let income = (m?.metrics.monthlyIncome ?? 0) + (b?.metrics.monthlyIncome ?? 0)
+                            let expenses = (m?.metrics.monthlyExpenses ?? 0) + (b?.metrics.monthlyExpenses ?? 0)
+                            let balance = (m?.metrics.monthlyBalance ?? 0) + (b?.metrics.monthlyBalance ?? 0)
                             return MonthMetricsResult(
                                 id: "\(year)-\(month)",
                                 monthStart: monthStart,
-                                income: metrics.metrics.monthlyIncome,
-                                expenses: metrics.metrics.monthlyExpenses,
-                                balance: balanceForTotal
+                                income: income,
+                                expenses: expenses,
+                                balance: balance
                             )
-                        } catch {
-                            print("[FinanceViewModel] Error loading historical data for \(year)-\(month): \(error.localizedDescription)")
-                            return nil
                         }
                     }
                 }
@@ -943,6 +1031,12 @@ class FinanceViewModel: ObservableObject {
                 self.isHistoricalDataLoading = false
             }
         }
+    }
+    
+    /// Clears the Insights cache and reloads (e.g. after bank link, when merged manual+bank metrics apply).
+    func invalidateAndReloadHistoricalData() {
+        hasLoadedHistoricalDataOnce = false
+        loadHistoricalData()
     }
     
     /// Maximum number of months available for comparison (based on loaded data). At least 1.

@@ -14,7 +14,7 @@ private func monthRange(calendar: Calendar, month: Int?, year: Int?) -> (String,
     let m = month ?? calendar.component(.month, from: now)
     let y = year ?? calendar.component(.year, from: now)
     let fromStr = String(format: "%04d-%02d-01", y, m)
-    var comp = DateComponents(year: y, month: m, day: 1)
+    let comp = DateComponents(year: y, month: m, day: 1)
     guard let firstDay = calendar.date(from: comp),
           let lastDay = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: firstDay) else {
         return (fromStr, fromStr)

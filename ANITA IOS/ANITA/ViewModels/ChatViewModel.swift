@@ -20,6 +20,17 @@ class ChatViewModel: ObservableObject {
     /// When true, ChatView should present UpgradeView (e.g. free user requested premium-only feature; backend returned paywall).
     @Published var showPaywallForLimitReached = false
     
+    /// Stable id for the local-first welcome bubble so we persist it once when the user sends their first message.
+    static let welcomeGreetingMessageId = "anita-local-welcome-greeting"
+    
+    /// Shown as a static headline above the typewriter hook (quick-start only).
+    @Published var welcomeTypewriterLead: String = ""
+    /// Body typed out under the lead; full `ChatMessage.content` is lead + hook for copy and API.
+    @Published var welcomeHookBody: String = ""
+    
+    private static let welcomeHookLastIndexKey = "anita_chat_welcome_hook_last_index"
+    private static let welcomeHookCount = 10
+    
     /// Fallback when assistant response is empty or fails validation (difficult context / malformed).
     private static let invalidResponseFallbackMessages: [String] = [
         "I got a bit confused there. Try again with something like \"add expense 50 for groceries\" or \"how's my budget?\" — I'll get it next time! 💡",
@@ -48,6 +59,12 @@ class ChatViewModel: ObservableObject {
     
     /// Prefix the AI must use when responding with a premium paywall (so we can show upgrade sheet). Strip before displaying.
     private static let premiumResponsePrefix = "[PREMIUM]"
+    
+    /// Free tier: substring match — spending / balance / history questions need bank-linked data (Premium).
+    private static func messageRequestsBankLinkedInsights(_ text: String) -> Bool {
+        let lower = text.lowercased()
+        return ["spend", "balance", "history"].contains { lower.contains($0) }
+    }
     
     /// Thread-safe "run once" for path monitor callback (Swift 6 concurrency).
     private final class OnceResume {
@@ -100,6 +117,44 @@ class ChatViewModel: ObservableObject {
                 // since it reads from UserDefaults on each request
             }
         }
+    }
+    
+    /// Local assistant greeting when the chat is empty (no API call; not gated on AI consent).
+    func ensureWelcomeGreetingIfNeeded() {
+        guard userManager.isAuthenticated else { return }
+        guard messages.isEmpty else { return }
+        let lead = Self.makeWelcomeLead(userManager: userManager)
+        let hookIndex = Self.pickWelcomeHookIndexDiverse()
+        let hook = AppL10n.t("chat.welcome_hook_\(hookIndex)")
+        welcomeTypewriterLead = lead
+        welcomeHookBody = hook
+        let full = lead + hook
+        let greeting = ChatMessage(id: Self.welcomeGreetingMessageId, role: "assistant", content: full)
+        messages = [greeting]
+    }
+    
+    private static func makeWelcomeLead(userManager: UserManager) -> String {
+        let profileName = userManager.getProfileName()?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let onboardingName = OnboardingSurveyResponse.loadFromUserDefaults(userId: userManager.userId)?.userName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = (profileName?.isEmpty == false ? profileName : nil) ?? (onboardingName?.isEmpty == false ? onboardingName : nil)
+        if let name {
+            return String(format: AppL10n.t("chat.greeting_opening_named"), name)
+        }
+        return AppL10n.t("chat.greeting_opening")
+    }
+    
+    /// New random hook each time the empty-state welcome is shown (new chat, empty thread, etc.), avoiding immediate repeat.
+    private static func pickWelcomeHookIndexDiverse() -> Int {
+        let hasLast = UserDefaults.standard.object(forKey: welcomeHookLastIndexKey) != nil
+        let last = hasLast ? UserDefaults.standard.integer(forKey: welcomeHookLastIndexKey) : -1
+        var picked = Int.random(in: 0..<welcomeHookCount)
+        var guardCount = 0
+        while picked == last && welcomeHookCount > 1 && guardCount < 32 {
+            picked = Int.random(in: 0..<welcomeHookCount)
+            guardCount += 1
+        }
+        UserDefaults.standard.set(picked, forKey: welcomeHookLastIndexKey)
+        return picked
     }
     
     // Load conversations from Supabase
@@ -173,9 +228,14 @@ class ChatViewModel: ObservableObject {
             print("[ChatViewModel] Successfully loaded \(loadedMessages.count) messages")
             
             await MainActor.run {
+                welcomeTypewriterLead = ""
+                welcomeHookBody = ""
                 messages = loadedMessages
                 currentConversationId = conversationId
                 print("[ChatViewModel] Updated messages array with \(messages.count) messages")
+                if loadedMessages.isEmpty {
+                    ensureWelcomeGreetingIfNeeded()
+                }
             }
         } catch {
             print("[ChatViewModel] Error loading messages: \(error.localizedDescription)")
@@ -449,6 +509,25 @@ class ChatViewModel: ObservableObject {
         return (type: type, amount: amount, category: category, description: text, currency: detectedCurrency)
     }
     
+    /// True when the message is a quick-add / natural-language manual transaction the user should not send while bank sync is active.
+    private func userIntendsManualTransactionEntry(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        let lower = trimmed.lowercased()
+        if trimmed.caseInsensitiveCompare(AppL10n.t("chat.add_income")) == .orderedSame { return true }
+        if trimmed.caseInsensitiveCompare(AppL10n.t("chat.add_expense")) == .orderedSame { return true }
+        if trimmed.caseInsensitiveCompare(AppL10n.t("finance.add_transaction")) == .orderedSame { return true }
+        let manualPrefixes = [
+            "add income", "add expense", "add an expense", "add a expense",
+            "log expense", "log income", "record expense", "record income",
+            "einkommen hinzufügen", "ausgabe hinzufügen", "transaktion hinzufügen"
+        ]
+        for p in manualPrefixes where lower == p || lower.hasPrefix(p + " ") || lower.hasPrefix(p + ",") {
+            return true
+        }
+        return parseTransaction(from: trimmed) != nil
+    }
+    
     // Extract just the amount from a message (simpler version for pending transactions). Prefers amount user paid (e.g. "payed 55,08") over other numbers (e.g. "3" from "every 3 month").
     private func extractAmount(from text: String) -> Double? {
         // Prefer: "payed 55,08", "55,08 for it", then largest decimal amount, then first number
@@ -601,11 +680,61 @@ class ChatViewModel: ObservableObject {
     
     func sendMessage() {
         guard !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let messageText = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        let userMessage = ChatMessage(role: "user", content: inputText)
+        if userManager.blocksManualTransactions, userIntendsManualTransactionEntry(messageText) {
+            let userMessage = ChatMessage(role: "user", content: messageText)
+            messages.append(userMessage)
+            inputText = ""
+            isLoading = true
+            errorMessage = nil
+            Task {
+                var conversationId = currentConversationId
+                let didCreateConversation = conversationId == nil
+                if conversationId == nil {
+                    do {
+                        let title = messageText.count > 50 ? String(messageText.prefix(50)) + "..." : messageText
+                        conversationId = try await createConversation(title: title)
+                    } catch {
+                        print("[ChatViewModel] Bank-block reply: conversation create failed: \(error.localizedDescription)")
+                        await MainActor.run {
+                            let assistantMessage = ChatMessage(
+                                role: "assistant",
+                                content: validateAndSanitizeAssistantResponse(AppL10n.t("chat.bank_blocks_manual_transaction"))
+                            )
+                            messages.append(assistantMessage)
+                            isLoading = false
+                        }
+                        return
+                    }
+                }
+                guard let convId = conversationId else {
+                    await MainActor.run {
+                        let assistantMessage = ChatMessage(
+                            role: "assistant",
+                            content: validateAndSanitizeAssistantResponse(AppL10n.t("chat.bank_blocks_manual_transaction"))
+                        )
+                        messages.append(assistantMessage)
+                        isLoading = false
+                    }
+                    return
+                }
+                if didCreateConversation,
+                   let welcome = messages.first(where: { $0.id == Self.welcomeGreetingMessageId }) {
+                    await saveMessage(welcome, conversationId: convId)
+                }
+                await saveMessage(userMessage, conversationId: convId)
+                await sendAIResponse(AppL10n.t("chat.bank_blocks_manual_transaction"))
+                if let cid = currentConversationId {
+                    NotificationCenter.default.post(name: NSNotification.Name("ConversationUpdated"), object: cid)
+                }
+            }
+            return
+        }
+        
+        let userMessage = ChatMessage(role: "user", content: messageText)
         messages.append(userMessage)
         
-        let messageText = inputText
         inputText = ""
         isLoading = true
         errorMessage = nil
@@ -648,6 +777,7 @@ class ChatViewModel: ObservableObject {
                 
                 // Create conversation if needed
                 var conversationId = currentConversationId
+                let didCreateConversation = conversationId == nil
                 if conversationId == nil {
                     print("[ChatViewModel] Creating new conversation...")
                     let title = messageText.count > 50 ? String(messageText.prefix(50)) + "..." : messageText
@@ -687,10 +817,31 @@ class ChatViewModel: ObservableObject {
                     }
                 }
                 
-                // Save user message
+                // Save user message (and local welcome bubble first so thread order matches the UI)
                 if let convId = conversationId {
+                    if didCreateConversation,
+                       let welcome = messages.first(where: { $0.id == Self.welcomeGreetingMessageId }) {
+                        print("[ChatViewModel] Saving welcome greeting to conversation: \(convId)")
+                        await saveMessage(welcome, conversationId: convId)
+                    }
                     print("[ChatViewModel] Saving user message to conversation: \(convId)")
                     await saveMessage(userMessage, conversationId: convId)
+                }
+                
+                if !SubscriptionManager.shared.isPremium,
+                   Self.messageRequestsBankLinkedInsights(messageText) {
+                    let reply = AppL10n.t("chat.premium_bank_data_reply")
+                    let assistantMessage = ChatMessage(role: "assistant", content: reply)
+                    await MainActor.run {
+                        messages.append(assistantMessage)
+                        isLoading = false
+                        showPaywallForLimitReached = true
+                    }
+                    if let convId = conversationId {
+                        await saveMessage(assistantMessage, conversationId: convId)
+                        NotificationCenter.default.post(name: NSNotification.Name("ConversationUpdated"), object: convId)
+                    }
+                    return
                 }
                 
                 // Convert messages to API format
@@ -853,6 +1004,11 @@ class ChatViewModel: ObservableObject {
             lines.append("PREMIUM (do not fulfill): Anything else — e.g. analytics, spending breakdown, \"where did my money go\", goals, limits, budgets, reports, charts, comparisons, summaries, insights about their finances. For PREMIUM intents only: respond with a single short, funny message in \(languageName) that this is a premium feature and they can upgrade to use it. Keep it light and on-brand. Your entire response for PREMIUM must start with exactly the tag [PREMIUM] (including the brackets), then a space, then your funny one- or two-sentence message in \(languageName). Do not perform any analysis or action for PREMIUM requests.")
         }
         
+        if userManager.blocksManualTransactions {
+            lines.append("")
+            lines.append("BANK-LINKED MODE — Manual transaction logging is disabled. Do not add, log, or record income or expenses from the user's messages. If they ask to add or log a transaction, briefly explain that transactions come from their bank connection and are not entered manually in the app.")
+        }
+        
         return lines.joined(separator: "\n")
     }
     
@@ -860,6 +1016,8 @@ class ChatViewModel: ObservableObject {
     func startNewConversation() {
         messages = []
         currentConversationId = nil
+        welcomeTypewriterLead = ""
+        welcomeHookBody = ""
     }
     
     // Save feedback for a message

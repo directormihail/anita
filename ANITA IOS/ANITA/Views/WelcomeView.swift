@@ -156,14 +156,7 @@ struct WelcomeView: View {
                 )
                 .padding(.horizontal, 24)
                 .padding(.vertical, 20)
-                .background(
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(Color.white.opacity(0.06))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 18)
-                                .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                        )
-                )
+                .financeSolidGlassSection(cornerRadius: 18)
                 .padding(.horizontal, 20)
                 .padding(.bottom, 44)
                 .offset(y: contentOffset)
@@ -183,16 +176,7 @@ struct WelcomeView: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 56)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14)
-                                .fill(Color.white.opacity(0.06))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                                )
-                        )
-                        .shadow(color: Color.black.opacity(0.35), radius: 18, x: 0, y: 10)
-                        .shadow(color: Color.white.opacity(0.06), radius: 4, x: 0, y: -1)
+                        .financeSolidGlassSection(cornerRadius: 14)
                     }
                     .buttonStyle(PremiumButtonStyle())
                     
@@ -208,16 +192,7 @@ struct WelcomeView: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 56)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14)
-                                .fill(Color.white.opacity(0.06))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                                )
-                        )
-                        .shadow(color: Color.black.opacity(0.35), radius: 18, x: 0, y: 10)
-                        .shadow(color: Color.white.opacity(0.06), radius: 4, x: 0, y: -1)
+                        .financeSolidGlassSection(cornerRadius: 14)
                     }
                     .buttonStyle(PremiumButtonStyle())
                     
@@ -236,14 +211,7 @@ struct WelcomeView: View {
                             .frame(maxWidth: .infinity)
                             .frame(height: 48)
                             .contentShape(Rectangle())
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color.white.opacity(0.04))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                                    )
-                            )
+                            .financeSolidGlassSection(cornerRadius: 12)
                         }
                         .buttonStyle(PremiumButtonStyle())
                     }

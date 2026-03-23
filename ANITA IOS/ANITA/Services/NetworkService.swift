@@ -387,6 +387,20 @@ class NetworkService: ObservableObject {
         }
     }
     
+    /// After bank link: permanently delete all manual `anita_data` transactions for this user (bank feed only).
+    func deleteManualTransactionsOnBankLink(userId: String) async throws {
+        let url = URL(string: "\(baseURL)/api/v1/transactions/delete-manual-on-bank-link")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        struct Body: Encodable { let userId: String }
+        request.httpBody = try JSONEncoder().encode(Body(userId: userId))
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw NetworkError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+    }
+    
     /// Re-sync bank transactions from Stripe into the backend DB; then use getBankTransactions to read.
     func refreshBankTransactions(userId: String) async throws {
         let urlString = "\(baseURL)/api/v1/bank-transactions/refresh?userId=\(userId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? userId)"

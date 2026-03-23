@@ -74,10 +74,7 @@ struct SignUpView: View {
                                 .foregroundColor(.white.opacity(0.9))
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 10)
-                                .background {
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .fill(Color(white: 0.15).opacity(0.3))
-                                }
+                                .financeSolidGlassTile(cornerRadius: 10)
                             }
                             
                             Spacer()
@@ -105,10 +102,7 @@ struct SignUpView: View {
                                 .foregroundColor(.white.opacity(0.9))
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 10)
-                                .background {
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .fill(Color(white: 0.15).opacity(0.3))
-                                }
+                                .financeSolidGlassTile(cornerRadius: 10)
                             }
                             
                             Spacer()
@@ -180,8 +174,15 @@ struct SignUpView: View {
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
-                        .background(Color.red.opacity(0.15))
-                        .cornerRadius(10)
+                        .financeSolidGlassSection(cornerRadius: 10)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(Color.red.opacity(0.14))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(Color.red.opacity(0.45), lineWidth: 1)
+                        )
                         .padding(.horizontal, 24)
                         .padding(.top, 20)
                     }
@@ -335,14 +336,7 @@ struct SignUpView: View {
                 .padding(.vertical, 16)
                 .background(Color(white: 0.1).opacity(0.3))
             }
-            .background {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(white: 0.1).opacity(0.2))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
-                    )
-            }
+            .financeSolidGlassTile(cornerRadius: 12)
             .padding(.horizontal, 24)
             .padding(.bottom, 24)
             
@@ -375,8 +369,7 @@ struct SignUpView: View {
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .frame(height: 50)
-                .background(Color(white: 0.2).opacity(0.4))
-                .cornerRadius(12)
+                .financeSolidGlassSection(cornerRadius: 12)
             }
             .disabled(viewModel.isLoading || email.isEmpty || password.isEmpty || confirmPassword.isEmpty)
             .opacity((viewModel.isLoading || email.isEmpty || password.isEmpty || confirmPassword.isEmpty) ? 0.5 : 1.0)
@@ -420,8 +413,7 @@ struct SignUpView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 50)
-                .background(Color(white: 0.15).opacity(0.3))
-                .cornerRadius(12)
+                .financeSolidGlassTile(cornerRadius: 12)
             }
             .disabled(viewModel.isLoading)
             .opacity(viewModel.isLoading ? 0.5 : 1.0)
@@ -443,6 +435,8 @@ struct SignUpView: View {
                 }
             )
             .frame(height: 50)
+            .financeSolidGlassTile(cornerRadius: 12)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .disabled(viewModel.isLoading)
             .opacity(viewModel.isLoading ? 0.5 : 1.0)
             .padding(.horizontal, 24)
@@ -494,15 +488,7 @@ struct SignUpView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 16)
-                    .background(Color(white: 0.1).opacity(0.3))
-                }
-                .background {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(white: 0.1).opacity(0.2))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
-                        )
+                    .financeSolidGlassTile(cornerRadius: 12)
                 }
                 .padding(.horizontal, 24)
             }
@@ -532,8 +518,7 @@ struct SignUpView: View {
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .frame(height: 50)
-                .background(Color(white: 0.2).opacity(0.4))
-                .cornerRadius(12)
+                .financeSolidGlassSection(cornerRadius: 12)
             }
             .disabled(viewModel.isLoading)
             .opacity(viewModel.isLoading ? 0.5 : 1.0)
@@ -567,12 +552,9 @@ struct StepIndicatorItem: View {
         VStack(spacing: 10) {
             ZStack {
                 Circle()
-                    .fill(
-                        isActive || isCompleted ?
-                        Color.white.opacity(0.25) :
-                        Color.white.opacity(0.12)
-                    )
+                    .fill(Color.clear)
                     .frame(width: 36, height: 36)
+                    .financeSolidGlassCircle()
                 
                 if isCompleted {
                     Image(systemName: "checkmark")
@@ -607,7 +589,7 @@ struct AppleSignInButton: UIViewRepresentable {
     
     func makeUIView(context: Context) -> UIButton {
         let button = UIButton(type: .system)
-        button.backgroundColor = UIColor(white: 0.15, alpha: 0.3)
+        button.backgroundColor = .clear
         button.layer.cornerRadius = 12
         button.clipsToBounds = true
         

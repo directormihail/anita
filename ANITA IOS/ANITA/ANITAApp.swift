@@ -52,10 +52,11 @@ struct ANITAApp: App {
         tabBarAppearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterialDark)
         tabBarAppearance.shadowColor = UIColor.clear
         
-        // Selected item
-        tabBarAppearance.stackedLayoutAppearance.selected.iconColor = UIColor(red: 0.4, green: 0.49, blue: 0.92, alpha: 1.0)
+        // Selected item — darker blue from Upgrade / plans CTA gradient
+        let tabSelectedBlue = UIColor(red: 0.20, green: 0.47, blue: 1.0, alpha: 1.0)
+        tabBarAppearance.stackedLayoutAppearance.selected.iconColor = tabSelectedBlue
         tabBarAppearance.stackedLayoutAppearance.selected.titleTextAttributes = [
-            .foregroundColor: UIColor(red: 0.4, green: 0.49, blue: 0.92, alpha: 1.0)
+            .foregroundColor: tabSelectedBlue
         ]
         
         // Normal item

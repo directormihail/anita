@@ -182,6 +182,7 @@ struct FinanceView: View {
     @StateObject private var viewModel = FinanceViewModel()
     @StateObject private var categoryViewModel = CategoryAnalyticsViewModel()
     @StateObject private var subscriptionManager = SubscriptionManager.shared
+    @ObservedObject private var userManager = UserManager.shared
     @ObservedObject private var xpStore = XPStore.shared
     @State private var languageRefreshTrigger = UUID()
     @State private var showUpgradeSheet = false
@@ -377,14 +378,7 @@ struct FinanceView: View {
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(.white.opacity(0.6))
                     .frame(width: 40, height: 40)
-                    .background {
-                        Circle()
-                            .fill(Color(white: 0.14).opacity(0.7))
-                            .overlay {
-                                Circle()
-                                    .stroke(Color(white: 0.25).opacity(0.5), lineWidth: 0.5)
-                            }
-                    }
+                    .financeSolidGlassCircle()
             }
             
             Spacer()
@@ -422,14 +416,7 @@ struct FinanceView: View {
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(.white.opacity(0.6))
                     .frame(width: 40, height: 40)
-                    .background {
-                        Circle()
-                            .fill(Color(white: 0.14).opacity(0.7))
-                            .overlay {
-                                Circle()
-                                    .stroke(Color(white: 0.25).opacity(0.5), lineWidth: 0.5)
-                            }
-                    }
+                    .financeSolidGlassCircle()
             }
             .disabled({
                 let calendar = Calendar.current
@@ -460,7 +447,7 @@ struct FinanceView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(label)
                 .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .foregroundColor(.white.opacity(0.45))
+                .foregroundColor(.white.opacity(0.60))
                 .tracking(0.8)
             Text(value)
                 .font(.system(size: 20, weight: .bold, design: .rounded))
@@ -473,13 +460,10 @@ struct FinanceView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white.opacity(0.035))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
-                )
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(white: 0.16))
         )
+        .shadow(color: Color.black.opacity(0.42), radius: 14, x: 0, y: 8)
     }
     
     @ViewBuilder
@@ -495,16 +479,17 @@ struct FinanceView: View {
         let displayScore = Int(animatedHealthScore)
         let progressPercentage = animatedProgress / 100.0
         
-        let scoreColor: Color
-        if healthScore.score >= 70 {
-            scoreColor = .green
-        } else if healthScore.score >= 40 {
-            scoreColor = .orange
-        } else {
-            scoreColor = .red
-        }
+        let scoreColor: Color = {
+            if healthScore.score >= 70 {
+                return .green
+            } else if healthScore.score >= 40 {
+                return .orange
+            } else {
+                return .red
+            }
+        }()
         
-        return VStack(spacing: 0) {
+        VStack(spacing: 0) {
             // Health Score Section
             VStack(spacing: 12) {
                 if !isStillLoading {
@@ -672,22 +657,7 @@ struct FinanceView: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 20)
         .padding(.vertical, 28)
-        .liquidGlass(cornerRadius: 24)
-        .overlay(
-            RoundedRectangle(cornerRadius: 24)
-                .stroke(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.1),
-                            Color.white.opacity(0.03),
-                            Color.white.opacity(0.06)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 0.5
-                )
-        )
+        .financeSolidGlassSection(cornerRadius: 24)
         .padding(.horizontal, 20)
         // Attach lifecycle to the whole card so SwiftUI sees a single concrete View type.
         .onAppear {
@@ -719,7 +689,7 @@ struct FinanceView: View {
             loadingArcPhase = false
         }
     }
-    
+
     private var trendsAndComparisonsView: some View {
         VStack(alignment: .leading, spacing: 14) {
             Button(action: {
@@ -733,31 +703,9 @@ struct FinanceView: View {
                 HStack(spacing: 16) {
                     ZStack {
                         Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color(white: 0.2).opacity(0.3),
-                                        Color(white: 0.15).opacity(0.2)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .fill(Color.clear)
                             .frame(width: 44, height: 44)
-                            .overlay {
-                                Circle()
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [
-                                                Color(white: 0.28).opacity(0.6),
-                                                Color(white: 0.22).opacity(0.5)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 1
-                                    )
-                            }
+                            .financeSolidGlassCircle()
                         
                         Image(systemName: "chart.line.uptrend.xyaxis")
                             .font(.system(size: 18, weight: .semibold))
@@ -787,7 +735,7 @@ struct FinanceView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 18)
-                .liquidGlass(cornerRadius: 20)
+                .financeSolidGlassSection(cornerRadius: 20)
                 .padding(.horizontal, 20)
             }
             
@@ -801,34 +749,7 @@ struct FinanceView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 36)
-                        .background(
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            Color(white: 0.15).opacity(0.95),
-                                            Color(white: 0.12).opacity(0.9)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 20)
-                                        .stroke(
-                                            LinearGradient(
-                                                colors: [
-                                                    Color(white: 0.24).opacity(0.5),
-                                                    Color(white: 0.15).opacity(0.5)
-                                                ],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            ),
-                                            lineWidth: 1
-                                        )
-                                }
-                                .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: 6)
-                        )
+                        .financeSolidGlassSection(cornerRadius: 20)
                         .padding(.horizontal, 20)
                         .padding(.top, 8)
                         .transition(.opacity)
@@ -845,7 +766,7 @@ struct FinanceView: View {
                                 )
                                 .padding(.horizontal, 20)
                                 .padding(.vertical, 20)
-                                .liquidGlass(cornerRadius: 20)
+                                .financeSolidGlassSection(cornerRadius: 20)
                                 .padding(.horizontal, 20)
                             }
                         }
@@ -880,31 +801,9 @@ struct FinanceView: View {
                     ZStack {
                         // Premium glass circle background with gradient
                         Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color(white: 0.2).opacity(0.3),
-                                        Color(white: 0.15).opacity(0.2)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .fill(Color.clear)
                             .frame(width: 44, height: 44)
-                            .overlay {
-                                Circle()
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [
-                                                Color(white: 0.28).opacity(0.6),
-                                                Color(white: 0.22).opacity(0.5)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 1
-                                    )
-                            }
+                            .financeSolidGlassCircle()
                         
                         Image(systemName: "chart.pie.fill")
                             .font(.system(size: 18, weight: .semibold))
@@ -934,7 +833,7 @@ struct FinanceView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 18)
-                .liquidGlass(cornerRadius: 20)
+                .financeSolidGlassSection(cornerRadius: 20)
                 .padding(.horizontal, 20)
             }
             .buttonStyle(PremiumSettingsButtonStyle())
@@ -1078,34 +977,7 @@ struct FinanceView: View {
                         .padding(.vertical, 36)
                     }
                 }
-                .background(
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color(white: 0.15).opacity(0.95),
-                                    Color(white: 0.12).opacity(0.9)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 20)
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [
-                                            Color(white: 0.24).opacity(0.5),
-                                            Color(white: 0.15).opacity(0.5)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 1
-                                )
-                        }
-                        .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: 6)
-                )
+                .financeSolidGlassSection(cornerRadius: 20)
                 .padding(.horizontal, 20)
                 .transition(.opacity)
             }
@@ -1124,31 +996,9 @@ struct FinanceView: View {
                     ZStack {
                         // Premium glass circle background with gradient
                         Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color(white: 0.2).opacity(0.3),
-                                        Color(white: 0.15).opacity(0.2)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .fill(Color.clear)
                             .frame(width: 44, height: 44)
-                            .overlay {
-                                Circle()
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [
-                                                Color(white: 0.28).opacity(0.6),
-                                                Color(white: 0.22).opacity(0.5)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 1
-                                    )
-                            }
+                            .financeSolidGlassCircle()
                         
                         Image(systemName: "arrow.down.right")
                             .font(.system(size: 18, weight: .semibold))
@@ -1178,7 +1028,7 @@ struct FinanceView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 18)
-                .liquidGlass(cornerRadius: 20)
+                .financeSolidGlassSection(cornerRadius: 20)
                 .padding(.horizontal, 20)
             }
             .buttonStyle(PremiumSettingsButtonStyle())
@@ -1248,7 +1098,7 @@ struct FinanceView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 36)
-                    .liquidGlass(cornerRadius: 18)
+                    .financeSolidGlassSection(cornerRadius: 18)
                     .padding(.horizontal, 20)
                     .transition(.opacity)
                 } else {
@@ -1289,31 +1139,9 @@ struct FinanceView: View {
                                     // Limit icon with premium glass effect (matching GoalRow)
                                     ZStack {
                                         Circle()
-                                            .fill(
-                                                LinearGradient(
-                                                    colors: [
-                                                        Color(white: 0.2).opacity(0.3),
-                                                        Color(white: 0.15).opacity(0.2)
-                                                    ],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
+                                            .fill(Color.clear)
                                             .frame(width: 48, height: 48)
-                                            .overlay {
-                                                Circle()
-                                                    .stroke(
-                                                        LinearGradient(
-                                                            colors: [
-                                                                Color(white: 0.28).opacity(0.6),
-                                                                Color(white: 0.22).opacity(0.5)
-                                                            ],
-                                                            startPoint: .topLeading,
-                                                            endPoint: .bottomTrailing
-                                                        ),
-                                                        lineWidth: 1
-                                                    )
-                                            }
+                                            .financeSolidGlassCircle()
                                         
                                         Image(systemName: "plus")
                                             .font(.system(size: 19, weight: .semibold))
@@ -1385,7 +1213,7 @@ struct FinanceView: View {
                     }
                     .frame(height: calculatedHeight)
                     .clipped()
-                    .liquidGlass(cornerRadius: 18)
+                    .financeSolidGlassSection(cornerRadius: 18)
                     .padding(.horizontal, 20)
                     .transition(.opacity)
                 }
@@ -1405,31 +1233,9 @@ struct FinanceView: View {
                     ZStack {
                         // Premium glass circle background with gradient
                         Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color(white: 0.2).opacity(0.3),
-                                        Color(white: 0.15).opacity(0.2)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .fill(Color.clear)
                             .frame(width: 44, height: 44)
-                            .overlay {
-                                Circle()
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [
-                                                Color(white: 0.28).opacity(0.6),
-                                                Color(white: 0.22).opacity(0.5)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 1
-                                    )
-                            }
+                            .financeSolidGlassCircle()
                         
                         Image(systemName: "target")
                             .font(.system(size: 18, weight: .semibold))
@@ -1459,7 +1265,7 @@ struct FinanceView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 18)
-                .liquidGlass(cornerRadius: 20)
+                .financeSolidGlassSection(cornerRadius: 20)
                 .padding(.horizontal, 20)
             }
             .buttonStyle(PremiumSettingsButtonStyle())
@@ -1488,7 +1294,7 @@ struct FinanceView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 18)
-                    .liquidGlass(cornerRadius: 20)
+                    .financeSolidGlassSection(cornerRadius: 20)
                     .padding(.horizontal, 20)
                     .transition(.opacity)
                 }
@@ -1553,7 +1359,7 @@ struct FinanceView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 36)
-                    .liquidGlass(cornerRadius: 18)
+                    .financeSolidGlassSection(cornerRadius: 18)
                     .padding(.horizontal, 20)
                     .transition(.opacity)
                 } else {
@@ -1594,31 +1400,9 @@ struct FinanceView: View {
                                     // Target icon with premium glass effect (matching TargetRow)
                                     ZStack {
                                         Circle()
-                                            .fill(
-                                                LinearGradient(
-                                                    colors: [
-                                                        Color(white: 0.2).opacity(0.3),
-                                                        Color(white: 0.15).opacity(0.2)
-                                                    ],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
+                                            .fill(Color.clear)
                                             .frame(width: 48, height: 48)
-                                            .overlay {
-                                                Circle()
-                                                    .stroke(
-                                                        LinearGradient(
-                                                            colors: [
-                                                                Color(white: 0.28).opacity(0.6),
-                                                                Color(white: 0.22).opacity(0.5)
-                                                            ],
-                                                            startPoint: .topLeading,
-                                                            endPoint: .bottomTrailing
-                                                        ),
-                                                        lineWidth: 1
-                                                    )
-                                            }
+                                            .financeSolidGlassCircle()
                                         
                                         Image(systemName: "plus")
                                             .font(.system(size: 19, weight: .semibold))
@@ -1691,7 +1475,7 @@ struct FinanceView: View {
                     }
                     .frame(height: calculatedHeight)
                     .clipped()
-                    .liquidGlass(cornerRadius: 18)
+                    .financeSolidGlassSection(cornerRadius: 18)
                     .padding(.horizontal, 20)
                     .transition(.opacity)
                 }
@@ -1712,31 +1496,9 @@ struct FinanceView: View {
                     ZStack {
                         // Premium glass circle background with gradient
                         Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color(white: 0.2).opacity(0.3),
-                                        Color(white: 0.15).opacity(0.2)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .fill(Color.clear)
                             .frame(width: 44, height: 44)
-                            .overlay {
-                                Circle()
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [
-                                                Color(white: 0.28).opacity(0.6),
-                                                Color(white: 0.22).opacity(0.5)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 1
-                                    )
-                            }
+                            .financeSolidGlassCircle()
                         
                         Image(systemName: "wallet.pass.fill")
                             .font(.system(size: 18, weight: .semibold))
@@ -1766,7 +1528,7 @@ struct FinanceView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 18)
-                .liquidGlass(cornerRadius: 20)
+                .financeSolidGlassSection(cornerRadius: 20)
                 .padding(.horizontal, 20)
             }
             .buttonStyle(PremiumSettingsButtonStyle())
@@ -1794,7 +1556,7 @@ struct FinanceView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 18)
-                    .liquidGlass(cornerRadius: 20)
+                    .financeSolidGlassSection(cornerRadius: 20)
                     .padding(.horizontal, 20)
                     .transition(.opacity)
                 }
@@ -1860,7 +1622,7 @@ struct FinanceView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 36)
-                    .liquidGlass(cornerRadius: 18)
+                    .financeSolidGlassSection(cornerRadius: 18)
                     .padding(.horizontal, 20)
                     .transition(.opacity)
                 } else {
@@ -1901,31 +1663,9 @@ struct FinanceView: View {
                                     // Asset icon with premium glass effect (matching AssetRow)
                                     ZStack {
                                         Circle()
-                                            .fill(
-                                                LinearGradient(
-                                                    colors: [
-                                                        Color(white: 0.2).opacity(0.3),
-                                                        Color(white: 0.15).opacity(0.2)
-                                                    ],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
+                                            .fill(Color.clear)
                                             .frame(width: 48, height: 48)
-                                            .overlay {
-                                                Circle()
-                                                    .stroke(
-                                                        LinearGradient(
-                                                            colors: [
-                                                                Color(white: 0.28).opacity(0.6),
-                                                                Color(white: 0.22).opacity(0.5)
-                                                            ],
-                                                            startPoint: .topLeading,
-                                                            endPoint: .bottomTrailing
-                                                        ),
-                                                        lineWidth: 1
-                                                    )
-                                            }
+                                            .financeSolidGlassCircle()
                                         
                                         Image(systemName: "plus")
                                             .font(.system(size: 19, weight: .semibold))
@@ -1997,7 +1737,7 @@ struct FinanceView: View {
                     }
                     .frame(height: calculatedHeight)
                     .clipped()
-                    .liquidGlass(cornerRadius: 18)
+                    .financeSolidGlassSection(cornerRadius: 18)
                     .padding(.horizontal, 20)
                     .transition(.opacity)
                 }
@@ -2026,31 +1766,9 @@ struct FinanceView: View {
                     ZStack {
                         // Premium glass circle background with gradient
                         Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color(white: 0.2).opacity(0.3),
-                                        Color(white: 0.15).opacity(0.2)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .fill(Color.clear)
                             .frame(width: 44, height: 44)
-                            .overlay {
-                                Circle()
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [
-                                                Color(white: 0.28).opacity(0.6),
-                                                Color(white: 0.22).opacity(0.5)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 1
-                                    )
-                            }
+                            .financeSolidGlassCircle()
                         
                         Image(systemName: "list.bullet.rectangle.fill")
                             .font(.system(size: 18, weight: .semibold))
@@ -2080,7 +1798,7 @@ struct FinanceView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 18)
-                .liquidGlass(cornerRadius: 20)
+                .financeSolidGlassSection(cornerRadius: 20)
                 .padding(.horizontal, 20)
             }
             .buttonStyle(PremiumSettingsButtonStyle())
@@ -2093,7 +1811,7 @@ struct FinanceView: View {
                         .padding()
                         .frame(height: 200)
                         .frame(maxWidth: .infinity)
-                        .liquidGlass(cornerRadius: 18)
+                        .financeSolidGlassSection(cornerRadius: 18)
                         .padding(.horizontal, 20)
                         .transition(.opacity)
                 } else if viewModel.transactionsForSelectedMonth.isEmpty {
@@ -2115,56 +1833,63 @@ struct FinanceView: View {
                             .font(.system(size: 15, weight: .medium, design: .rounded))
                             .foregroundColor(.white.opacity(0.5))
                         
-                        Text(AppL10n.t("finance.add_first_transaction"))
+                        Text(
+                            userManager.blocksManualTransactions
+                                ? AppL10n.t("finance.transactions_from_bank_only")
+                                : AppL10n.t("finance.add_first_transaction")
+                        )
                             .font(.system(size: 13, weight: .regular, design: .rounded))
                             .foregroundColor(.white.opacity(0.4))
                             .multilineTextAlignment(.center)
                         
-                        Button(action: {
-                            let impact = UIImpactFeedbackGenerator(style: .light)
-                            impact.impactOccurred()
-                            showAddTransactionSheet = true
-                        }) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "plus.circle.fill")
-                                    .font(.system(size: 16, weight: .semibold))
-                                Text(AppL10n.t("finance.add_transaction"))
-                                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 12)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [
-                                                Color(red: 0.4, green: 0.49, blue: 0.92),
-                                                Color(red: 0.5, green: 0.55, blue: 0.95)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
+                        if !userManager.blocksManualTransactions {
+                            Button(action: {
+                                let impact = UIImpactFeedbackGenerator(style: .light)
+                                impact.impactOccurred()
+                                showAddTransactionSheet = true
+                            }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "plus.circle.fill")
+                                        .font(.system(size: 16, weight: .semibold))
+                                    Text(AppL10n.t("finance.add_transaction"))
+                                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                }
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color(red: 0.4, green: 0.49, blue: 0.92),
+                                                    Color(red: 0.5, green: 0.55, blue: 0.95)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
                                         )
-                                    )
-                            )
+                                )
+                            }
+                            .padding(.top, 8)
                         }
-                        .padding(.top, 8)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 36)
-                    .liquidGlass(cornerRadius: 18)
+                    .financeSolidGlassSection(cornerRadius: 18)
                     .padding(.horizontal, 20)
                     .transition(.opacity)
                 } else {
                     // Only show transactions and transfers for the selected month
                     let allTransactions = viewModel.transactionsForSelectedMonth
+                    let includeAddTransactionRow = !userManager.blocksManualTransactions
                     
                     // Row height: ~85px (28px vertical padding + ~57px content height)
                     let rowHeight: CGFloat = 85
                     let dividerHeight: CGFloat = 1
                     let maxVisibleRows: CGFloat = 3.5
-                    // Include "Add Transaction" button as first row
-                    let totalItemCount = 1 + allTransactions.count
+                    // Optional "Add Transaction" row when manual entry is allowed
+                    let totalItemCount = (includeAddTransactionRow ? 1 : 0) + allTransactions.count
                     let itemCount = CGFloat(totalItemCount)
                     let heightForThreePointFiveRows = 3 * rowHeight + 0.5 * rowHeight + 2 * dividerHeight
                     let calculatedHeight: CGFloat = {
@@ -2182,29 +1907,31 @@ struct FinanceView: View {
                     
                     ScrollView {
                         VStack(spacing: 0) {
-                            // Add Transaction button as first item (inline with transactions)
-                            AddTransactionRow(action: {
-                                let impact = UIImpactFeedbackGenerator(style: .light)
-                                impact.impactOccurred()
-                                showAddTransactionSheet = true
-                            })
-                            .opacity(isTransactionsExpanded ? 1 : 0)
-                            .animation(
-                                .spring(response: 0.4, dampingFraction: 0.8)
-                                    .delay(0.01),
-                                value: isTransactionsExpanded
-                            )
-                            
-                            // Divider after Add Transaction button
-                            if !allTransactions.isEmpty {
-                                PremiumDivider()
-                                    .padding(.leading, 82)
-                                    .opacity(isTransactionsExpanded ? 1 : 0)
-                                    .animation(
-                                        .spring(response: 0.4, dampingFraction: 0.8)
-                                            .delay(0.02),
-                                        value: isTransactionsExpanded
-                                    )
+                            if includeAddTransactionRow {
+                                // Add Transaction button as first item (inline with transactions)
+                                AddTransactionRow(action: {
+                                    let impact = UIImpactFeedbackGenerator(style: .light)
+                                    impact.impactOccurred()
+                                    showAddTransactionSheet = true
+                                })
+                                .opacity(isTransactionsExpanded ? 1 : 0)
+                                .animation(
+                                    .spring(response: 0.4, dampingFraction: 0.8)
+                                        .delay(0.01),
+                                    value: isTransactionsExpanded
+                                )
+                                
+                                // Divider after Add Transaction button
+                                if !allTransactions.isEmpty {
+                                    PremiumDivider()
+                                        .padding(.leading, 82)
+                                        .opacity(isTransactionsExpanded ? 1 : 0)
+                                        .animation(
+                                            .spring(response: 0.4, dampingFraction: 0.8)
+                                                .delay(0.02),
+                                            value: isTransactionsExpanded
+                                        )
+                                }
                             }
                             
                             // Transaction list - selected month only
@@ -2213,7 +1940,7 @@ struct FinanceView: View {
                                     .opacity(isTransactionsExpanded ? 1 : 0)
                                     .animation(
                                         .spring(response: 0.4, dampingFraction: 0.8)
-                                            .delay(Double(index + 1) * 0.025),
+                                            .delay(Double(index + (includeAddTransactionRow ? 1 : 0)) * 0.025),
                                         value: isTransactionsExpanded
                                     )
                                 
@@ -2223,7 +1950,7 @@ struct FinanceView: View {
                                         .opacity(isTransactionsExpanded ? 1 : 0)
                                         .animation(
                                             .spring(response: 0.4, dampingFraction: 0.8)
-                                                .delay(Double(index + 1) * 0.025 + 0.01),
+                                                .delay(Double(index + (includeAddTransactionRow ? 1 : 0)) * 0.025 + 0.01),
                                             value: isTransactionsExpanded
                                         )
                                 }
@@ -2232,7 +1959,7 @@ struct FinanceView: View {
                     }
                     .frame(height: calculatedHeight)
                     .clipped()
-                    .liquidGlass(cornerRadius: 18)
+                    .financeSolidGlassSection(cornerRadius: 18)
                     .padding(.horizontal, 20)
                     .transition(.opacity)
                 }
@@ -2266,11 +1993,14 @@ struct FinanceView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(12)
-                .background(Color.red.opacity(0.2))
-                .cornerRadius(8)
+                .financeSolidGlassSection(cornerRadius: 12)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.red.opacity(0.5), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.red.opacity(0.14))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.red.opacity(0.55), lineWidth: 1)
                 )
                 .padding(.horizontal, 20)
                 .padding(.bottom, 8)
@@ -2383,7 +2113,12 @@ struct FinanceView: View {
             viewModel.loadData()
             // Refresh shared XP store so Level card is up to date (single source of truth)
             Task { await XPStore.shared.refresh() }
+            Task { await subscriptionManager.refresh() }
             // Health score will update automatically when isLoading changes to false
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .anitaBankSyncCompleted)) { _ in
+            viewModel.refresh()
+            viewModel.invalidateAndReloadHistoricalData()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LanguageChanged"))) { _ in
             languageRefreshTrigger = UUID()
@@ -2482,31 +2217,9 @@ struct TransactionRow: View {
             // Category icon with premium glass effect
             ZStack {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(white: 0.2).opacity(0.3),
-                                Color(white: 0.15).opacity(0.2)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(Color.clear)
                     .frame(width: 48, height: 48)
-                    .overlay {
-                        Circle()
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        Color(white: 0.28).opacity(0.6),
-                                        Color(white: 0.22).opacity(0.5)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
-                    }
+                    .financeSolidGlassCircle()
                 
                 Image(systemName: categoryIcon(transaction.category))
                     .font(.system(size: 19, weight: .semibold))
@@ -2566,31 +2279,9 @@ struct TransactionRow: View {
                 }) {
                     ZStack {
                         Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color(white: 0.2).opacity(0.3),
-                                        Color(white: 0.15).opacity(0.2)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .fill(Color.clear)
                             .frame(width: 36, height: 36)
-                            .overlay {
-                                Circle()
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [
-                                                Color(white: 0.28).opacity(0.6),
-                                                Color(white: 0.22).opacity(0.5)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 1
-                                    )
-                            }
+                            .financeSolidGlassCircle()
                         
                         Image(systemName: "pencil")
                             .font(.system(size: 14, weight: .semibold))
@@ -2703,31 +2394,9 @@ struct AddTransactionRow: View {
                 // Plus icon with premium glass effect (matching TransactionRow exactly)
                 ZStack {
                     Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color(white: 0.2).opacity(0.3),
-                                    Color(white: 0.15).opacity(0.2)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .fill(Color.clear)
                         .frame(width: 48, height: 48)
-                        .overlay {
-                            Circle()
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [
-                                            Color(white: 0.28).opacity(0.6),
-                                            Color(white: 0.22).opacity(0.5)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 1
-                                )
-                        }
+                        .financeSolidGlassCircle()
                     
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 19, weight: .semibold))
@@ -2784,31 +2453,9 @@ struct TargetRow: View {
             // Status icon - checkmark for completed, or arrow for incomplete
             ZStack {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(white: 0.2).opacity(0.3),
-                                Color(white: 0.15).opacity(0.2)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(Color.clear)
                     .frame(width: 48, height: 48)
-                    .overlay {
-                        Circle()
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        Color(white: 0.28).opacity(0.6),
-                                        Color(white: 0.22).opacity(0.5)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
-                    }
+                    .financeSolidGlassCircle()
                 
                 if isCompleted {
                     Image(systemName: "checkmark")
@@ -2916,31 +2563,9 @@ struct TargetRow: View {
             }) {
                 ZStack {
                     Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color(white: 0.2).opacity(0.3),
-                                    Color(white: 0.15).opacity(0.2)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .fill(Color.clear)
                         .frame(width: 40, height: 40)
-                        .overlay {
-                            Circle()
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [
-                                            Color(white: 0.28).opacity(0.6),
-                                            Color(white: 0.22).opacity(0.5)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 1
-                                )
-                        }
+                        .financeSolidGlassCircle()
                     
                     Image(systemName: "pencil")
                         .font(.system(size: 16, weight: .semibold))
@@ -3620,31 +3245,9 @@ struct EditGoalSheet: View {
                                 HStack(spacing: 16) {
                                     ZStack {
                                         Circle()
-                                            .fill(
-                                                LinearGradient(
-                                                    colors: [
-                                                        Color(white: 0.2).opacity(0.3),
-                                                        Color(white: 0.15).opacity(0.2)
-                                                    ],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
+                                            .fill(Color.clear)
                                             .frame(width: 48, height: 48)
-                                            .overlay {
-                                                Circle()
-                                                    .stroke(
-                                                        LinearGradient(
-                                                            colors: [
-                                                                Color(white: 0.28).opacity(0.6),
-                                                                Color(white: 0.22).opacity(0.5)
-                                                            ],
-                                                            startPoint: .topLeading,
-                                                            endPoint: .bottomTrailing
-                                                        ),
-                                                        lineWidth: 1
-                                                    )
-                                            }
+                                            .financeSolidGlassCircle()
                                         
                                         Image(systemName: "plus")
                                             .font(.system(size: 19, weight: .semibold))
@@ -3676,7 +3279,7 @@ struct EditGoalSheet: View {
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(PremiumSettingsButtonStyle())
-                            .liquidGlass(cornerRadius: 18)
+                            .financeSolidGlassSection(cornerRadius: 18)
                             .padding(.horizontal, 20)
                             
                             // Take Money Button
@@ -3688,31 +3291,9 @@ struct EditGoalSheet: View {
                                 HStack(spacing: 16) {
                                     ZStack {
                                         Circle()
-                                            .fill(
-                                                LinearGradient(
-                                                    colors: [
-                                                        Color(white: 0.2).opacity(0.3),
-                                                        Color(white: 0.15).opacity(0.2)
-                                                    ],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
+                                            .fill(Color.clear)
                                             .frame(width: 48, height: 48)
-                                            .overlay {
-                                                Circle()
-                                                    .stroke(
-                                                        LinearGradient(
-                                                            colors: [
-                                                                Color(white: 0.28).opacity(0.6),
-                                                                Color(white: 0.22).opacity(0.5)
-                                                            ],
-                                                            startPoint: .topLeading,
-                                                            endPoint: .bottomTrailing
-                                                        ),
-                                                        lineWidth: 1
-                                                    )
-                                            }
+                                            .financeSolidGlassCircle()
                                         
                                         Image(systemName: "minus")
                                             .font(.system(size: 19, weight: .semibold))
@@ -3744,7 +3325,7 @@ struct EditGoalSheet: View {
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(PremiumSettingsButtonStyle())
-                            .liquidGlass(cornerRadius: 18)
+                            .financeSolidGlassSection(cornerRadius: 18)
                             .padding(.horizontal, 20)
                         } else {
                             // Budget: Change Amount, Remove
@@ -3757,31 +3338,9 @@ struct EditGoalSheet: View {
                                 HStack(spacing: 16) {
                                     ZStack {
                                         Circle()
-                                            .fill(
-                                                LinearGradient(
-                                                    colors: [
-                                                        Color(white: 0.2).opacity(0.3),
-                                                        Color(white: 0.15).opacity(0.2)
-                                                    ],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
+                                            .fill(Color.clear)
                                             .frame(width: 48, height: 48)
-                                            .overlay {
-                                                Circle()
-                                                    .stroke(
-                                                        LinearGradient(
-                                                            colors: [
-                                                                Color(white: 0.28).opacity(0.6),
-                                                                Color(white: 0.22).opacity(0.5)
-                                                            ],
-                                                            startPoint: .topLeading,
-                                                            endPoint: .bottomTrailing
-                                                        ),
-                                                        lineWidth: 1
-                                                    )
-                                            }
+                                            .financeSolidGlassCircle()
                                         
                                         Image(systemName: "pencil")
                                             .font(.system(size: 19, weight: .semibold))
@@ -3813,7 +3372,7 @@ struct EditGoalSheet: View {
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(PremiumSettingsButtonStyle())
-                            .liquidGlass(cornerRadius: 18)
+                            .financeSolidGlassSection(cornerRadius: 18)
                             .padding(.horizontal, 20)
                         }
                         
@@ -3826,31 +3385,9 @@ struct EditGoalSheet: View {
                             HStack(spacing: 16) {
                                 ZStack {
                                     Circle()
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [
-                                                    Color(white: 0.2).opacity(0.3),
-                                                    Color(white: 0.15).opacity(0.2)
-                                                ],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
-                                        )
+                                        .fill(Color.clear)
                                         .frame(width: 48, height: 48)
-                                        .overlay {
-                                            Circle()
-                                                .stroke(
-                                                    LinearGradient(
-                                                        colors: [
-                                                            Color(white: 0.28).opacity(0.6),
-                                                            Color(white: 0.22).opacity(0.5)
-                                                        ],
-                                                        startPoint: .topLeading,
-                                                        endPoint: .bottomTrailing
-                                                    ),
-                                                    lineWidth: 1
-                                                )
-                                        }
+                                        .financeSolidGlassCircle()
                                     
                                     Image(systemName: "trash")
                                         .font(.system(size: 19, weight: .semibold))
@@ -3882,7 +3419,7 @@ struct EditGoalSheet: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(PremiumSettingsButtonStyle())
-                        .liquidGlass(cornerRadius: 18)
+                        .financeSolidGlassSection(cornerRadius: 18)
                         .padding(.horizontal, 20)
                     }
                     
@@ -3958,31 +3495,9 @@ struct EditAssetSheet: View {
                                 // Icon with premium glass circle
                                 ZStack {
                                     Circle()
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [
-                                                    Color(white: 0.2).opacity(0.3),
-                                                    Color(white: 0.15).opacity(0.2)
-                                                ],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
-                                        )
+                                        .fill(Color.clear)
                                         .frame(width: 48, height: 48)
-                                        .overlay {
-                                            Circle()
-                                                .stroke(
-                                                    LinearGradient(
-                                                        colors: [
-                                                            Color(white: 0.28).opacity(0.6),
-                                                            Color(white: 0.22).opacity(0.5)
-                                                        ],
-                                                        startPoint: .topLeading,
-                                                        endPoint: .bottomTrailing
-                                                    ),
-                                                    lineWidth: 1
-                                                )
-                                        }
+                                        .financeSolidGlassCircle()
                                     
                                     Image(systemName: "plus")
                                         .font(.system(size: 19, weight: .semibold))
@@ -4016,7 +3531,7 @@ struct EditAssetSheet: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(PremiumSettingsButtonStyle())
-                        .liquidGlass(cornerRadius: 18)
+                        .financeSolidGlassSection(cornerRadius: 18)
                         .padding(.horizontal, 20)
                         
                         // Take Button
@@ -4029,31 +3544,9 @@ struct EditAssetSheet: View {
                                 // Icon with premium glass circle
                                 ZStack {
                                     Circle()
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [
-                                                    Color(white: 0.2).opacity(0.3),
-                                                    Color(white: 0.15).opacity(0.2)
-                                                ],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
-                                        )
+                                        .fill(Color.clear)
                                         .frame(width: 48, height: 48)
-                                        .overlay {
-                                            Circle()
-                                                .stroke(
-                                                    LinearGradient(
-                                                        colors: [
-                                                            Color(white: 0.28).opacity(0.6),
-                                                            Color(white: 0.22).opacity(0.5)
-                                                        ],
-                                                        startPoint: .topLeading,
-                                                        endPoint: .bottomTrailing
-                                                    ),
-                                                    lineWidth: 1
-                                                )
-                                        }
+                                        .financeSolidGlassCircle()
                                     
                                     Image(systemName: "minus")
                                         .font(.system(size: 19, weight: .semibold))
@@ -4087,7 +3580,7 @@ struct EditAssetSheet: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(PremiumSettingsButtonStyle())
-                        .liquidGlass(cornerRadius: 18)
+                        .financeSolidGlassSection(cornerRadius: 18)
                         .padding(.horizontal, 20)
                         
                         // Remove Button
@@ -4100,31 +3593,9 @@ struct EditAssetSheet: View {
                                 // Icon with premium glass circle
                                 ZStack {
                                     Circle()
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [
-                                                    Color(white: 0.2).opacity(0.3),
-                                                    Color(white: 0.15).opacity(0.2)
-                                                ],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
-                                        )
+                                        .fill(Color.clear)
                                         .frame(width: 48, height: 48)
-                                        .overlay {
-                                            Circle()
-                                                .stroke(
-                                                    LinearGradient(
-                                                        colors: [
-                                                            Color(white: 0.28).opacity(0.6),
-                                                            Color(white: 0.22).opacity(0.5)
-                                                        ],
-                                                        startPoint: .topLeading,
-                                                        endPoint: .bottomTrailing
-                                                    ),
-                                                    lineWidth: 1
-                                                )
-                                        }
+                                        .financeSolidGlassCircle()
                                     
                                     Image(systemName: "trash")
                                         .font(.system(size: 19, weight: .semibold))
@@ -4158,7 +3629,7 @@ struct EditAssetSheet: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(PremiumSettingsButtonStyle())
-                        .liquidGlass(cornerRadius: 18)
+                        .financeSolidGlassSection(cornerRadius: 18)
                         .padding(.horizontal, 20)
                     }
                     
@@ -5551,31 +5022,9 @@ struct GoalRow: View {
             // Goal icon with premium glass effect
             ZStack {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(white: 0.2).opacity(0.3),
-                                Color(white: 0.15).opacity(0.2)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(Color.clear)
                     .frame(width: 48, height: 48)
-                    .overlay {
-                        Circle()
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        Color(white: 0.28).opacity(0.6),
-                                        Color(white: 0.22).opacity(0.5)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
-                    }
+                    .financeSolidGlassCircle()
                 
                 Image(systemName: "arrow.down.right")
                     .font(.system(size: 19, weight: .semibold))
@@ -5667,31 +5116,9 @@ struct GoalRow: View {
             }) {
                 ZStack {
                     Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color(white: 0.2).opacity(0.3),
-                                    Color(white: 0.15).opacity(0.2)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .fill(Color.clear)
                         .frame(width: 40, height: 40)
-                        .overlay {
-                            Circle()
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [
-                                            Color(white: 0.28).opacity(0.6),
-                                            Color(white: 0.22).opacity(0.5)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 1
-                                )
-                        }
+                        .financeSolidGlassCircle()
                     
                     Image(systemName: "pencil")
                         .font(.system(size: 16, weight: .semibold))
@@ -5750,31 +5177,9 @@ struct AssetRow: View {
             // Asset icon with premium glass effect
             ZStack {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(white: 0.2).opacity(0.3),
-                                Color(white: 0.15).opacity(0.2)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(Color.clear)
                     .frame(width: 48, height: 48)
-                    .overlay {
-                        Circle()
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        Color(white: 0.28).opacity(0.6),
-                                        Color(white: 0.22).opacity(0.5)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
-                    }
+                    .financeSolidGlassCircle()
                 
                 Image(systemName: assetTypeIcon(asset.type))
                     .font(.system(size: 19, weight: .semibold))
@@ -5841,31 +5246,9 @@ struct AssetRow: View {
                 }) {
                     ZStack {
                         Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color(white: 0.2).opacity(0.3),
-                                        Color(white: 0.15).opacity(0.2)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .fill(Color.clear)
                             .frame(width: 40, height: 40)
-                            .overlay {
-                                Circle()
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [
-                                                Color(white: 0.28).opacity(0.6),
-                                                Color(white: 0.22).opacity(0.5)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 1
-                                    )
-                            }
+                            .financeSolidGlassCircle()
                         
                         Image(systemName: "pencil")
                             .font(.system(size: 16, weight: .semibold))
@@ -6055,7 +5438,7 @@ struct XPLevelWidget: View {
         }
         .padding(.horizontal, innerHPadding)
         .padding(.vertical, innerVPadding)
-        .liquidGlass(cornerRadius: glassRadius)
+        .financeSolidGlassSection(cornerRadius: glassRadius)
         .padding(.horizontal, outerHPadding)
     }
 }
@@ -6142,54 +5525,38 @@ struct FinanceCategoryRow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(
-            ZStack {
-                // Base gradient background
+        .financeSolidGlassTile(cornerRadius: 28)
+        .overlay {
+            if isSelected {
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color(white: 0.15).opacity(0.9),
-                                Color(white: 0.12).opacity(0.8)
+                                category.color.opacity(0.22),
+                                category.color.opacity(0.12)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
-                    )
-                
-                // Category color overlay when selected
-                if isSelected {
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    category.color.opacity(0.2),
-                                    category.color.opacity(0.15)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                }
-                
-                // Border
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                isSelected ? category.color.opacity(0.5) : Color(white: 0.22).opacity(0.5),
-                                isSelected ? category.color.opacity(0.3) : Color(white: 0.15).opacity(0.5)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: isSelected ? 1.5 : 1
                     )
             }
-            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-            .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
-        )
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            isSelected ? category.color.opacity(0.55) : Color.white.opacity(0.14),
+                            isSelected ? category.color.opacity(0.28) : Color.white.opacity(0.06)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: isSelected ? 1.5 : 0.65
+                )
+        }
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .shadow(color: .black.opacity(0.22), radius: 8, x: 0, y: 4)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
         .contentShape(Rectangle())
     }
@@ -6238,10 +5605,7 @@ struct AddAssetSheet: View {
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 14)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(white: 0.12).opacity(0.7))
-                                )
+                                .financeSolidGlassTile(cornerRadius: 12)
                         }
                         .padding(.horizontal, 20)
                         
@@ -6280,10 +5644,7 @@ struct AddAssetSheet: View {
                                 }
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 14)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(white: 0.12).opacity(0.7))
-                                )
+                                .financeSolidGlassTile(cornerRadius: 12)
                             }
                         }
                         .padding(.horizontal, 20)
@@ -6302,10 +5663,7 @@ struct AddAssetSheet: View {
                                 .keyboardType(.decimalPad)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 14)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(white: 0.12).opacity(0.7))
-                                )
+                                .financeSolidGlassTile(cornerRadius: 12)
                         }
                         .padding(.horizontal, 20)
                         
@@ -6323,10 +5681,7 @@ struct AddAssetSheet: View {
                                 .lineLimit(3...6)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 14)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(white: 0.12).opacity(0.7))
-                                )
+                                .financeSolidGlassTile(cornerRadius: 12)
                         }
                         .padding(.horizontal, 20)
                         
@@ -6485,10 +5840,7 @@ struct AddSavingGoalSheet: View {
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 14)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(white: 0.12).opacity(0.7))
-                                )
+                                .financeSolidGlassTile(cornerRadius: 12)
                         }
                         .padding(.horizontal, 20)
                         
@@ -6506,10 +5858,7 @@ struct AddSavingGoalSheet: View {
                                 .keyboardType(.decimalPad)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 14)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(white: 0.12).opacity(0.7))
-                                )
+                                .financeSolidGlassTile(cornerRadius: 12)
                         }
                         .padding(.horizontal, 20)
                         
@@ -6527,10 +5876,7 @@ struct AddSavingGoalSheet: View {
                                 .keyboardType(.decimalPad)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 14)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(white: 0.12).opacity(0.7))
-                                )
+                                .financeSolidGlassTile(cornerRadius: 12)
                         }
                         .padding(.horizontal, 20)
                         
@@ -6548,10 +5894,7 @@ struct AddSavingGoalSheet: View {
                                 .lineLimit(3...6)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 14)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(white: 0.12).opacity(0.7))
-                                )
+                                .financeSolidGlassTile(cornerRadius: 12)
                         }
                         .padding(.horizontal, 20)
                         
@@ -6741,10 +6084,7 @@ struct AddSavingLimitSheet: View {
                                 }
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 14)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(white: 0.12).opacity(0.7))
-                                )
+                                .financeSolidGlassTile(cornerRadius: 12)
                             }
                         }
                         .padding(.horizontal, 20)
@@ -6763,10 +6103,7 @@ struct AddSavingLimitSheet: View {
                                 .keyboardType(.decimalPad)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 14)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(white: 0.12).opacity(0.7))
-                                )
+                                .financeSolidGlassTile(cornerRadius: 12)
                         }
                         .padding(.horizontal, 20)
                         
@@ -6784,10 +6121,7 @@ struct AddSavingLimitSheet: View {
                                 .lineLimit(3...6)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 14)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(white: 0.12).opacity(0.7))
-                                )
+                                .financeSolidGlassTile(cornerRadius: 12)
                         }
                         .padding(.horizontal, 20)
                         
@@ -6975,10 +6309,7 @@ struct AddSpendingLimitSheet: View {
                                 }
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 14)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(white: 0.12).opacity(0.7))
-                                )
+                                .financeSolidGlassTile(cornerRadius: 12)
                             }
                         }
                         .padding(.horizontal, 20)
@@ -6997,10 +6328,7 @@ struct AddSpendingLimitSheet: View {
                                 .keyboardType(.decimalPad)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 14)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(white: 0.12).opacity(0.7))
-                                )
+                                .financeSolidGlassTile(cornerRadius: 12)
                         }
                         .padding(.horizontal, 20)
                         
@@ -7018,10 +6346,7 @@ struct AddSpendingLimitSheet: View {
                                 .lineLimit(3...6)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 14)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(white: 0.12).opacity(0.7))
-                                )
+                                .financeSolidGlassTile(cornerRadius: 12)
                         }
                         .padding(.horizontal, 20)
                         
@@ -7253,7 +6578,7 @@ struct MonthPickerSheet: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(PremiumSettingsButtonStyle())
-                        .liquidGlass(cornerRadius: 12)
+                        .financeSolidGlassSection(cornerRadius: 12)
                         
                         Button(action: {
                             onConfirm()
@@ -7266,7 +6591,7 @@ struct MonthPickerSheet: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(PremiumSettingsButtonStyle())
-                        .liquidGlass(cornerRadius: 12)
+                        .financeSolidGlassSection(cornerRadius: 12)
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 40)
@@ -7312,6 +6637,7 @@ struct MonthPickerSheet: View {
 // Add Transaction Sheet
 struct AddTransactionSheet: View {
     @ObservedObject var viewModel: FinanceViewModel
+    @ObservedObject private var userManager = UserManager.shared
     @Environment(\.dismiss) var dismiss
     @State private var transactionType: String = "expense"
     @State private var amount: String = ""
@@ -7381,6 +6707,16 @@ struct AddTransactionSheet: View {
                         dismiss()
                     }
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
+                }
+            }
+            .onAppear {
+                if userManager.blocksManualTransactions {
+                    dismiss()
+                }
+            }
+            .onChange(of: userManager.blocksManualTransactions) { _, blocked in
+                if blocked {
+                    dismiss()
                 }
             }
         }
@@ -7467,10 +6803,7 @@ struct AddTransactionSheet: View {
                 .keyboardType(.decimalPad)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(white: 0.12).opacity(0.7))
-                )
+                .financeSolidGlassTile(cornerRadius: 12)
         }
         .padding(.horizontal, 20)
     }
@@ -7510,10 +6843,7 @@ struct AddTransactionSheet: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(white: 0.12).opacity(0.7))
-                )
+                .financeSolidGlassTile(cornerRadius: 12)
             }
             .onChange(of: transactionType) { oldValue, newValue in
                 // Ensure selected category is valid for the new transaction type
@@ -7538,10 +6868,7 @@ struct AddTransactionSheet: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(white: 0.12).opacity(0.7))
-                )
+                .financeSolidGlassTile(cornerRadius: 12)
         }
         .padding(.horizontal, 20)
     }
@@ -7817,10 +7144,7 @@ struct EditTransactionSheet: View {
                 .keyboardType(.decimalPad)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(white: 0.12).opacity(0.7))
-                )
+                .financeSolidGlassTile(cornerRadius: 12)
         }
         .padding(.horizontal, 20)
     }
@@ -7858,10 +7182,7 @@ struct EditTransactionSheet: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(white: 0.12).opacity(0.7))
-                )
+                .financeSolidGlassTile(cornerRadius: 12)
             }
             .onChange(of: transactionType) { oldValue, newValue in
                 if !categories.contains(selectedCategory) {
@@ -7885,10 +7206,7 @@ struct EditTransactionSheet: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(white: 0.12).opacity(0.7))
-                )
+                .financeSolidGlassTile(cornerRadius: 12)
         }
         .padding(.horizontal, 20)
     }
@@ -8087,10 +7405,7 @@ struct DeleteTransactionSheet: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 20)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color(white: 0.12).opacity(0.7))
-                    )
+                    .financeSolidGlassTile(cornerRadius: 16)
                     .padding(.horizontal, 20)
                     
                     if let error = errorMessage {
@@ -8738,7 +8053,7 @@ struct ComparisonPeriodSelectorView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .liquidGlass(cornerRadius: 18)
+        .financeSolidGlassSection(cornerRadius: 18)
     }
 }
 
@@ -9923,7 +9238,7 @@ struct EnhancedIncomeExpenseBarChart: View {
                 let chartWidth = width - (horizontalPadding * 2)
                 let totalSpacing = barSpacing * CGFloat(max(0, sortedData.count - 1))
                 let availableWidth = chartWidth - totalSpacing
-                let barGroupWidth = availableWidth / CGFloat(sortedData.count)
+                let barGroupWidth = availableWidth / CGFloat(max(sortedData.count, 1))
                 // Optimized bar width: ensure bars are visible but not too wide, with good separation
                 let barWidth = min(barGroupWidth * 0.25, 20)
                 // Optimal gap between bars: ensures clear separation while keeping bars centered

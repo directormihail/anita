@@ -50,6 +50,7 @@
 		A2000001 /* BankConnectionTester.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000 /* BankConnectionTester.swift */; };
 		A3000003 /* StripeFinancialConnections in Frameworks */ = {isa = PBXBuildFile; productRef = A3000004 /* StripeFinancialConnections */; };
 		Aa31fd725f3f /* TextFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = Af035dc2b2fe /* TextFormatter.swift */; };
+		A10000D1 /* SyncBankConnectBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000D0 /* SyncBankConnectBar.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -97,6 +98,7 @@
 		A10000B0 /* ResetPasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResetPasswordView.swift; sourceTree = "<group>"; };
 		A2000000 /* BankConnectionTester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankConnectionTester.swift; sourceTree = "<group>"; };
 		Af035dc2b2fe /* TextFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFormatter.swift; sourceTree = "<group>"; };
+		A10000D0 /* SyncBankConnectBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncBankConnectBar.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -160,6 +162,7 @@
 			isa = PBXGroup;
 			children = (
 				A1000013 /* ChatView.swift */,
+				A10000D0 /* SyncBankConnectBar.swift */,
 				A1000027 /* FinanceView.swift */,
 				A1000019 /* SettingsView.swift */,
 				A1000034 /* SidebarMenu.swift */,
@@ -369,6 +372,7 @@
 				A1000097 /* KeychainHelper.swift in Sources */,
 				A10000B1 /* ResetPasswordView.swift in Sources */,
 				A2000001 /* BankConnectionTester.swift in Sources */,
+				A10000D1 /* SyncBankConnectBar.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

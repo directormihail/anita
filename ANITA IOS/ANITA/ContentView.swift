@@ -16,6 +16,10 @@ enum AuthViewState {
 
 private let hasShownFirstLaunchNotificationPromptKey = "anita_has_shown_first_launch_notification_prompt"
 
+/// Selected tab — darker end of the same blue gradient as Chat `Upgrade` / plans Continue CTA.
+private let appTabSelectedBlue = Color(red: 0.20, green: 0.47, blue: 1.0)
+private let appTabSelectedBlueUI = UIColor(red: 0.20, green: 0.47, blue: 1.0, alpha: 1.0)
+
 struct ContentView: View {
     @StateObject private var authViewModel = AuthViewModel()
     @StateObject private var userManager = UserManager.shared
@@ -93,7 +97,7 @@ struct ContentView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             ProgressView()
-                .progressViewStyle(CircularProgressViewStyle(tint: Color(red: 0.4, green: 0.49, blue: 0.92)))
+                .progressViewStyle(CircularProgressViewStyle(tint: appTabSelectedBlue))
                 .scaleEffect(1.2)
         }
     }
@@ -123,7 +127,7 @@ struct ContentView: View {
                     }
                     .tag(2)
             }
-            .accentColor(Color(red: 0.4, green: 0.49, blue: 0.92)) // #667eea purple accent
+            .accentColor(appTabSelectedBlue)
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SwitchToFinanceTab"))) { _ in
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                     selectedTab = 1
@@ -143,10 +147,10 @@ struct ContentView: View {
                 // Remove shadow for clean transparent look
                 appearance.shadowColor = UIColor.clear
                 
-                // Selected item styling
-                appearance.stackedLayoutAppearance.selected.iconColor = UIColor(red: 0.4, green: 0.49, blue: 0.92, alpha: 1.0)
+                // Selected item styling (matches Chat Upgrade / subscription CTA blue)
+                appearance.stackedLayoutAppearance.selected.iconColor = appTabSelectedBlueUI
                 appearance.stackedLayoutAppearance.selected.titleTextAttributes = [
-                    .foregroundColor: UIColor(red: 0.4, green: 0.49, blue: 0.92, alpha: 1.0)
+                    .foregroundColor: appTabSelectedBlueUI
                 ]
                 
                 // Schedule daily transaction reminder (refreshes message when app opens)

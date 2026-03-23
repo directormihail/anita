@@ -40,6 +40,7 @@ struct SettingsView: View {
     // Subscription (display name from SubscriptionManager — database-backed)
     @StateObject private var subscriptionManager = SubscriptionManager.shared
     @State private var showUpgradeView = false
+    @State private var isSettingsBankConnecting = false
     
     // Data export
     @State private var showExportSuccess = false
@@ -362,6 +363,18 @@ struct SettingsView: View {
                                 ) {}
                             }
                             .buttonStyle(PremiumSettingsButtonStyle())
+                            
+                            if userManager.isAuthenticated, subscriptionManager.isPremium, !userManager.hasEstablishedBankSync {
+                                PremiumDivider()
+                                    .padding(.leading, 76)
+                                SyncBankConnectBar(
+                                    isVisible: true,
+                                    isConnecting: $isSettingsBankConnecting,
+                                    onNeedsPremium: { showUpgradeView = true },
+                                    onRefresh: {},
+                                    presentation: .settingsGrouped
+                                )
+                            }
                         }
                     }
                     
