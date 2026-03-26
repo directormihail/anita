@@ -55,9 +55,14 @@ struct Config {
         if let url = ProcessInfo.processInfo.environment["BACKEND_URL"], !url.isEmpty {
             return url
         }
-        // DEBUG and Release both use Railway so "Test bank connection" works from Xcode without running backend locally.
-        // For local backend testing, set Backend URL in Settings → Developer to http://localhost:3001 and run: cd 'ANITA backend' && npm run dev
+        // In DEBUG (simulator/Xcode), default to local backend so code fixes are testable immediately.
+        // You can still override this in Settings → Developer.
+        #if DEBUG
+        return "http://localhost:3001"
+        #else
+        // Release/TestFlight should use production backend.
         return productionBackendURL
+        #endif
     }()
     
     // Google Sign-In Configuration

@@ -51,6 +51,7 @@
 		A3000003 /* StripeFinancialConnections in Frameworks */ = {isa = PBXBuildFile; productRef = A3000004 /* StripeFinancialConnections */; };
 		Aa31fd725f3f /* TextFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = Af035dc2b2fe /* TextFormatter.swift */; };
 		A10000D1 /* SyncBankConnectBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000D0 /* SyncBankConnectBar.swift */; };
+		A10000D3 /* OnboardingPreBankHealthStoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000D2 /* OnboardingPreBankHealthStoryView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -99,6 +100,7 @@
 		A2000000 /* BankConnectionTester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankConnectionTester.swift; sourceTree = "<group>"; };
 		Af035dc2b2fe /* TextFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFormatter.swift; sourceTree = "<group>"; };
 		A10000D0 /* SyncBankConnectBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncBankConnectBar.swift; sourceTree = "<group>"; };
+		A10000D2 /* OnboardingPreBankHealthStoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingPreBankHealthStoryView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -174,6 +176,7 @@
 				A1000065 /* GoogleLogoView.swift */,
 				A1000067 /* UpgradeView.swift */,
 				A1000073 /* OnboardingView.swift */,
+				A10000D2 /* OnboardingPreBankHealthStoryView.swift */,
 				A1000082 /* PostSignupPlansView.swift */,
 				A1000077 /* NotificationPreviewView.swift */,
 			);
@@ -363,6 +366,7 @@
 				A1000068 /* StoreKitService.swift in Sources */,
 				A1000070 /* CategoryDefinitions.swift in Sources */,
 				A1000072 /* OnboardingView.swift in Sources */,
+				A10000D3 /* OnboardingPreBankHealthStoryView.swift in Sources */,
 				A1000083 /* PostSignupPlansView.swift in Sources */,
 				A1000091 /* XPStore.swift in Sources */,
 				A1000074 /* NotificationService.swift in Sources */,

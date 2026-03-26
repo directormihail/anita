@@ -99,6 +99,19 @@ class ChatViewModel: ObservableObject {
     private let userManager = UserManager.shared
     private let userId: String
     
+    /// Canonical user id for backend requests.
+    /// If authenticated, always use Supabase auth id (never local fallback UUID).
+    private var effectiveUserId: String? {
+        if userManager.isAuthenticated {
+            guard let authId = userManager.currentUser?.id.trimmingCharacters(in: .whitespacesAndNewlines), !authId.isEmpty else {
+                return nil
+            }
+            return authId
+        }
+        let local = userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        return local.isEmpty ? nil : local
+    }
+    
     init(userId: String? = nil) {
         self.userId = userId ?? userManager.userId
         Task {
@@ -160,8 +173,12 @@ class ChatViewModel: ObservableObject {
     // Load conversations from Supabase
     func loadConversations() async {
         do {
-            // Always use authenticated user ID if available, otherwise fall back to stored userId
-            let currentUserId = userManager.isAuthenticated ? (userManager.currentUser?.id ?? userId) : userId
+            guard let currentUserId = effectiveUserId else {
+                await MainActor.run {
+                    self.errorMessage = "Please sign in to load conversations."
+                }
+                return
+            }
             print("[ChatViewModel] Loading conversations for userId: \(currentUserId)")
             let response = try await networkService.getConversations(userId: currentUserId)
             await MainActor.run {
@@ -176,8 +193,12 @@ class ChatViewModel: ObservableObject {
     // Load messages for a conversation
     func loadMessages(conversationId: String) async {
         do {
-            // Always use authenticated user ID if available
-            let currentUserId = userManager.isAuthenticated ? (userManager.currentUser?.id ?? userId) : userId
+            guard let currentUserId = effectiveUserId else {
+                await MainActor.run {
+                    self.errorMessage = "Please sign in to load messages."
+                }
+                return
+            }
             print("[ChatViewModel] Loading messages for conversation: \(conversationId), userId: \(currentUserId)")
             let response = try await networkService.getMessages(conversationId: conversationId, userId: currentUserId)
             
@@ -300,8 +321,10 @@ class ChatViewModel: ObservableObject {
             // Database schema only allows 'user' or 'anita' as sender values
             let sender = message.role == "assistant" ? "anita" : message.role
             
-            // Always use authenticated user ID if available
-            let currentUserId = userManager.isAuthenticated ? (userManager.currentUser?.id ?? userId) : userId
+            guard let currentUserId = effectiveUserId else {
+                print("[ChatViewModel] Cannot save message: missing effective user id")
+                return
+            }
             
             _ = try await networkService.saveMessage(
                 userId: currentUserId,
@@ -855,8 +878,17 @@ class ChatViewModel: ObservableObject {
                 }
                 
                 print("[ChatViewModel] Sending chat message to backend...")
-                // Always use authenticated user ID if available
-                let currentUserId = userManager.isAuthenticated ? (userManager.currentUser?.id ?? userId) : userId
+                guard let currentUserId = effectiveUserId else {
+                    await MainActor.run {
+                        self.errorMessage = "Please sign in to chat."
+                        self.isLoading = false
+                        if let index = self.messages.firstIndex(where: { $0.id == userMessage.id }) {
+                            self.messages.remove(at: index)
+                        }
+                        self.inputText = messageText
+                    }
+                    return
+                }
                 // User display name: source of truth is profile (DB / UserManager), then onboarding
                 let profileName = userManager.getProfileName()?.trimmingCharacters(in: .whitespacesAndNewlines)
                 let onboardingName = OnboardingSurveyResponse.loadFromUserDefaults(userId: userId)?.userName.trimmingCharacters(in: .whitespacesAndNewlines)

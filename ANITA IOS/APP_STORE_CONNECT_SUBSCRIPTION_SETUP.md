@@ -71,6 +71,14 @@ You need **one** auto‑renewable subscription with this **exact** product ID: *
 
 ---
 
+## Step 5.5: Add a 3-day free trial (intro offer)
+1. Still on the subscription **com.anita.pro.monthly**.
+2. Find **Introductory Offers** / **Free Trial** (the exact label can vary).
+3. Add a **Free Trial** intro offer of **3 days** for this subscription.
+4. Save.
+
+---
+
 ## Step 6: Subscription localization (name and description)
 
 1. Still on the subscription **com.anita.pro.monthly**.

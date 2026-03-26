@@ -29,6 +29,7 @@ struct OnboardingView: View {
     @State private var answers: [String: String] = [:]
     @State private var selectedCurrency: String = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
     @State private var showingFomo: Bool = false
+    @State private var showingPreBankHealthStory: Bool = false
     
     /// When true, adds a final "Connect your bank" step before completion; "Get started" on that step completes onboarding.
     var includeBankConnectionStep: Bool = false
@@ -103,6 +104,8 @@ struct OnboardingView: View {
     private var totalPages: Int { 3 + questions.count + (includeBankConnectionStep ? 1 : 0) }
     
     private var isBankStepPage: Bool { includeBankConnectionStep && pageIndex == totalPages - 1 }
+    /// Last survey page index before the optional bank step (language + name + currency + all questions).
+    private var lastQuestionPageIndex: Int { 3 + questions.count - 1 }
     private var isLastPage: Bool { pageIndex == totalPages - 1 }
     private var isFirstPage: Bool { pageIndex == 0 }
     
@@ -155,6 +158,25 @@ struct OnboardingView: View {
             
             if showingFomo {
                 fomoView
+            } else if includeBankConnectionStep && showingPreBankHealthStory {
+                OnboardingPreBankHealthStoryView(
+                    languageCode: languageCode,
+                    currencyCode: selectedCurrency,
+                    userName: trimmedUserName,
+                    onContinue: {
+                        let impact = UIImpactFeedbackGenerator(style: .medium)
+                        impact.impactOccurred()
+                        withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                            showingPreBankHealthStory = false
+                            pageIndex = totalPages - 1
+                        }
+                    },
+                    onBack: {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
+                            showingPreBankHealthStory = false
+                        }
+                    }
+                )
             } else {
                 VStack(spacing: 0) {
                     // Header
@@ -1131,8 +1153,14 @@ struct OnboardingView: View {
                 )
                 onComplete(survey)
             } else if !isLastPage {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                    pageIndex = min(pageIndex + 1, totalPages - 1)
+                if includeBankConnectionStep && pageIndex == lastQuestionPageIndex {
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                        showingPreBankHealthStory = true
+                    }
+                } else {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        pageIndex = min(pageIndex + 1, totalPages - 1)
+                    }
                 }
             } else {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {

@@ -22,6 +22,13 @@ class NetworkService: ObservableObject {
     /// Base URL: Settings override (for local testing) if set, else Config.backendURL (Railway).
     /// If a stored URL is localhost/127.0.0.1 we ignore it and use Railway so "Test bank connection" works from Xcode without running backend locally.
     private var rawBaseURL: String {
+        #if DEBUG
+        // In local development we want deterministic behavior: use local backend unless explicitly overridden via env.
+        if let env = ProcessInfo.processInfo.environment["BACKEND_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines), !env.isEmpty {
+            return env
+        }
+        return Config.backendURL
+        #else
         let key = "backendURL"
         guard let url = UserDefaults.standard.string(forKey: key)?.trimmingCharacters(in: .whitespacesAndNewlines), !url.isEmpty else {
             return Config.backendURL
@@ -32,6 +39,7 @@ class NetworkService: ObservableObject {
             return Config.backendURL
         }
         return normalized
+        #endif
     }
     
     /// Normalized base URL: trimmed, no trailing slash, never empty.

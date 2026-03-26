@@ -1834,16 +1834,58 @@ function parseTargetFromConversation(messages: Array<{ role: string; content: st
  * Parse AI confirmation that a limit was set (e.g. "I've set a limit for Dining Out at target $59.22").
  * Used to persist the budget target to the database when the AI sends this confirmation.
  */
+function parseLocalizedMoneyAmount(raw: string): number {
+  const cleaned = (raw || '').replace(/[^\d.,\s]/g, '').trim();
+  if (!cleaned) return NaN;
+
+  // Remove spaces used as thousand separators (e.g. "8 800,50")
+  let normalized = cleaned.replace(/\s+/g, '');
+  const hasDot = normalized.includes('.');
+  const hasComma = normalized.includes(',');
+
+  if (hasDot && hasComma) {
+    // Use the rightmost separator as decimal separator; strip the other as thousands.
+    const lastDot = normalized.lastIndexOf('.');
+    const lastComma = normalized.lastIndexOf(',');
+    if (lastComma > lastDot) {
+      // "8.800,50" -> "8800.50"
+      normalized = normalized.replace(/\./g, '').replace(',', '.');
+    } else {
+      // "8,800.50" -> "8800.50"
+      normalized = normalized.replace(/,/g, '');
+    }
+  } else if (hasComma) {
+    // If only comma: decide decimal vs thousands by trailing digits count.
+    const lastComma = normalized.lastIndexOf(',');
+    const digitsAfter = normalized.length - lastComma - 1;
+    if (digitsAfter === 2 || digitsAfter === 1) {
+      normalized = normalized.replace(/\./g, '').replace(',', '.');
+    } else {
+      normalized = normalized.replace(/,/g, '');
+    }
+  } else if (hasDot) {
+    const lastDot = normalized.lastIndexOf('.');
+    const digitsAfter = normalized.length - lastDot - 1;
+    // "8.800" likely thousands in finance context; keep only when not a decimal amount.
+    if (digitsAfter === 3 && /^\d{1,3}(\.\d{3})+$/.test(normalized)) {
+      normalized = normalized.replace(/\./g, '');
+    }
+  }
+
+  const parsed = Number.parseFloat(normalized);
+  return Number.isFinite(parsed) ? Math.round(parsed * 100) / 100 : NaN;
+}
+
 function parseLimitConfirmationFromAiResponse(aiResponse: string): { category: string; amount: number; currency?: string } | null {
   const r = aiResponse.trim();
   // Match: "I've set a limit for X at target $Y" / "set a limit for X at target €Y" / "limit for X at target CHF Y"
-  const pattern = /(?:I've set|I have set|I've created|set|created)\s+(?:a )?limit for\s+([^.✓!]+?)\s+at target\s*([$€£¥]|USD|EUR|GBP|JPY|CHF)?\s*(\d+(?:\.\d{1,2})?)/i;
+  const pattern = /(?:I've set|I have set|I've created|set|created)\s+(?:a )?limit for\s+([^.✓!]+?)\s+at target\s*([$€£¥]|USD|EUR|GBP|JPY|CHF)?\s*([\d.,\s]+)/i;
   const match = r.match(pattern);
   if (!match) return null;
   const categoryRaw = match[1].trim();
   const currencySymbol = (match[2] || '').trim();
   const amountStr = match[3];
-  const amount = parseFloat(amountStr);
+  const amount = parseLocalizedMoneyAmount(amountStr);
   if (!categoryRaw || !Number.isFinite(amount) || amount <= 0) return null;
   // Reject AI misunderstanding: "Any of your spending categories" is not a real category
   if (!isValidLimitCategory(categoryRaw)) return null;
@@ -1866,12 +1908,12 @@ function parseLimitSuggestionFromMessage(text: string): { category: string; amou
   if (!text || !text.trim()) return null;
   const r = text.trim();
   // Amount: "target of $59.22" / "target CHF 59.22" / "about €59.22" / "$59.22"
-  const withSym = r.match(/(?:target\s+(?:of\s+)?|about\s+)?([$€£¥]|CHF)\s*(\d+(?:\.\d{1,2})?)/i);
-  const noSym = r.match(/(?:target\s+(?:of\s+)?)(\d+(?:\.\d{1,2})?)/);
+  const withSym = r.match(/(?:target\s+(?:of\s+)?|about\s+)?([$€£¥]|CHF)\s*([\d.,\s]+)/i);
+  const noSym = r.match(/(?:target\s+(?:of\s+)?)([\d.,\s]+)/i);
   const amountMatch = withSym || noSym;
   if (!amountMatch) return null;
   const amountStr = amountMatch[2] || amountMatch[1];
-  const amount = parseFloat(amountStr);
+  const amount = parseLocalizedMoneyAmount(amountStr);
   if (!Number.isFinite(amount) || amount <= 0) return null;
   const sym = withSym ? (withSym[1] || '').trim().toUpperCase() : '';
   let currency: string | undefined;
@@ -1910,7 +1952,7 @@ function parseBudgetRecommendations(aiResponse: string): Array<{ category: strin
   // Pattern 1: Match "1. **Category Name** — target $X" with markdown bold
   // Also match without numbering: "**Category Name** — target $X"
   // Updated to capture decimal amounts more precisely (e.g., 21.60, 21.6, 20)
-  const pattern1 = /(?:^\d+\.\s*)?\*\*([^*]+?)\*\*\s*[—–-]\s*target\s*([$€£¥]|USD|EUR|GBP|JPY|CHF)?\s*(\d+(?:\.\d{1,2})?)/gmi;
+  const pattern1 = /(?:^\d+\.\s*)?\*\*([^*]+?)\*\*\s*[—–-]\s*target\s*([$€£¥]|USD|EUR|GBP|JPY|CHF)?\s*([\d.,\s]+)/gmi;
   
   let match;
   while ((match = pattern1.exec(recommendationsSection)) !== null) {
@@ -1932,7 +1974,7 @@ function parseBudgetRecommendations(aiResponse: string): Array<{ category: strin
     }
     
     // Parse amount with full precision (preserve decimals)
-    const amount = parseFloat(amountStr);
+    const amount = parseLocalizedMoneyAmount(amountStr);
     
     if (category && amount > 0 && !isNaN(amount)) {
       const cleanCategory = category
@@ -1953,7 +1995,7 @@ function parseBudgetRecommendations(aiResponse: string): Array<{ category: strin
   
   // Pattern 2: Match "1. Category Name — target $X" without markdown (fallback)
   if (recommendations.length === 0) {
-    const pattern2 = /^\d+\.\s*([A-Za-z\s&]+?)\s*[—–-]\s*target\s*([$€£¥]|USD|EUR|GBP|JPY|CHF)?\s*(\d+(?:\.\d{1,2})?)/gmi;
+    const pattern2 = /^\d+\.\s*([A-Za-z\s&]+?)\s*[—–-]\s*target\s*([$€£¥]|USD|EUR|GBP|JPY|CHF)?\s*([\d.,\s]+)/gmi;
     let match2;
     while ((match2 = pattern2.exec(recommendationsSection)) !== null) {
       const category = match2[1].trim();
@@ -1973,7 +2015,7 @@ function parseBudgetRecommendations(aiResponse: string): Array<{ category: strin
         currency = 'CHF';
       }
       
-      const amount = parseFloat(amountStr);
+      const amount = parseLocalizedMoneyAmount(amountStr);
       
       if (category && amount > 0 && !isNaN(amount) && category.length > 1) {
         // Round to 2 decimal places to match currency precision
@@ -1994,12 +2036,12 @@ function parseBudgetRecommendations(aiResponse: string): Array<{ category: strin
     const lines = recommendationsSection.split('\n');
     for (const line of lines) {
       // Look for pattern: "Category" followed by "target" and amount (with or without dashes)
-      const pattern3 = /([A-Za-z\s&]+?)\s+[—–-]\s+target\s+([$€£¥]|USD|EUR|GBP|JPY|CHF)?\s*(\d+(?:\.\d{1,2})?)/i;
+      const pattern3 = /([A-Za-z\s&]+?)\s+[—–-]\s+target\s+([$€£¥]|USD|EUR|GBP|JPY|CHF)?\s*([\d.,\s]+)/i;
       const match3 = line.match(pattern3);
       
       // Also try pattern without dashes: "Category target $X"
       if (!match3) {
-        const pattern3b = /([A-Za-z\s&]+?)\s+target\s+([$€£¥]|USD|EUR|GBP|JPY|CHF)?\s*(\d+(?:\.\d{1,2})?)/i;
+        const pattern3b = /([A-Za-z\s&]+?)\s+target\s+([$€£¥]|USD|EUR|GBP|JPY|CHF)?\s*([\d.,\s]+)/i;
         const match3b = line.match(pattern3b);
         if (match3b) {
           const category = match3b[1].trim();
@@ -2023,7 +2065,7 @@ function parseBudgetRecommendations(aiResponse: string): Array<{ category: strin
                 currency = 'CHF';
               }
               
-              const amount = parseFloat(amountStr);
+              const amount = parseLocalizedMoneyAmount(amountStr);
               
               if (amount > 0 && !isNaN(amount)) {
                 const roundedAmount = Math.round(amount * 100) / 100;
@@ -2067,7 +2109,7 @@ function parseBudgetRecommendations(aiResponse: string): Array<{ category: strin
           currency = 'CHF';
         }
         
-        const amount = parseFloat(amountStr);
+        const amount = parseLocalizedMoneyAmount(amountStr);
         
         if (category && amount > 0 && !isNaN(amount)) {
           // Round to 2 decimal places to match currency precision
@@ -2186,14 +2228,14 @@ async function buildSystemPrompt(userId: string, conversationId: string, options
   try {
     const { data: profileData, error: profileError } = await supabase
       .from('profiles')
-      .select('currency_code, display_name, name, full_name')
+      // Current schema has name/email/phone/location (no display_name/full_name/currency_code).
+      .select('name, email')
       .eq('id', userId)
       .single();
     
     if (!profileError && profileData) {
-      if (profileData.currency_code) userCurrency = profileData.currency_code;
-      else if (options?.clientCurrency) userCurrency = options.clientCurrency;
-      const name = (profileData.display_name ?? profileData.name ?? profileData.full_name) as string | undefined;
+      if (options?.clientCurrency) userCurrency = options.clientCurrency;
+      const name = (profileData.name ?? profileData.email) as string | undefined;
       if (name && typeof name === 'string' && name.trim()) userNameFromDb = name.trim();
     }
   } catch (error) {
@@ -2205,16 +2247,31 @@ async function buildSystemPrompt(userId: string, conversationId: string, options
   // Explicit instruction so AI uses only the user's chosen currency (never default to dollars)
   const currencyInstruction = `CURRENCY — CRITICAL: Always use the user's currency in every reply: ${currencySymbol} (${userCurrency}). Never use $ or USD unless the user's currency is USD. All amounts, limits, and goals must be shown in ${userCurrency} only.\n\n`;
 
-  // Fetch ALL transactions (no limit) to get complete financial picture
+  // Fetch ALL manual transactions (no limit) to get complete financial picture
   const { data: transactionsData, error: transactionsError } = await supabase
     .from('anita_data')
     .select('*')
     .eq('account_id', userId)
     .eq('data_type', 'transaction')
+    .or('archived_after_bank_link.is.null,archived_after_bank_link.eq.false')
     .order('created_at', { ascending: false });
 
   if (transactionsError) {
     logger.warn('Failed to fetch transactions', { error: transactionsError.message });
+  }
+
+  // Fetch ALL bank transactions so chat can see the same bank-linked numbers as Finance.
+  const { data: bankTransactionsData, error: bankTransactionsError } = await supabase
+    .from('bank_transactions')
+    .select('id, amount_cents, merchant_name, description, category, raw_category, transacted_at')
+    .eq('user_id', userId)
+    .order('transacted_at', { ascending: false });
+
+  if (bankTransactionsError) {
+    logger.warn('Failed to fetch bank transactions for chat context', {
+      error: bankTransactionsError.message,
+      userId
+    });
   }
 
   // Fetch recent messages for context (only if conversationId is provided)
@@ -2235,14 +2292,38 @@ async function buildSystemPrompt(userId: string, conversationId: string, options
     }
   }
 
-  // Calculate financial metrics and normalize categories
-  const transactions = (transactionsData || []).map((item: any) => ({
+  // Calculate financial metrics and normalize categories.
+  // Merge manual + bank data so AI context matches Finance cards and list.
+  const manualTransactions = (transactionsData || []).map((item: any) => ({
     type: item.transaction_type || 'expense',
     amount: Number(item.transaction_amount) || 0,
     description: item.transaction_description || '',
     category: normalizeCategory(item.transaction_category), // Normalize to proper case
     date: item.transaction_date || item.created_at
   }));
+
+  const bankTransactions = (bankTransactionsData || []).map((item: any) => {
+    const amountCents = Number(item.amount_cents) || 0;
+    const type = amountCents >= 0 ? 'income' : 'expense';
+    const amount = Math.abs(amountCents / 100);
+    const description = (item.merchant_name || item.description || '').toString();
+    const category = normalizeCategory(item.category || item.raw_category || 'Other');
+    const date = item.transacted_at || new Date().toISOString();
+    return { type, amount, description, category, date };
+  });
+
+  const transactions = [...manualTransactions, ...bankTransactions].sort((a: any, b: any) => {
+    const aTime = new Date(a.date).getTime() || 0;
+    const bTime = new Date(b.date).getTime() || 0;
+    return bTime - aTime;
+  });
+
+  logger.info('Chat financial context loaded', {
+    userId,
+    manualTransactions: manualTransactions.length,
+    bankTransactions: bankTransactions.length,
+    totalTransactions: transactions.length
+  });
 
   const totalIncome = transactions
     .filter((t: any) => t.type === 'income')
@@ -2274,11 +2355,13 @@ async function buildSystemPrompt(userId: string, conversationId: string, options
 
   // Build financial insights
   const now = new Date();
-  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const currentMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
+  const nextMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0, 0));
   
   const monthlyTransactions = transactions.filter((t: any) => {
     const transactionDate = new Date(t.date);
-    return transactionDate >= currentMonthStart;
+    if (Number.isNaN(transactionDate.getTime())) return false;
+    return transactionDate >= currentMonthStart && transactionDate < nextMonthStart;
   });
 
   const monthlyIncome = monthlyTransactions
@@ -2368,6 +2451,7 @@ async function buildSystemPrompt(userId: string, conversationId: string, options
 - DEFAULT: Always show CURRENT MONTH only (monthly income, monthly expenses, monthly balance). Do not show "Total Income" or "Total Expenses" (all-time) unless the user explicitly asks for overall/total/all-time figures.
 - MAIN SNAPSHOT: Present the current month summary in TEXT form (full sentences), e.g. "This month you've earned ${currencySymbol}X, spent ${currencySymbol}Y, and your balance is ${currencySymbol}Z." Do NOT use bullet points for income, expenses, or balance.
 - BULLET POINTS: Use bullet points ONLY when listing spending categories (e.g. "Your top spending categories this month: • Dining Out ${currencySymbol}X • Groceries ${currencySymbol}Y"). Never use bullets for the main financial numbers.
+- NUMBER SAFETY: Re-check the monthly math before you reply (monthly balance must equal monthly income minus monthly expenses).
 
 CURRENT MONTH (always use this for the default snapshot):
 - Monthly Income: ${currencySymbol}${monthlyIncome.toFixed(2)}

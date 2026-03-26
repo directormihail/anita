@@ -19,7 +19,21 @@ struct UpgradeView: View {
     let onSkip: (() -> Void)?
     @StateObject private var storeKitService = StoreKitService.shared
     @Environment(\.dismiss) private var dismiss
-    @State private var showSuccessAlert = false
+
+    private enum ActiveAlert: Identifiable {
+        case purchaseSuccess
+        case monthlyTrialConfirmation
+        
+        var id: Int {
+            switch self {
+            case .purchaseSuccess: return 1
+            case .monthlyTrialConfirmation: return 2
+            }
+        }
+    }
+    
+    @State private var activeAlert: ActiveAlert?
+    @State private var pendingMonthlyTrialProductId: String?
     @State private var databaseSubscription: Subscription?
     @State private var isLoadingSubscription = false
     @State private var isRestoring = false
@@ -203,7 +217,7 @@ struct UpgradeView: View {
                         VStack(spacing: 12) {
                             PremiumFeaturesCard()
 
-                            HStack(spacing: 12) {
+                            HStack(alignment: .top, spacing: 12) {
                                 PaymentOptionCard(
                                     title: AppL10n.t("plans.period_monthly"),
                                     price: premiumPriceString,
@@ -230,7 +244,14 @@ struct UpgradeView: View {
                             }
 
                             Button(action: {
-                                Task { await purchasePlan(productId: selectedProductIdForContinue) }
+                                // Monthly is configured in App Store Connect with a 3-day free trial.
+                                // We show a clear pre-confirmation message so users know what will happen.
+                                if selectedProductIdForContinue == monthlyProductId {
+                                    pendingMonthlyTrialProductId = selectedProductIdForContinue
+                                    activeAlert = .monthlyTrialConfirmation
+                                } else {
+                                    Task { await purchasePlan(productId: selectedProductIdForContinue) }
+                                }
                             }) {
                                 if storeKitService.isLoading {
                                     ProgressView()
@@ -423,18 +444,34 @@ struct UpgradeView: View {
                             .padding(.bottom, 10)
                         }
                     }
+                    .padding(.top, 8)
                 }
             }
         }
-        .alert(AppL10n.t("plans.purchase_success_title"), isPresented: $showSuccessAlert) {
-            Button(AppL10n.t("plans.ok")) {
-                Task {
-                    await loadSubscriptionFromDatabase()
-                    dismiss()
-                }
+        .alert(item: $activeAlert) { alertType in
+            switch alertType {
+            case .purchaseSuccess:
+                return Alert(
+                    title: Text(AppL10n.t("plans.purchase_success_title")),
+                    message: Text(AppL10n.t("plans.purchase_success_body")),
+                    dismissButton: .default(Text(AppL10n.t("plans.ok"))) {
+                        Task {
+                            await loadSubscriptionFromDatabase()
+                            dismiss()
+                        }
+                    }
+                )
+            case .monthlyTrialConfirmation:
+                return Alert(
+                    title: Text(AppL10n.t("plans.monthly_trial_alert_title")),
+                    message: Text(AppL10n.t("plans.monthly_trial_alert_body")),
+                    primaryButton: .default(Text(AppL10n.t("plans.monthly_trial_alert_start"))) {
+                        guard let productId = pendingMonthlyTrialProductId else { return }
+                        Task { await purchasePlan(productId: productId) }
+                    },
+                    secondaryButton: .cancel(Text(AppL10n.t("common.cancel")))
+                )
             }
-        } message: {
-            Text(AppL10n.t("plans.purchase_success_body"))
         }
         .task {
             await loadSubscriptionFromDatabase()
@@ -474,7 +511,7 @@ struct UpgradeView: View {
             await restorePurchases()
             await MainActor.run {
                 storeKitService.errorMessage = nil
-                showSuccessAlert = true
+                activeAlert = .purchaseSuccess
             }
             return
         }
@@ -497,7 +534,7 @@ struct UpgradeView: View {
             await SubscriptionManager.shared.refresh()
             await loadSubscriptionFromDatabase()
             await MainActor.run {
-                showSuccessAlert = true
+                activeAlert = .purchaseSuccess
             }
         } catch StoreKitError.userCancelled {
             // User cancelled - no error to show
@@ -598,7 +635,7 @@ private struct PremiumFeaturesCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
                 Image(systemName: "crown.fill")
                     .font(.system(size: 17, weight: .semibold))
@@ -621,7 +658,7 @@ private struct PremiumFeaturesCard: View {
             }
             .padding(.bottom, 1)
 
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
                 ForEach(features) { feature in
                     IconFeatureRow(
                         icon: feature.icon,
@@ -631,9 +668,9 @@ private struct PremiumFeaturesCard: View {
                     )
                 }
             }
-            .padding(.top, 4)
+            .padding(.top, 2)
         }
-        .padding(18)
+        .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 20)
                 .fill(Color.white.opacity(0.03))
@@ -644,6 +681,9 @@ private struct PremiumFeaturesCard: View {
         )
     }
 }
+
+/// Shared height so Monthly + Lifetime plan tiles align; fits title, trial row, price, and two-line footer.
+private let paymentOptionCardHeight: CGFloat = 168
 
 private struct PaymentOptionCard: View {
     let title: String
@@ -656,89 +696,122 @@ private struct PaymentOptionCard: View {
     let isLocked: Bool
     let onSelect: () -> Void
 
+    /// Locks pill row height on both options so prices and footers line up.
+    private let trialSlotHeight: CGFloat = 22
+
     private var isSelected: Bool { selectedOption == option }
     private var showPurchasedBadge: Bool { isPurchased && isSelected }
 
     var body: some View {
         Button(action: onSelect) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top) {
-                    Text(title)
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white.opacity(0.75))
-                        .lineLimit(1)
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(title)
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white.opacity(0.78))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.88)
 
-                    Spacer()
+                        ZStack(alignment: .leading) {
+                            if option == .monthly {
+                                Text(AppL10n.t("plans.monthly_trial_badge"))
+                                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.92))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.85)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(
+                                        Capsule(style: .continuous)
+                                            .fill(Color(red: 0.16, green: 0.17, blue: 0.20))
+                                    )
+                            }
+                        }
+                        .frame(height: trialSlotHeight, alignment: .topLeading)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                     ZStack(alignment: .center) {
                         Image(systemName: isSelected ? "circle.fill" : "circle")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(isSelected ? .white.opacity(0.95) : .white.opacity(0.55))
 
                         if showPurchasedBadge {
                             Image(systemName: "checkmark")
-                                .font(.system(size: 9, weight: .bold))
+                                .font(.system(size: 8.5, weight: .bold))
                                 .foregroundColor(.green.opacity(0.95))
                                 .offset(y: -0.25)
                         }
                     }
+                    .padding(.top, 1)
+                    .accessibilityHidden(true)
                 }
+                .padding(.bottom, 6)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(price)
-                        .font(.system(size: 41, weight: .bold, design: .rounded))
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
                         .monospacedDigit()
                         .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                        .minimumScaleFactor(0.8)
 
                     Text(priceSuffix)
-                        .font(.system(size: 14, weight: .regular, design: .rounded))
-                        .foregroundColor(.white.opacity(0.6))
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundColor(.white.opacity(0.58))
                 }
+                .padding(.bottom, 4)
 
                 Text(description)
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundColor(.white.opacity(0.55))
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundColor(.white.opacity(0.52))
                     .lineLimit(2)
+                    .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Spacer(minLength: 0)
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 13)
+            .padding(.vertical, 11)
+            .padding(.top, 2)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .buttonStyle(.plain)
         .disabled(isLocked)
-        .frame(height: 124)
-        .background(
+        .frame(height: paymentOptionCardHeight)
+        // Nearly-opaque base so the screen vignette / backdrop never bleeds through as curved “smudges”.
+        .background {
+            let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+            let base = Color(red: 0.09, green: 0.10, blue: 0.12)
             ZStack {
+                shape.fill(base)
                 if isSelected {
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color(red: 0.20, green: 0.76, blue: 1.0).opacity(0.30),
-                                    Color(red: 0.08, green: 0.52, blue: 1.0).opacity(0.14)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
+                    shape.fill(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 0.20, green: 0.76, blue: 1.0).opacity(0.28),
+                                Color(red: 0.08, green: 0.52, blue: 1.0).opacity(0.12)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
                         )
-                } else {
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(Color.white.opacity(0.02))
-                }
-
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(
-                        isSelected ? Color.blue.opacity(0.55) : Color.white.opacity(0.10),
-                        lineWidth: 1
                     )
+                } else {
+                    shape.fill(Color.white.opacity(0.04))
+                }
             }
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .scaleEffect(isSelected ? 1.0 : 0.99)
-        .shadow(color: isSelected ? Color.blue.opacity(0.16) : .clear, radius: 12, x: 0, y: 6)
+            .overlay {
+                shape.strokeBorder(
+                    isSelected ? Color.blue.opacity(0.50) : Color.white.opacity(0.10),
+                    lineWidth: 1
+                )
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: isSelected ? Color.black.opacity(0.28) : .clear, radius: 6, x: 0, y: 3)
         .animation(.spring(response: 0.25, dampingFraction: 0.85), value: isSelected)
     }
 }
@@ -1516,6 +1589,23 @@ struct SubscriptionPlanCard: View {
                             .foregroundColor(.white.opacity(0.55))
                     }
                     .padding(.leading, 2)
+                }
+                
+                // In this app, "Pro" is the monthly subscription with a 3-day free trial.
+                if planType == .pro {
+                    Text(AppL10n.t("plans.monthly_trial_badge"))
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white.opacity(0.65))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(Color.white.opacity(0.06))
+                                .overlay(
+                                    Capsule().stroke(Color.white.opacity(0.12), lineWidth: 1)
+                                )
+                        )
+                        .padding(.bottom, 6)
                 }
                 
                 Spacer()

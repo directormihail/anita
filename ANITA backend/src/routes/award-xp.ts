@@ -84,6 +84,62 @@ export async function handleAwardXP(req: Request, res: Response): Promise<void> 
       p_metadata: metadata
     });
 
+    const result = Array.isArray(data) && data.length > 0 ? data[0] : data;
+    const success = result?.success === true;
+    const xpAwarded = result?.xp_awarded ?? 0;
+
+    // Critical: "daily_chat_message" should reward EVERY user chat message.
+    // If the backend RPC enforces a once-per-period rule (or if the xp_rule row is missing),
+    // we fall back to inserting an XP event directly so get-xp-stats reflects chat usage.
+    const shouldForceChatXP = ruleId === 'daily_chat_message' && (!success || xpAwarded <= 0);
+    if (shouldForceChatXP) {
+      const fallbackXpAmount = 5; // Keep in sync with UX expectation ("5 XP per chat message")
+      const eventId = `xp_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+      const description = 'Chat with ANITA';
+
+      // Ensure xp_rules row exists, otherwise foreign key insert into user_xp_events fails.
+      await supabase.from('xp_rules').upsert(
+        {
+          id: ruleId,
+          category: 'Engagement',
+          name: 'Daily chat message',
+          xp_amount: fallbackXpAmount,
+          description: 'User chat with ANITA',
+          frequency: 'event',
+          extra_meta: {},
+          updated_at: new Date().toISOString()
+        },
+        { onConflict: 'id' }
+      );
+
+      const { error: insertErr } = await supabase.from('user_xp_events').insert({
+        id: eventId,
+        user_id: userId,
+        rule_id: ruleId,
+        xp_amount: fallbackXpAmount,
+        description,
+        metadata: metadata || {}
+      });
+
+      if (insertErr) {
+        logger.error('Failed to insert fallback chat XP event', {
+          requestId,
+          userId,
+          ruleId,
+          error: insertErr.message
+        });
+      } else {
+        res.status(200).json({
+          success: true,
+          xpAwarded: fallbackXpAmount,
+          message: 'XP awarded (chat message)'
+          ,
+          requestId
+        });
+        return;
+      }
+    }
+
     if (error) {
       logger.error('award_xp RPC error', { error: error.message, requestId, userId, ruleId });
       res.status(500).json({
@@ -93,10 +149,6 @@ export async function handleAwardXP(req: Request, res: Response): Promise<void> 
       });
       return;
     }
-
-    const result = Array.isArray(data) && data.length > 0 ? data[0] : data;
-    const success = result?.success === true;
-    const xpAwarded = result?.xp_awarded ?? 0;
 
     res.status(200).json({
       success,

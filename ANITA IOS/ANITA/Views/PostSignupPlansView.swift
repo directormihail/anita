@@ -12,9 +12,13 @@ struct PostSignupPlansView: View {
     @StateObject private var storeKitService = StoreKitService.shared
     @State private var databaseSubscription: Subscription?
     @State private var isRestoring = false
+    @State private var showMonthlyTrialConfirmation = false
+    @State private var pendingMonthlyTrialProductId: String?
     
     private let networkService = NetworkService.shared
     let onContinue: () -> Void
+
+    private let monthlyProductId = "com.anita.pro.monthly"
     
     // Determine current plan - prioritize database subscription over StoreKit. Free or Premium.
     private var currentPlan: String {
@@ -25,6 +29,10 @@ struct PostSignupPlansView: View {
             return "premium"
         }
         return "free"
+    }
+    
+    private var hasMonthlyEntitlement: Bool {
+        storeKitService.isPurchased(monthlyProductId)
     }
     
     /// User's currency from database (profiles.currency_code), synced to UserDefaults.
@@ -42,27 +50,7 @@ struct PostSignupPlansView: View {
     }
     
     private var cancelAnytimeSubtitle: String {
-        let lang = AppL10n.currentLanguageCode()
-        switch lang {
-        case "de":
-            return "Du kannst jederzeit kündigen."
-        case "fr":
-            return "Tu peux annuler ton abonnement à tout moment."
-        case "es":
-            return "Puedes cancelar tu suscripción en cualquier momento."
-        case "it":
-            return "Puoi annullare l’abbonamento in qualsiasi momento."
-        case "pl":
-            return "Możesz anulować subskrypcję w dowolnym momencie."
-        case "ru":
-            return "Вы можете отменить подписку в любое время."
-        case "tr":
-            return "Aboneliğini istediğin zaman iptal edebilirsin."
-        case "uk":
-            return "Ви можете скасувати підписку в будь-який час."
-        default:
-            return "Cancel your subscription anytime."
-        }
+        AppL10n.t("plans.monthly_fully_protected")
     }
     
     var body: some View {
@@ -97,7 +85,7 @@ struct PostSignupPlansView: View {
                                 isCurrentPlan: currentPlan == "premium",
                                 isCreatingCheckout: storeKitService.isLoading,
                                 price: formatSubscriptionPrice(4.99),
-                                onCheckout: { Task { await purchasePlan(productId: "com.anita.pro.monthly") } }
+                                onCheckout: { requestMonthlyTrialPurchase(productId: monthlyProductId) }
                             )
                         }
                         .padding(.horizontal, 20)
@@ -124,6 +112,19 @@ struct PostSignupPlansView: View {
                         .buttonStyle(.plain)
                         .disabled(storeKitService.isLoading || isRestoring)
                         .padding(.top, 8)
+
+                        if currentPlan == "premium" || hasMonthlyEntitlement {
+                            Button(action: openSubscriptionManagement) {
+                                Text(AppL10n.t("settings.cancel_subscription"))
+                                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.75))
+                                    .underline()
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.top, 4)
+                        }
                         
                         Text(AppL10n.t("plans.cancel_subscription_hint"))
                             .font(.system(size: 12, weight: .regular, design: .rounded))
@@ -215,6 +216,18 @@ struct PostSignupPlansView: View {
         .task {
             await loadSubscriptionFromDatabase()
         }
+        .alert(
+            AppL10n.t("plans.monthly_trial_alert_title"),
+            isPresented: $showMonthlyTrialConfirmation
+        ) {
+            Button(AppL10n.t("plans.monthly_trial_alert_start")) {
+                guard let productId = pendingMonthlyTrialProductId else { return }
+                Task { await purchasePlan(productId: productId) }
+            }
+            Button(AppL10n.t("common.cancel"), role: .cancel) {}
+        } message: {
+            Text(AppL10n.t("plans.monthly_trial_alert_body"))
+        }
     }
     
     private func loadSubscriptionFromDatabase() async {
@@ -260,6 +273,16 @@ struct PostSignupPlansView: View {
                 storeKitService.errorMessage = error.localizedDescription
             }
         }
+    }
+
+    private func requestMonthlyTrialPurchase(productId: String) {
+        pendingMonthlyTrialProductId = productId
+        showMonthlyTrialConfirmation = true
+    }
+
+    private func openSubscriptionManagement() {
+        guard let url = URL(string: "https://apps.apple.com/account/subscriptions") else { return }
+        UIApplication.shared.open(url)
     }
     
     /// Restore previous Apple purchases and sync with backend

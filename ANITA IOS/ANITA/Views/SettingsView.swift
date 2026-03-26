@@ -55,10 +55,6 @@ struct SettingsView: View {
     @State private var showTestOnboardingConfirm = false
     @State private var showTestOnboardingSignInRequired = false
     
-    // Backend URL (for iPhone → laptop IP)
-    @State private var showBackendURLSheet = false
-    @State private var backendURLText: String = ""
-    
     private let networkService = NetworkService.shared
     private let supabaseService = SupabaseService.shared
     
@@ -327,24 +323,6 @@ struct SettingsView: View {
                                 ) {}
                             }
                             
-                            PremiumDivider()
-                                .padding(.leading, 76)
-                            
-                            // Backend URL (for local dev / bank connection)
-                            Button(action: {
-                                backendURLText = networkService.getCurrentBaseURL()
-                                showBackendURLSheet = true
-                            }) {
-                                SettingsRowWithIcon(
-                                    icon: "server.rack",
-                                    iconColor: Color(red: 0.4, green: 0.49, blue: 0.92),
-                                    title: AppL10n.t("settings.backend_url"),
-                                    value: networkService.getCurrentBaseURL(),
-                                    showChevron: true
-                                ) {}
-                            }
-                            .buttonStyle(PremiumSettingsButtonStyle())
-                            
                         }
                     }
                     
@@ -559,35 +537,6 @@ struct SettingsView: View {
             if !isShowing {
                 Task { await subscriptionManager.refresh() }
             }
-        }
-        .sheet(isPresented: $showBackendURLSheet) {
-            BackendURLSheet(
-                urlText: $backendURLText,
-                onSave: {
-                    let trimmed = backendURLText.trimmingCharacters(in: .whitespacesAndNewlines)
-                    var finalURL: String?
-                    if trimmed.isEmpty {
-                        UserDefaults.standard.removeObject(forKey: "backendURL")
-                        NetworkService.shared.updateBaseURL("")
-                    } else {
-                        var url = trimmed
-                        if !url.hasPrefix("http://") && !url.hasPrefix("https://") {
-                            url = "http://" + url
-                        }
-                        if url.hasSuffix("/") {
-                            url = String(url.dropLast())
-                        }
-                        finalURL = url
-                        UserDefaults.standard.set(url, forKey: "backendURL")
-                        NetworkService.shared.updateBaseURL(url)
-                    }
-                    NotificationCenter.default.post(name: NSNotification.Name("BackendURLUpdated"), object: finalURL)
-                    showBackendURLSheet = false
-                },
-                onCancel: {
-                    showBackendURLSheet = false
-                }
-            )
         }
         .sheet(isPresented: $showAuthSheet) {
             AuthSheet(
@@ -1923,65 +1872,6 @@ struct AuthSheet: View {
                     Button(AppL10n.t("common.cancel")) {
                         dismiss()
                     }
-                    .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Backend URL Sheet (Server IP for iPhone → laptop)
-
-struct BackendURLSheet: View {
-    @Binding var urlText: String
-    let onSave: () -> Void
-    let onCancel: () -> Void
-    @Environment(\.dismiss) var dismiss
-    
-    var body: some View {
-        NavigationView {
-            ZStack {
-                Color.black
-                    .ignoresSafeArea()
-                
-                VStack(alignment: .leading, spacing: 16) {
-                    Text(AppL10n.t("settings.backend_url_hint"))
-                        .font(.subheadline)
-                        .foregroundColor(.white.opacity(0.7))
-                    
-                    TextField(AppL10n.t("settings.backend_url_example"), text: $urlText)
-                        .font(.system(size: 16, design: .rounded))
-                        .foregroundColor(.white)
-                        .keyboardType(.URL)
-                        .autocapitalization(.none)
-                        .disableAutocorrection(true)
-                        .padding(14)
-                        .background(Color.white.opacity(0.1))
-                        .cornerRadius(12)
-                    
-                    Text(AppL10n.t("settings.backend_url_example"))
-                        .font(.caption)
-                        .foregroundColor(.white.opacity(0.5))
-                }
-                .padding(20)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            }
-            .navigationTitle(AppL10n.t("settings.backend_url_title"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Color.black, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(AppL10n.t("common.cancel")) {
-                        onCancel()
-                    }
-                    .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(AppL10n.t("settings.save")) {
-                        onSave()
-                    }
-                    .fontWeight(.semibold)
                     .foregroundColor(Color(red: 0.4, green: 0.49, blue: 0.92))
                 }
             }

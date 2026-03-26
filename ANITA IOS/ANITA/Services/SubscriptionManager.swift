@@ -47,7 +47,10 @@ class SubscriptionManager: ObservableObject {
         do {
             let response = try await networkService.getSubscription(userId: uid)
             let sub = response.subscription
-            isPremium = (sub.plan != "free" && sub.status == "active")
+            // Use StoreKit entitlements as an additional source of truth so trial/cancellation
+            // are reflected even if the backend subscription record hasn't been updated yet.
+            let storeKitPurchased = storeKitService.isPurchased("com.anita.pro.monthly") || storeKitService.isPurchased("com.anita.pro.lifetime")
+            isPremium = (sub.plan != "free" && sub.status == "active" && storeKitPurchased)
             subscriptionPlan = (sub.plan == "premium" || sub.plan == "pro" || sub.plan == "ultimate") ? "premium" : "free"
         } catch {
             // Offline or backend error: use StoreKit as fallback
