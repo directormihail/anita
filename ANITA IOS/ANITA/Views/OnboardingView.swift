@@ -1235,99 +1235,153 @@ struct OnboardingView: View {
 
 // MARK: - Bank connection step (used when includeBankConnectionStep is true)
 private struct BankConnectionOnboardingStep: View {
+    private enum BankStepIntent {
+        case connectBank
+        case manualInput
+    }
+
     var onFinish: () -> Void
     @StateObject private var subscriptionManager = SubscriptionManager.shared
     @State private var isConnecting = false
-    @State private var showUpgradeSheet = false
-    @State private var shouldConnectBankAfterUpgrade = false
-    @State private var isSkipAllowedInUpgradeSheet = false
+    @State private var showPostSignupPaywall = false
+    @State private var pendingIntentAfterPaywall: BankStepIntent?
     @State private var errorMessage: String?
     @State private var showDeleteManualConfirm = false
+    @State private var showSetupLaterConfirm = false
+    @State private var showStripeRetryState = false
     
     var body: some View {
         VStack(spacing: 16) {
-            Button {
-                if subscriptionManager.isPremium {
-                    showDeleteManualConfirm = true
-                } else {
-                    isSkipAllowedInUpgradeSheet = false
-                    shouldConnectBankAfterUpgrade = true
-                    showUpgradeSheet = true
+            if !showStripeRetryState {
+                Button {
+                    handleIntent(.connectBank)
+                } label: {
+                    HStack {
+                        if isConnecting {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        } else {
+                            Image(systemName: "link.badge.plus")
+                                .font(.system(size: 20, weight: .semibold))
+                            Text("Connect bank")
+                                .font(.system(size: 17, weight: .semibold))
+                        }
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.11, green: 0.62, blue: 1.0),
+                                        Color(red: 0.20, green: 0.47, blue: 1.0)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(Color.white.opacity(0.25), lineWidth: 1)
+                            )
+                    )
+                    .shadow(color: Color.blue.opacity(0.18), radius: 12, x: 0, y: 6)
                 }
-            } label: {
-                HStack {
-                    if isConnecting {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                    } else {
-                        Image(systemName: "link.badge.plus")
+                .buttonStyle(.plain)
+                .disabled(isConnecting)
+                
+                Button {
+                    handleIntent(.manualInput)
+                } label: {
+                    HStack {
+                        Image(systemName: "square.and.pencil")
                             .font(.system(size: 20, weight: .semibold))
-                        Text("Connect bank")
+                        Text("Use manual input")
                             .font(.system(size: 17, weight: .semibold))
                     }
-                }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 52)
-                .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color(red: 0.11, green: 0.62, blue: 1.0),
-                                    Color(red: 0.20, green: 0.47, blue: 1.0)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(Color.white.opacity(0.08))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
                             )
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(Color.white.opacity(0.25), lineWidth: 1)
-                        )
-                )
-                .shadow(color: Color.blue.opacity(0.18), radius: 12, x: 0, y: 6)
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(isConnecting)
             }
-            .buttonStyle(.plain)
-            .disabled(isConnecting)
             
             Button {
-                // In the global "test bank connection" flow, we want the manual button
-                // to show the exact same UI as the bank-connection path.
-                // Otherwise the app would route to PostSignupPlansView ("Choose your plan").
-                if UserManager.pendingTestBankConnectionFlow {
-                    if subscriptionManager.isPremium {
-                        showDeleteManualConfirm = true
-                    } else {
-                        isSkipAllowedInUpgradeSheet = true
-                        shouldConnectBankAfterUpgrade = true
-                        showUpgradeSheet = true
-                    }
+                if subscriptionManager.isPremium {
+                    showSetupLaterConfirm = true
                 } else {
-                    UserManager.shared.setTransactionDataSource("manual")
-                    onFinish()
+                    pendingIntentAfterPaywall = nil
+                    showPostSignupPaywall = true
                 }
             } label: {
                 HStack {
-                    Image(systemName: "square.and.pencil")
+                    Image(systemName: "clock.badge.checkmark")
                         .font(.system(size: 20, weight: .semibold))
-                    Text("Use manual input")
+                    Text("Set up bank later")
                         .font(.system(size: 17, weight: .semibold))
                 }
-                .foregroundColor(.white)
+                .foregroundColor(.white.opacity(0.95))
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
                 .background(
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(Color.white.opacity(0.08))
+                        .fill(Color.white.opacity(0.06))
                         .overlay(
                             RoundedRectangle(cornerRadius: 14)
-                                .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                                .stroke(Color.white.opacity(0.14), lineWidth: 1)
                         )
                 )
             }
             .buttonStyle(.plain)
             .disabled(isConnecting)
+
+            if showStripeRetryState {
+                Button {
+                    showStripeRetryState = false
+                    connectBankConfirmed()
+                } label: {
+                    HStack {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 20, weight: .semibold))
+                        Text("Retry bank connection")
+                            .font(.system(size: 17, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.11, green: 0.62, blue: 1.0),
+                                        Color(red: 0.20, green: 0.47, blue: 1.0)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(Color.white.opacity(0.25), lineWidth: 1)
+                            )
+                    )
+                    .shadow(color: Color.blue.opacity(0.18), radius: 12, x: 0, y: 6)
+                }
+                .buttonStyle(.plain)
+                .disabled(isConnecting)
+            }
             
             if let msg = errorMessage {
                 Text(msg)
@@ -1349,29 +1403,39 @@ private struct BankConnectionOnboardingStep: View {
                 "\(AppL10n.t("bank.connect_deletes_manual_intro"))\n\n\(AppL10n.t("bank.connect_deletes_manual_warning"))"
             )
         }
-        .sheet(isPresented: $showUpgradeSheet) {
-            UpgradeView(onSkip: isSkipAllowedInUpgradeSheet ? {
-                // User can proceed without paying (Free tier).
-                shouldConnectBankAfterUpgrade = false
-                // IMPORTANT: Stop the test-bank-flow logic from routing us to PostSignupPlansView.
-                // ContentView shows PostSignupPlansView when `pendingTestBankConnectionFlow` is true.
+        .alert(
+            "Set up your bank later?",
+            isPresented: $showSetupLaterConfirm
+        ) {
+            Button(AppL10n.t("common.cancel"), role: .cancel) {}
+            Button("Set up later") {
+                // Premium remains active; user can connect later from Settings.
+                UserManager.shared.setTransactionDataSource("manual")
                 UserManager.setPendingTestBankConnectionFlow(false)
                 UserManager.shared.shouldShowPostSignupPlans = false
-                UserManager.shared.setTransactionDataSource("manual")
                 onFinish()
-            } : nil)
+            }
+        } message: {
+            Text("You will keep Premium with all features. You can connect your bank anytime in Settings.")
         }
-        .onChange(of: showUpgradeSheet) { oldValue, newValue in
+        .sheet(isPresented: $showPostSignupPaywall) {
+            PostSignupPlansView {
+                showPostSignupPaywall = false
+            }
+        }
+        .onChange(of: showPostSignupPaywall) { oldValue, newValue in
             guard oldValue == true, newValue == false else { return }
             Task { @MainActor in
                 await subscriptionManager.refresh()
-                if shouldConnectBankAfterUpgrade, subscriptionManager.isPremium {
-                    shouldConnectBankAfterUpgrade = false
-                    showDeleteManualConfirm = true
-                } else {
-                    shouldConnectBankAfterUpgrade = false
+                guard subscriptionManager.isPremium else {
+                    errorMessage = AppL10n.t("paywall.upgrade_to_use")
+                    pendingIntentAfterPaywall = nil
+                    return
                 }
-                isSkipAllowedInUpgradeSheet = false
+                if let intent = pendingIntentAfterPaywall {
+                    pendingIntentAfterPaywall = nil
+                    runPremiumIntent(intent)
+                }
             }
         }
     }
@@ -1404,11 +1468,36 @@ private struct BankConnectionOnboardingStep: View {
                         print("[Onboarding] refreshBankTransactions failed: \(error.localizedDescription)")
                     }
                     NotificationCenter.default.post(name: .anitaBankSyncCompleted, object: nil)
+                    onFinish()
+                } else {
+                    showStripeRetryState = true
+                    errorMessage = "Connection was canceled or not completed. Retry or set up later."
                 }
-                onFinish()
             } catch {
+                showStripeRetryState = true
                 errorMessage = error.localizedDescription
             }
+        }
+    }
+
+    private func handleIntent(_ intent: BankStepIntent) {
+        showStripeRetryState = false
+        if subscriptionManager.isPremium {
+            runPremiumIntent(intent)
+        } else {
+            pendingIntentAfterPaywall = intent
+            showPostSignupPaywall = true
+        }
+    }
+
+    private func runPremiumIntent(_ intent: BankStepIntent) {
+        errorMessage = nil
+        switch intent {
+        case .connectBank:
+            showDeleteManualConfirm = true
+        case .manualInput:
+            UserManager.shared.setTransactionDataSource("manual")
+            onFinish()
         }
     }
 }
