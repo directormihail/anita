@@ -33,7 +33,6 @@ class UserManager: ObservableObject {
     @Published var isAuthenticated = false
     @Published var currentUser: User?
     @Published var hasCompletedOnboarding = false
-    @Published var shouldShowPostSignupPlans = false
     @Published var profileDisplayName: String = ""
     /// True when app was opened via password recovery link; user must set a new password before using the app.
     @Published var recoveryModeNeedsPassword = false
@@ -98,22 +97,18 @@ class UserManager: ObservableObject {
         UserDefaults.standard.set(value, forKey: pendingTestBankFlowKey)
     }
     
-    /// Call after onboarding completes in the test-bank flow. If user chose bank, go straight to chat; otherwise show subscriptions.
-    func clearPendingTestBankConnectionFlowAndShowPlans() {
+    /// Call after onboarding completes in the test-bank flow. Post-signup “Choose your plan” was removed; always continue into the app.
+    func clearPendingTestBankConnectionFlow() {
         Self.setPendingTestBankConnectionFlow(false)
-        if transactionDataSource == "bank" {
-            shouldShowPostSignupPlans = false
-        } else {
-            UserDefaults.standard.set(true, forKey: prefKey(postSignupPlansPendingKey))
-            shouldShowPostSignupPlans = true
-        }
+        UserDefaults.standard.set(false, forKey: prefKey(postSignupPlansPendingKey))
     }
     
     private init() {
         supabaseService.loadSavedToken()
         migrateLegacyUnkeyedStorageIfNeeded()
         hasCompletedOnboarding = UserDefaults.standard.bool(forKey: prefKey(onboardingCompletedKey))
-        shouldShowPostSignupPlans = UserDefaults.standard.bool(forKey: prefKey(postSignupPlansPendingKey))
+        // Legacy: never show post-signup plans screen again; clear stale flag.
+        UserDefaults.standard.set(false, forKey: prefKey(postSignupPlansPendingKey))
         transactionDataSource = UserDefaults.standard.string(forKey: prefKey(transactionDataSourceKeyBase)) ?? "manual"
         reloadBankSyncEstablishedFromStorage()
         // Hydrate display name so @Published is in sync and all UI updates without re-login
@@ -253,11 +248,8 @@ class UserManager: ObservableObject {
             if Self.pendingTestBankConnectionFlow {
                 self.hasCompletedOnboarding = false
                 UserDefaults.standard.set(false, forKey: prefKey(onboardingCompletedKey))
-                // Post-signup plans will be shown after they finish onboarding + bank step
-            } else {
-                UserDefaults.standard.set(true, forKey: prefKey(postSignupPlansPendingKey))
-                self.shouldShowPostSignupPlans = true
             }
+            UserDefaults.standard.set(false, forKey: prefKey(postSignupPlansPendingKey))
             self.transactionDataSource = UserDefaults.standard.string(forKey: prefKey(transactionDataSourceKeyBase)) ?? "manual"
             self.reloadBankSyncEstablishedFromStorage()
         }
@@ -342,7 +334,6 @@ class UserManager: ObservableObject {
         Task { @MainActor in
             self.currentUser = nil
             self.isAuthenticated = false
-            self.shouldShowPostSignupPlans = UserDefaults.standard.bool(forKey: prefKey(postSignupPlansPendingKey))
             self.reloadBankSyncEstablishedFromStorage()
             await SubscriptionManager.shared.refresh()
         }
@@ -615,7 +606,6 @@ class UserManager: ObservableObject {
         UserDefaults.standard.removeObject(forKey: prefKey(numberFormatKeyBase))
         UserDefaults.standard.removeObject(forKey: prefKey("anita_date_format"))
         hasCompletedOnboarding = false
-        shouldShowPostSignupPlans = false
     }
     
     /// Remove all keyed storage for a given user (e.g. after full reset).
@@ -631,18 +621,12 @@ class UserManager: ObservableObject {
         }
     }
     
-    func completePostSignupPlans() {
-        UserDefaults.standard.set(false, forKey: prefKey(postSignupPlansPendingKey))
-        shouldShowPostSignupPlans = false
-    }
-    
     func reset() {
         let idToClear = userId
         signOut()
         UserDefaults.standard.removeObject(forKey: userIdKey)
         clearKeyedStorage(for: idToClear)
         hasCompletedOnboarding = false
-        shouldShowPostSignupPlans = false
     }
 }
 

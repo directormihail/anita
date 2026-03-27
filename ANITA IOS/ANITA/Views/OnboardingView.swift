@@ -1243,11 +1243,10 @@ private struct BankConnectionOnboardingStep: View {
     var onFinish: () -> Void
     @StateObject private var subscriptionManager = SubscriptionManager.shared
     @State private var isConnecting = false
-    @State private var showPostSignupPaywall = false
-    @State private var pendingIntentAfterPaywall: BankStepIntent?
+    @State private var showUpgradePaywall = false
+    @State private var pendingIntentAfterUpgrade: BankStepIntent?
     @State private var errorMessage: String?
     @State private var showDeleteManualConfirm = false
-    @State private var showSetupLaterConfirm = false
     @State private var showStripeRetryState = false
     
     var body: some View {
@@ -1317,35 +1316,6 @@ private struct BankConnectionOnboardingStep: View {
                 .disabled(isConnecting)
             }
             
-            Button {
-                if subscriptionManager.isPremium {
-                    showSetupLaterConfirm = true
-                } else {
-                    pendingIntentAfterPaywall = nil
-                    showPostSignupPaywall = true
-                }
-            } label: {
-                HStack {
-                    Image(systemName: "clock.badge.checkmark")
-                        .font(.system(size: 20, weight: .semibold))
-                    Text("Set up bank later")
-                        .font(.system(size: 17, weight: .semibold))
-                }
-                .foregroundColor(.white.opacity(0.95))
-                .frame(maxWidth: .infinity)
-                .frame(height: 52)
-                .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(Color.white.opacity(0.06))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(Color.white.opacity(0.14), lineWidth: 1)
-                        )
-                )
-            }
-            .buttonStyle(.plain)
-            .disabled(isConnecting)
-
             if showStripeRetryState {
                 Button {
                     showStripeRetryState = false
@@ -1386,7 +1356,7 @@ private struct BankConnectionOnboardingStep: View {
             if let msg = errorMessage {
                 Text(msg)
                     .font(.system(size: 14))
-                    .foregroundColor(.orange)
+                    .foregroundColor(.white.opacity(0.82))
                     .multilineTextAlignment(.center)
             }
         }
@@ -1403,37 +1373,25 @@ private struct BankConnectionOnboardingStep: View {
                 "\(AppL10n.t("bank.connect_deletes_manual_intro"))\n\n\(AppL10n.t("bank.connect_deletes_manual_warning"))"
             )
         }
-        .alert(
-            "Set up your bank later?",
-            isPresented: $showSetupLaterConfirm
-        ) {
-            Button(AppL10n.t("common.cancel"), role: .cancel) {}
-            Button("Set up later") {
-                // Premium remains active; user can connect later from Settings.
+        .sheet(isPresented: $showUpgradePaywall) {
+            UpgradeView(onSkip: pendingIntentAfterUpgrade == .manualInput ? {
+                // "Use manual input" can be skipped for now without purchasing.
+                pendingIntentAfterUpgrade = nil
                 UserManager.shared.setTransactionDataSource("manual")
-                UserManager.setPendingTestBankConnectionFlow(false)
-                UserManager.shared.shouldShowPostSignupPlans = false
                 onFinish()
-            }
-        } message: {
-            Text("You will keep Premium with all features. You can connect your bank anytime in Settings.")
+            } : nil)
         }
-        .sheet(isPresented: $showPostSignupPaywall) {
-            PostSignupPlansView {
-                showPostSignupPaywall = false
-            }
-        }
-        .onChange(of: showPostSignupPaywall) { oldValue, newValue in
+        .onChange(of: showUpgradePaywall) { oldValue, newValue in
             guard oldValue == true, newValue == false else { return }
             Task { @MainActor in
                 await subscriptionManager.refresh()
                 guard subscriptionManager.isPremium else {
-                    errorMessage = AppL10n.t("paywall.upgrade_to_use")
-                    pendingIntentAfterPaywall = nil
+                    // User may close paywall without buying; keep screen clean.
+                    errorMessage = nil
                     return
                 }
-                if let intent = pendingIntentAfterPaywall {
-                    pendingIntentAfterPaywall = nil
+                if let intent = pendingIntentAfterUpgrade {
+                    pendingIntentAfterUpgrade = nil
                     runPremiumIntent(intent)
                 }
             }
@@ -1471,7 +1429,7 @@ private struct BankConnectionOnboardingStep: View {
                     onFinish()
                 } else {
                     showStripeRetryState = true
-                    errorMessage = "Connection was canceled or not completed. Retry or set up later."
+                    errorMessage = "Connection was canceled or not completed. Please retry."
                 }
             } catch {
                 showStripeRetryState = true
@@ -1485,8 +1443,8 @@ private struct BankConnectionOnboardingStep: View {
         if subscriptionManager.isPremium {
             runPremiumIntent(intent)
         } else {
-            pendingIntentAfterPaywall = intent
-            showPostSignupPaywall = true
+            pendingIntentAfterUpgrade = intent
+            showUpgradePaywall = true
         }
     }
 

@@ -286,6 +286,31 @@ struct UpgradeView: View {
                             )
                             .shadow(color: Color.blue.opacity(0.18), radius: 16, x: 0, y: 8)
                             .padding(.top, 2)
+
+                            // Optional skip for flows that allow continuing without purchase (same size as Continue).
+                            if onSkip != nil {
+                                Button {
+                                    onSkip?()
+                                    dismiss()
+                                } label: {
+                                    Text(AppL10n.t("common.skip"))
+                                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                        .foregroundColor(.white.opacity(0.92))
+                                        .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(.plain)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 56)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .fill(Color.white.opacity(0.08))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                                        )
+                                )
+                                .padding(.top, 10)
+                            }
                         }
                         .frame(maxWidth: 520)
                         .frame(maxWidth: .infinity, alignment: .center)
@@ -337,30 +362,6 @@ struct UpgradeView: View {
                         .padding(.horizontal, 20)
                         .padding(.top, 20)
 
-                        // Secondary "skip" to improve conversion (lets user continue on Free plan).
-                        // Only show when the caller provides onSkip.
-                        if onSkip != nil {
-                            Button {
-                                onSkip?()
-                                dismiss()
-                            } label: {
-                                Text(AppL10n.t("common.skip"))
-                                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                                    .foregroundColor(.white.opacity(0.78))
-                                    .frame(height: 44)
-                                    .frame(width: 220)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 14)
-                                            .fill(Color.white.opacity(0.06))
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 14)
-                                                    .stroke(Color.white.opacity(0.14), lineWidth: 1)
-                                            )
-                                    )
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        
                         // Legal & subscription terms — natural footer
                         VStack(spacing: 10) {
                             Text(AppL10n.t(usesLifetimeTerms ? "plans.lifetime_purchase_hint" : "plans.cancel_subscription_hint"))

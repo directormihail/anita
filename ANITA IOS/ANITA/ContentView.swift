@@ -36,11 +36,7 @@ struct ContentView: View {
                 // Opened from password reset link; user must set new password
                 ResetPasswordView()
             } else if authViewModel.isAuthenticated {
-                if userManager.shouldShowPostSignupPlans {
-                    PostSignupPlansView {
-                        userManager.completePostSignupPlans()
-                    }
-                } else if userManager.hasCompletedOnboarding {
+                if userManager.hasCompletedOnboarding {
                     mainContentView
                         .onAppear {
                             if !UserDefaults.standard.bool(forKey: hasShownFirstLaunchNotificationPromptKey) {
@@ -66,7 +62,7 @@ struct ContentView: View {
                     ) { survey in
                         userManager.completeOnboarding(survey: survey)
                         if UserManager.pendingTestBankConnectionFlow {
-                            userManager.clearPendingTestBankConnectionFlowAndShowPlans()
+                            userManager.clearPendingTestBankConnectionFlow()
                         }
                     }
                 }

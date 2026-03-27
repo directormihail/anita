@@ -40,7 +40,6 @@
 		A1000076 /* NotificationPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000077 /* NotificationPreviewView.swift */; };
 		A1000079 /* OnboardingSurvey.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000078 /* OnboardingSurvey.swift */; };
 		A1000081 /* AppL10n.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000080 /* AppL10n.swift */; };
-		A1000083 /* PostSignupPlansView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000082 /* PostSignupPlansView.swift */; };
 		A1000091 /* XPStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000090 /* XPStore.swift */; };
 		A1000093 /* AmountParsing.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000092 /* AmountParsing.swift */; };
 		A1000095 /* SubscriptionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000094 /* SubscriptionManager.swift */; };
@@ -89,7 +88,6 @@
 		A1000077 /* NotificationPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPreviewView.swift; sourceTree = "<group>"; };
 		A1000078 /* OnboardingSurvey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingSurvey.swift; sourceTree = "<group>"; };
 		A1000080 /* AppL10n.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppL10n.swift; sourceTree = "<group>"; };
-		A1000082 /* PostSignupPlansView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostSignupPlansView.swift; sourceTree = "<group>"; };
 		A1000084 /* ANITA.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ANITA.entitlements; sourceTree = "<group>"; };
 		A1000086 /* Configuration.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Configuration.storekit; sourceTree = "<group>"; };
 		A1000090 /* XPStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XPStore.swift; sourceTree = "<group>"; };
@@ -177,7 +175,6 @@
 				A1000067 /* UpgradeView.swift */,
 				A1000073 /* OnboardingView.swift */,
 				A10000D2 /* OnboardingPreBankHealthStoryView.swift */,
-				A1000082 /* PostSignupPlansView.swift */,
 				A1000077 /* NotificationPreviewView.swift */,
 			);
 			path = Views;
@@ -367,7 +364,6 @@
 				A1000070 /* CategoryDefinitions.swift in Sources */,
 				A1000072 /* OnboardingView.swift in Sources */,
 				A10000D3 /* OnboardingPreBankHealthStoryView.swift in Sources */,
-				A1000083 /* PostSignupPlansView.swift in Sources */,
 				A1000091 /* XPStore.swift in Sources */,
 				A1000074 /* NotificationService.swift in Sources */,
 				A1000076 /* NotificationPreviewView.swift in Sources */,
