@@ -51,6 +51,7 @@
 		Aa31fd725f3f /* TextFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = Af035dc2b2fe /* TextFormatter.swift */; };
 		A10000D1 /* SyncBankConnectBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000D0 /* SyncBankConnectBar.swift */; };
 		A10000D3 /* OnboardingPreBankHealthStoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000D2 /* OnboardingPreBankHealthStoryView.swift */; };
+		A10000E1 /* WelcomeBankPartners.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000E0 /* WelcomeBankPartners.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -99,6 +100,7 @@
 		Af035dc2b2fe /* TextFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFormatter.swift; sourceTree = "<group>"; };
 		A10000D0 /* SyncBankConnectBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncBankConnectBar.swift; sourceTree = "<group>"; };
 		A10000D2 /* OnboardingPreBankHealthStoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingPreBankHealthStoryView.swift; sourceTree = "<group>"; };
+		A10000E0 /* WelcomeBankPartners.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeBankPartners.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -168,6 +170,7 @@
 				A1000034 /* SidebarMenu.swift */,
 				A1000044 /* CategoryAnalyticsView.swift */,
 				A1000054 /* WelcomeView.swift */,
+				A10000E0 /* WelcomeBankPartners.swift */,
 				A1000056 /* LoginView.swift */,
 				A10000B0 /* ResetPasswordView.swift */,
 				A1000058 /* SignUpView.swift */,
@@ -355,6 +358,7 @@
 				A1000001 /* ANITAApp.swift in Sources */,
 				Aa31fd725f3f /* TextFormatter.swift in Sources */,
 				A1000053 /* WelcomeView.swift in Sources */,
+				A10000E1 /* WelcomeBankPartners.swift in Sources */,
 				A1000055 /* LoginView.swift in Sources */,
 				A1000057 /* SignUpView.swift in Sources */,
 				A1000059 /* AuthViewModel.swift in Sources */,
@@ -628,7 +632,7 @@
 			repositoryURL = "https://github.com/stripe/stripe-ios";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 24.0.0;
+				minimumVersion = 25.0.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

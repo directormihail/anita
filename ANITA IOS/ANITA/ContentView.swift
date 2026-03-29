@@ -9,7 +9,6 @@ import SwiftUI
 
 enum AuthViewState {
     case welcome
-    case onboarding
     case login
     case signUp
 }
@@ -186,27 +185,13 @@ struct ContentView: View {
                             authViewState = .login
                         }
                     },
-                    onShowSignUp: {
-                        withAnimation {
-                            authViewState = .onboarding
-                        }
-                    },
-                    onStartTestBankFlow: {
+                    onGetStarted: {
                         UserManager.setPendingTestBankConnectionFlow(true)
                         withAnimation {
                             authViewState = .signUp
                         }
                     }
                 )
-                
-            case .onboarding:
-                OnboardingView { survey in
-                    // Pre-auth onboarding: save locally + apply language, then proceed to account creation.
-                    userManager.savePreAuthOnboarding(survey: survey)
-                    withAnimation {
-                        authViewState = .signUp
-                    }
-                }
                 
             case .login:
                 LoginView(

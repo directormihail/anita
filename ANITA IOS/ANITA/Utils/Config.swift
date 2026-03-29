@@ -55,12 +55,15 @@ struct Config {
         if let url = ProcessInfo.processInfo.environment["BACKEND_URL"], !url.isEmpty {
             return url
         }
-        // In DEBUG (simulator/Xcode), default to local backend so code fixes are testable immediately.
-        // You can still override this in Settings → Developer.
+        // DEBUG: Simulator → local Node server. Physical device → production URL (localhost on device is the phone itself).
+        // Override anytime with BACKEND_URL or Settings → Backend URL (UserDefaults).
         #if DEBUG
+        #if targetEnvironment(simulator)
         return "http://localhost:3001"
         #else
-        // Release/TestFlight should use production backend.
+        return productionBackendURL
+        #endif
+        #else
         return productionBackendURL
         #endif
     }()

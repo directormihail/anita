@@ -19,21 +19,21 @@ class NetworkService: ObservableObject {
         #endif
     }
     
-    /// Base URL: Settings override (for local testing) if set, else Config.backendURL (Railway).
-    /// If a stored URL is localhost/127.0.0.1 we ignore it and use Railway so "Test bank connection" works from Xcode without running backend locally.
+    /// Base URL: `BACKEND_URL` env (Xcode scheme) → UserDefaults `backendURL` (Settings) → `Config.backendURL`.
+    /// In **Release**, a stored localhost URL is ignored so TestFlight falls back to production instead of a useless loopback URL.
+    /// In **Debug**, UserDefaults is honored (Mac IP for a physical device); previously Debug ignored Settings entirely, so the app never “saw” the server.
     private var rawBaseURL: String {
-        #if DEBUG
-        // In local development we want deterministic behavior: use local backend unless explicitly overridden via env.
         if let env = ProcessInfo.processInfo.environment["BACKEND_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines), !env.isEmpty {
             return env
         }
-        return Config.backendURL
-        #else
         let key = "backendURL"
         guard let url = UserDefaults.standard.string(forKey: key)?.trimmingCharacters(in: .whitespacesAndNewlines), !url.isEmpty else {
             return Config.backendURL
         }
         let normalized = url.hasSuffix("/") ? String(url.dropLast()) : url
+        #if DEBUG
+        return normalized
+        #else
         let lower = normalized.lowercased()
         if lower.hasPrefix("http://localhost") || lower.hasPrefix("http://127.0.0.1") || lower.contains("localhost") || lower.contains("127.0.0.1") {
             return Config.backendURL

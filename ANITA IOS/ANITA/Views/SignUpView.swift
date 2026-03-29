@@ -44,20 +44,7 @@ struct SignUpView: View {
             
             ScrollView {
                 VStack(spacing: 0) {
-                    // Header
-                    VStack(spacing: 8) {
-                        Text(AppL10n.t("welcome.title"))
-                            .font(.system(size: 32, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
-                        
-                        Text(AppL10n.t("welcome.subtitle"))
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.white.opacity(0.7))
-                    }
-                    .padding(.top, 20)
-                    .padding(.bottom, 24)
-                    
-                    // Back Button (only on credentials step)
+                    // Back — above header, same layout as LoginView
                     if currentStep == .credentials, let onBack = onBack {
                         HStack {
                             Button(action: {
@@ -80,11 +67,9 @@ struct SignUpView: View {
                             Spacer()
                         }
                         .padding(.horizontal, 24)
+                        .padding(.top, 20)
                         .padding(.bottom, 20)
-                    }
-                    
-                    // Step Indicator
-                    if needsCurrencyStep && currentStep == .preferences {
+                    } else if needsCurrencyStep && currentStep == .preferences {
                         HStack {
                             Button(action: {
                                 let impact = UIImpactFeedbackGenerator(style: .light)
@@ -108,8 +93,22 @@ struct SignUpView: View {
                             Spacer()
                         }
                         .padding(.horizontal, 24)
+                        .padding(.top, 20)
                         .padding(.bottom, 20)
                     }
+                    
+                    // Header
+                    VStack(spacing: 8) {
+                        Text(AppL10n.t("welcome.title"))
+                            .font(.system(size: 32, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                        
+                        Text(AppL10n.t("welcome.subtitle"))
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                    .padding(.top, 20)
+                    .padding(.bottom, 24)
                     
                     // Step Indicator
                     if needsCurrencyStep {
