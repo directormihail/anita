@@ -36,6 +36,39 @@ function getCurrencySymbolForCode(currency: string): string {
   return symbols[currency] ?? '$';
 }
 
+/** True if `tz` is a valid IANA time zone for Intl (invalid → use UTC). */
+function isValidIanaTimeZone(tz: string): boolean {
+  if (!tz || typeof tz !== 'string' || tz.length > 120) return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Calendar Y-M-D for an instant in the user's time zone (month 1–12). */
+function calendarYMInTimeZone(isoOrDate: string | Date, timeZone: string): { year: number; month: number; day: number } {
+  const d = typeof isoOrDate === 'string' ? new Date(isoOrDate) : isoOrDate;
+  if (Number.isNaN(d.getTime())) return { year: 0, month: 0, day: 0 };
+  const fmt = new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: 'numeric', day: 'numeric' });
+  const parts = fmt.formatToParts(d);
+  const y = parseInt(parts.find(p => p.type === 'year')?.value ?? '0', 10);
+  const m = parseInt(parts.find(p => p.type === 'month')?.value ?? '0', 10);
+  const day = parseInt(parts.find(p => p.type === 'day')?.value ?? '0', 10);
+  return { year: y, month: m, day };
+}
+
+function isInCalendarMonth(isoDate: string, timeZone: string, year: number, month: number): boolean {
+  const cal = calendarYMInTimeZone(isoDate, timeZone);
+  return cal.year === year && cal.month === month;
+}
+
+function addCalendarMonths(year: number, month: number, delta: number): { year: number; month: number } {
+  const d = new Date(Date.UTC(year, month - 1 + delta, 15));
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1 };
+}
+
 /** Freemium: check if user has an active premium subscription (plan is premium/pro/ultimate). */
 async function getIsPremium(supabase: { from: (table: string) => any }, userId: string): Promise<boolean> {
   const { data, error } = await supabase
@@ -302,7 +335,18 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
       return;
     }
 
-    const { messages, maxTokens = 1200, temperature = 0.8, userId, conversationId, userDisplayName: bodyDisplayName, userCurrency: bodyUserCurrency, currencyCode: bodyCurrencyCode, isPremium: clientIsPremium } = body;
+    const {
+      messages,
+      maxTokens = 1200,
+      temperature = 0.8,
+      userId,
+      conversationId,
+      userDisplayName: bodyDisplayName,
+      userCurrency: bodyUserCurrency,
+      currencyCode: bodyCurrencyCode,
+      isPremium: clientIsPremium,
+      userTimeZone: bodyUserTimeZone
+    } = body;
 
     // Validate messages array
     if (!Array.isArray(messages) || messages.length === 0) {
@@ -401,7 +445,9 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
           resolvedUserCurrency = freemiumResult.userCurrency;
         } else {
           // Premium: full system prompt with financial data and all patterns P1–P6
-          const systemResult = await buildSystemPrompt(userId, conversationId || '', { clientCurrency });
+          const userTimeZone =
+            typeof bodyUserTimeZone === 'string' && bodyUserTimeZone.trim() ? bodyUserTimeZone.trim() : undefined;
+          const systemResult = await buildSystemPrompt(userId, conversationId || '', { clientCurrency, userTimeZone });
           systemPrompt = systemResult.prompt;
           resolvedUserCurrency = systemResult.userCurrency;
         }
@@ -974,12 +1020,15 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
           
           // Only create limits for valid spending categories (reject AI mistakes like "Any of your spending categories")
           const validRecommendations = budgetRecommendations?.filter(r => isValidLimitCategory(r.category)) ?? [];
+          /** One limit per chat turn: sequential UX and matches single confirmation phrase the model must output. */
+          const validRecommendationsThisTurn = validRecommendations.slice(0, 1);
           if (validRecommendations.length > 0) {
             logger.info('Budget recommendations detected, creating automatically', { 
               requestId, 
               userId, 
-              count: validRecommendations.length,
-              recommendations: validRecommendations.map(r => `${r.category}: ${r.amount}`)
+              count: validRecommendationsThisTurn.length,
+              cappedFrom: validRecommendations.length,
+              recommendations: validRecommendationsThisTurn.map(r => `${r.category}: ${r.amount}`)
             });
             
             // Get user currency preference
@@ -1014,7 +1063,7 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
 
             const createdTargetIds: string[] = [];
             
-            for (const recommendation of validRecommendations) {
+            for (const recommendation of validRecommendationsThisTurn) {
               // Skip if budget target already exists for this category
               if (recommendation.category && existingCategories.has(recommendation.category.toLowerCase())) {
                 logger.info('Budget target already exists for category', { 
@@ -1068,16 +1117,16 @@ export async function handleChatCompletion(req: Request, res: Response): Promise
               (res as any).createdTargetId = createdTargetIds[0];
               (res as any).createdTargetType = 'budget';
               // Store category from first recommendation
-              if (validRecommendations.length > 0) {
-                (res as any).createdTargetCategory = validRecommendations[0].category;
+              if (validRecommendationsThisTurn.length > 0) {
+                (res as any).createdTargetCategory = validRecommendationsThisTurn[0].category;
               }
             } else if (hadLimitConfirmation) {
               // AI said "I've set a limit" but we didn't actually create it — don't show false confirmation
               finalResponse = "I couldn't set that limit. Please try again or add it from the Finance page.";
             }
             // When we created from fallback (user said "Do it"), ensure we show the confirmation message
-            if (createdLimitFromFallback && createdTargetIds.length > 0 && validRecommendations.length > 0) {
-              const rec = validRecommendations[0];
+            if (createdLimitFromFallback && createdTargetIds.length > 0 && validRecommendationsThisTurn.length > 0) {
+              const rec = validRecommendationsThisTurn[0];
               const effectiveCurrency = rec.currency || userCurrency;
               const sym = effectiveCurrency === 'USD' ? '$' : effectiveCurrency === 'GBP' ? '£' : effectiveCurrency === 'JPY' ? '¥' : effectiveCurrency === 'CHF' ? 'CHF' : '€';
               finalResponse = `I've set a limit for ${rec.category} at target ${sym}${rec.amount.toFixed(2)}. ✅ You can review your limit now.`;
@@ -1269,6 +1318,7 @@ export function parseTransactionFromAiResponse(
   aiResponse: string
 ): { type: 'expense' | 'income'; amount: number; category: string; description: string } | null {
   const r = aiResponse.trim();
+  if (responseLooksLikeLimitBulkSummary(aiResponse)) return null;
   const lastUserMessage = messages.filter(m => m.role === 'user').pop()?.content?.trim() || '';
 
   // AI confirmed it added a transaction (broad patterns so we don't miss phrasings)
@@ -1322,10 +1372,26 @@ function shortifyDescription(userMessage: string, category: string): string {
 }
 
 /**
+ * Assistant "recap" of many limits at once — must NOT be parsed as an expense (✅ + dollar amounts).
+ * Matches "I've set the limits", bullet lists "Dining Out at $79", etc.
+ */
+function responseLooksLikeLimitBulkSummary(aiResponse: string): boolean {
+  const r = aiResponse.trim();
+  const lower = r.toLowerCase();
+  if (/I'?ve\s+set\s+(?:the\s+)?limits\b/i.test(r)) return true;
+  if (/let\s+me\s+handle\s+that|I'?ll\s+set\s+the\s+limits/i.test(lower)) return true;
+  if (/(?:quick\s+recap|here'?s\s+a\s+recap)/i.test(lower) && /\bat\s+[$€£¥]\s*[\d.,]+/i.test(r)) return true;
+  const atPriceMatches = r.match(/\bat\s+[$€£¥]\s*[\d.,]+/gi) || [];
+  if (atPriceMatches.length >= 2 && /\blimit|recap|categor/i.test(lower)) return true;
+  return false;
+}
+
+/**
  * Detect if the AI response is confirming a LIMIT or GOAL (savings target), NOT a transaction.
  * We must never persist these as transactions — they belong only in the targets table.
  */
 function isLimitOrGoalConfirmation(aiResponse: string): boolean {
+  if (responseLooksLikeLimitBulkSummary(aiResponse)) return true;
   const r = aiResponse.trim().toLowerCase();
   return (
     /(?:I've set|I have set|set|created)\s+(?:a )?limit\s+for\s+/i.test(aiResponse) ||
@@ -1343,6 +1409,7 @@ function isLimitOrGoalConfirmation(aiResponse: string): boolean {
  */
 function looksLikeTransactionConfirmation(aiResponse: string): boolean {
   if (isLimitOrGoalConfirmation(aiResponse)) return false;
+  if (responseLooksLikeLimitBulkSummary(aiResponse)) return false;
   const r = aiResponse.trim();
   if (!r.includes('✅')) return false;
   const hasAmount = /[$€£¥]\s*\d+(?:[.,]\d{2})?|\d+(?:[.,]\d{2})?\s*(?:€|eur|\$|usd|dollars?)/i.test(r);
@@ -1359,6 +1426,7 @@ function parseTransactionFromConfirmationFallback(
   aiResponse: string
 ): { type: 'expense' | 'income'; amount: number; category: string; description: string } | null {
   if (isLimitOrGoalConfirmation(aiResponse)) return null;
+  if (responseLooksLikeLimitBulkSummary(aiResponse)) return null;
   if (!looksLikeTransactionConfirmation(aiResponse)) return null;
   const r = aiResponse.trim();
   const lastUserMessage = messages.filter(m => m.role === 'user').pop()?.content?.trim() || '';
@@ -1394,11 +1462,16 @@ function parseTransactionFromConfirmationFallback(
  * When true, we must NOT treat the user's message as a new expense/income transaction.
  */
 function conversationContextSuggestLimitFlow(messages: Array<{ role: string; content: string }>): boolean {
-  const recent = messages.slice(-4).map(m => (m.content || '').toLowerCase());
+  const recent = messages
+    .filter(m => m.role === 'user' || m.role === 'assistant' || (m as { role?: string }).role === 'anita')
+    .slice(-8)
+    .map(m => (m.content || '').toLowerCase());
   const text = recent.join(' ');
   return (
-    /(?:set\s+)?(?:a\s+)?limit\s+for\s+|limit\s+for\s+.+?\s+at\s+target|would you like to set the limit|target\s+of\s+[$€£¥]?\s*\d|monthly limit:|spending limit/i.test(text) ||
-    /(?:yourself|with my help)\s*[.?]?\s*$/im.test(text)
+    /(?:set\s+)?(?:a\s+)?limit\s+for\s+|limit\s+for\s+.+?\s+at\s+target|would you like to set the limit|target\s+of\s+[$€£¥]?\s*\d|monthly limit:/i.test(text) ||
+    /(?:^|[\s,.;])spending limit(?:$|[\s,.;])/i.test(text) ||
+    /(?:yourself|with my help)\b/i.test(text) ||
+    /I'?ve\s+set\s+(?:the\s+)?limits\b|quick\s+recap|here'?s\s+a\s+recap|let\s+me\s+handle\s+that|I'?ll\s+set\s+the\s+limits/i.test(text)
   );
 }
 
@@ -1449,9 +1522,14 @@ function aggregateTransactionFromFullConversation(
   }
   if (!type && assistantMessages.length > 0) {
     const recentAssistant = assistantMessages.slice(-3).join(' ').toLowerCase();
+    const assistantIsLimitAdvice =
+      /I'?ve\s+set\s+(?:the\s+)?limits\b|quick\s+recap|here'?s\s+a\s+recap|limit\s+for\s+.+\s+at\s+target|would you like to set the limit|with my help|spending categor|set\s+the\s+limit|monthly limit:/i.test(recentAssistant);
     if (/category\s+of\s+income|income\s+fall\s+into|this\s+income|salary|freelance\s+&?\s*side\s+income/i.test(recentAssistant) && !/expense|ausgabe/i.test(recentAssistant)) {
       type = 'income';
-    } else if (/category\s+of\s+expense|expense\s+fall\s+into|this\s+expense|amount\s+spent|provide\s+the\s+amount|groceries|dining|rent/i.test(recentAssistant)) {
+    } else if (
+      !assistantIsLimitAdvice &&
+      /category\s+of\s+expense|expense\s+fall\s+into|this\s+expense|amount\s+spent|provide\s+the\s+amount|groceries|dining|rent/i.test(recentAssistant)
+    ) {
       type = 'expense';
     }
   }
@@ -2215,7 +2293,11 @@ Categories for P1/P2 only: Rent, Groceries, Dining Out, Entertainment, Streaming
 /**
  * Build context-aware system prompt similar to webapp
  */
-async function buildSystemPrompt(userId: string, conversationId: string, options?: { clientCurrency?: string }): Promise<{ prompt: string; userCurrency: string }> {
+async function buildSystemPrompt(
+  userId: string,
+  conversationId: string,
+  options?: { clientCurrency?: string; userTimeZone?: string }
+): Promise<{ prompt: string; userCurrency: string }> {
   const supabase = getSupabaseClient();
   const fallbackPrompt = 'No financial data available. Use conversation context only.';
   if (!supabase) {
@@ -2353,33 +2435,40 @@ async function buildSystemPrompt(userId: string, conversationId: string, options
       .join('\n');
   }
 
-  // Build financial insights
+  // Financial insights: user's calendar month in their time zone (from app), not server UTC.
+  const userTz =
+    options?.userTimeZone && isValidIanaTimeZone(options.userTimeZone) ? options.userTimeZone : 'UTC';
   const now = new Date();
-  const currentMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
-  const nextMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0, 0));
-  
-  const monthlyTransactions = transactions.filter((t: any) => {
-    const transactionDate = new Date(t.date);
-    if (Number.isNaN(transactionDate.getTime())) return false;
-    return transactionDate >= currentMonthStart && transactionDate < nextMonthStart;
-  });
+  const curCal = calendarYMInTimeZone(now, userTz);
+  const curY = curCal.year;
+  const curM = curCal.month;
+  const prevCal = addCalendarMonths(curY, curM, -1);
+  const prevY = prevCal.year;
+  const prevM = prevCal.month;
+
+  const monthlyTransactions = transactions.filter(
+    (t: any) => t.date && isInCalendarMonth(String(t.date), userTz, curY, curM)
+  );
+
+  const previousMonthTransactions = transactions.filter(
+    (t: any) => t.date && isInCalendarMonth(String(t.date), userTz, prevY, prevM)
+  );
 
   const monthlyIncome = monthlyTransactions
     .filter((t: any) => t.type === 'income')
     .reduce((sum: number, t: any) => sum + t.amount, 0);
-  
+
   const monthlyExpenses = monthlyTransactions
     .filter((t: any) => t.type === 'expense')
     .reduce((sum: number, t: any) => sum + t.amount, 0);
 
-  // Calculate category breakdowns for better insights (categories already normalized)
-  const categoryBreakdown = transactions
+  const prevMonthlyIncome = previousMonthTransactions
+    .filter((t: any) => t.type === 'income')
+    .reduce((sum: number, t: any) => sum + t.amount, 0);
+
+  const prevMonthlyExpenses = previousMonthTransactions
     .filter((t: any) => t.type === 'expense')
-    .reduce((acc: any, t: any) => {
-      const category = normalizeCategory(t.category);
-      acc[category] = (acc[category] || 0) + t.amount;
-      return acc;
-    }, {});
+    .reduce((sum: number, t: any) => sum + t.amount, 0);
 
   const monthlyCategoryBreakdown = monthlyTransactions
     .filter((t: any) => t.type === 'expense')
@@ -2389,7 +2478,14 @@ async function buildSystemPrompt(userId: string, conversationId: string, options
       return acc;
     }, {});
 
-  // Define fixed vs variable spending categories for clearer insights
+  const prevMonthlyCategoryBreakdown = previousMonthTransactions
+    .filter((t: any) => t.type === 'expense')
+    .reduce((acc: any, t: any) => {
+      const category = normalizeCategory(t.category);
+      acc[category] = (acc[category] || 0) + t.amount;
+      return acc;
+    }, {});
+
   const fixedCategories = new Set<string>([
     'Rent',
     'Mortgage',
@@ -2424,51 +2520,122 @@ async function buildSystemPrompt(userId: string, conversationId: string, options
     return 'Other';
   };
 
-  // Get top VARIABLE spending categories for the CURRENT MONTH only
   const topMonthlyCategories = Object.entries(monthlyCategoryBreakdown)
     .filter(([category]) => variableCategories.has(category))
     .sort(([, a]: any, [, b]: any) => b - a)
     .slice(0, 5)
     .map(([category, amount]: any) => ({ category, amount, type: getCategoryType(category) }));
 
-  const financialInsights = {
-    totalBalance: netBalance,
-    totalIncome,
-    totalExpenses,
-    monthlyIncome,
-    monthlyExpenses,
-    monthlyBalance: monthlyIncome - monthlyExpenses,
-    categoryBreakdown,
-    monthlyCategoryBreakdown,
-    topMonthlyCategories,
-    transactionCount: transactions.length,
-    monthlyTransactionCount: monthlyTransactions.length
+  const topPrevMonthlyCategories = Object.entries(prevMonthlyCategoryBreakdown)
+    .filter(([category]) => variableCategories.has(category))
+    .sort(([, a]: any, [, b]: any) => b - a)
+    .slice(0, 5)
+    .map(([category, amount]: any) => ({ category, amount, type: getCategoryType(category) }));
+
+  const sumExpenseCategoriesMonth = Object.values(monthlyCategoryBreakdown).reduce(
+    (a: number, b: any) => a + (typeof b === 'number' ? b : 0),
+    0
+  );
+  if (Math.abs(sumExpenseCategoriesMonth - monthlyExpenses) > 0.05) {
+    logger.warn('Chat context: monthly expenses !== sum of category buckets', {
+      userId,
+      monthlyExpenses,
+      sumExpenseCategoriesMonth
+    });
+  }
+
+  const sumTopVariableMonth = topMonthlyCategories.reduce((s, c) => s + c.amount, 0);
+  const sumTopVariableLastMonth = topPrevMonthlyCategories.reduce((s, c) => s + c.amount, 0);
+
+  const ROLLOVER_WINDOW_DAYS = 7;
+  const isRolloverWindow = curCal.day > 0 && curCal.day <= ROLLOVER_WINDOW_DAYS;
+
+  const verbatimCategoryLinesThisMonth =
+    topMonthlyCategories.length > 0
+      ? topMonthlyCategories
+          .map((c: { category: string; amount: number }) => `• ${c.category} ${currencySymbol}${c.amount.toFixed(2)}`)
+          .join(' ')
+      : '';
+
+  const verbatimCategoryLinesLastMonth =
+    topPrevMonthlyCategories.length > 0
+      ? topPrevMonthlyCategories
+          .map((c: { category: string; amount: number }) => `• ${c.category} ${currencySymbol}${c.amount.toFixed(2)}`)
+          .join(' ')
+      : '';
+
+  const financialInsightsForAI = {
+    userCalendarTimeZone: userTz,
+    currentMonthLabel: `${curY}-${String(curM).padStart(2, '0')}`,
+    previousMonthLabel: `${prevY}-${String(prevM).padStart(2, '0')}`,
+    thisMonth: {
+      income: monthlyIncome,
+      expenses: monthlyExpenses,
+      balance: monthlyIncome - monthlyExpenses,
+      expenseTotalsByCategory: monthlyCategoryBreakdown,
+      topVariableSpendingCategories: topMonthlyCategories,
+      transactionCount: monthlyTransactions.length
+    },
+    lastMonth: {
+      income: prevMonthlyIncome,
+      expenses: prevMonthlyExpenses,
+      balance: prevMonthlyIncome - prevMonthlyExpenses,
+      expenseTotalsByCategory: prevMonthlyCategoryBreakdown,
+      topVariableSpendingCategories: topPrevMonthlyCategories,
+      transactionCount: previousMonthTransactions.length
+    },
+    allTime: {
+      totalIncome,
+      totalExpenses,
+      netBalance
+    }
   };
+
+  const monthlyBalance = monthlyIncome - monthlyExpenses;
   const userNameLine = userNameFromDb
     ? `The user's name is ${userNameFromDb}. You may address them by name when appropriate.\n\n`
     : '';
+  const rolloverBlock =
+    isRolloverWindow
+      ? `- MONTH ROLLOVER: We are in the first ${ROLLOVER_WINDOW_DAYS} days of ${curY}-${String(curM).padStart(2, '0')} (user TZ). The month that just ended is ${prevY}-${String(prevM).padStart(2, '0')}. If the user mentions late imports, missing transactions, or tying up the month, suggest a quick check of **that closed month** in their transaction list so categories stay accurate. One short sentence when relevant; do not repeat every turn.\n`
+      : '';
   const fullPrompt = `${userNameLine}${currencyInstruction}FINANCIAL DATA — RULES:
-- DEFAULT: Always show CURRENT MONTH only (monthly income, monthly expenses, monthly balance). Do not show "Total Income" or "Total Expenses" (all-time) unless the user explicitly asks for overall/total/all-time figures.
-- MAIN SNAPSHOT: Present the current month summary in TEXT form (full sentences), e.g. "This month you've earned ${currencySymbol}X, spent ${currencySymbol}Y, and your balance is ${currencySymbol}Z." Do NOT use bullet points for income, expenses, or balance.
-- BULLET POINTS: Use bullet points ONLY when listing spending categories (e.g. "Your top spending categories this month: • Dining Out ${currencySymbol}X • Groceries ${currencySymbol}Y"). Never use bullets for the main financial numbers.
-- NUMBER SAFETY: Re-check the monthly math before you reply (monthly balance must equal monthly income minus monthly expenses).
+- CALENDAR: "This month" = ${curY}-${String(curM).padStart(2, '0')} in the user's time zone (${userTz}). "Last month" = ${prevY}-${String(prevM).padStart(2, '0')}. Use thisMonth.* in JSON for "this month"; use lastMonth.* when discussing the previous calendar month or comparing. Never mix months in one answer unless the user explicitly compares.
+${rolloverBlock}- P3 LIMIT WITH HELP (which spending categories to cut + suggested limit amounts): Use **lastMonth** only — lastMonth.expenseTotalsByCategory and the VERBATIM LAST MONTH line below (exact categories, amounts, order). Propose limits ~10–20% below **last month's** spend per category. Say in plain language that you're going off last month's spending. If last month has no variable-category line (empty / no data), fall back to **thisMonth** and the THIS MONTH verbatim line and say briefly you're using this month because last month had nothing to go on.
+- DEFAULT: Show THIS MONTH only (thisMonth.income/expenses/balance) for general "how am I doing". Do not show all-time unless the user explicitly asks for overall/total/all-time (then use allTime.* only).
+- MAIN SNAPSHOT: Present this month in TEXT (full sentences), e.g. "This month you've earned ${currencySymbol}X, spent ${currencySymbol}Y, and your balance is ${currencySymbol}Z." Do NOT use bullet points for income, expenses, or balance.
+- CATEGORY LINES (THIS month): For P4/P6 and any "this month" category list, copy EXACTLY the THIS MONTH verbatim line (same categories, amounts, order). Do not recalculate or reorder. Top-variable-only; total spent is thisMonth.expenses (includes fixed/other). Sum of those bullets must NOT exceed thisMonth.expenses.
+- Verbatim category line for THIS month (P4/P6 — copy when listing this month's top categories): ${verbatimCategoryLinesThisMonth || '(no variable-category spend this month)'}
+- CATEGORY LINES (LAST month): For P3 Limit — with help ONLY, copy EXACTLY the LAST MONTH verbatim line. Sum of those bullets must NOT exceed lastMonth.expenses.
+- Verbatim category line for LAST month (P3 Limit with help — copy exactly): ${verbatimCategoryLinesLastMonth || '(none — use this-month fallback per P3 rules above)'}
+- Sum of THIS-MONTH bullets only: ${currencySymbol}${sumTopVariableMonth.toFixed(2)} | Total this-month expenses: ${currencySymbol}${monthlyExpenses.toFixed(2)}
+- Sum of LAST-MONTH bullets only: ${currencySymbol}${sumTopVariableLastMonth.toFixed(2)} | Total last-month expenses: ${currencySymbol}${prevMonthlyExpenses.toFixed(2)}
+- BULLET POINTS: Only for the category list as above; never bullets for the main income/expense/balance numbers.
+- NUMBER SAFETY: monthly balance = monthly income − monthly expenses, using thisMonth figures only.
 
-CURRENT MONTH (always use this for the default snapshot):
-- Monthly Income: ${currencySymbol}${monthlyIncome.toFixed(2)}
-- Monthly Expenses: ${currencySymbol}${monthlyExpenses.toFixed(2)}
-- Monthly Balance: ${currencySymbol}${financialInsights.monthlyBalance.toFixed(2)}
+THIS MONTH (${curY}-${String(curM).padStart(2, '0')}, user calendar):
+- Income: ${currencySymbol}${monthlyIncome.toFixed(2)}
+- Expenses: ${currencySymbol}${monthlyExpenses.toFixed(2)}
+- Balance: ${currencySymbol}${monthlyBalance.toFixed(2)}
 
-ALL-TIME (only mention when user explicitly asks for total/overall):
+LAST MONTH (${prevY}-${String(prevM).padStart(2, '0')}, if user asks):
+- Income: ${currencySymbol}${prevMonthlyIncome.toFixed(2)}
+- Expenses: ${currencySymbol}${prevMonthlyExpenses.toFixed(2)}
+- Balance: ${currencySymbol}${(prevMonthlyIncome - prevMonthlyExpenses).toFixed(2)}
+
+ALL-TIME (only when user explicitly asks):
 - Total Income: ${currencySymbol}${totalIncome.toFixed(2)}
 - Total Expenses: ${currencySymbol}${totalExpenses.toFixed(2)}
 - Net Balance: ${currencySymbol}${netBalance.toFixed(2)}
 
 ${recentTransactionSummary ? `Recent Transactions: ${recentTransactionSummary}` : ''}
 
-${topMonthlyCategories.length > 0 ? `Top Variable Spending Categories (current month only):\n${topMonthlyCategories.map((c: any, i: number) => `${i + 1}. ${c.category} (${c.type}): ${currencySymbol}${c.amount.toFixed(2)}`).join('\n')}` : ''}
+${topMonthlyCategories.length > 0 ? `Top variable categories (this month, same as verbatim):\n${topMonthlyCategories.map((c: any, i: number) => `${i + 1}. ${c.category}: ${currencySymbol}${c.amount.toFixed(2)}`).join('\n')}` : ''}
 
-DETAILED FINANCIAL DATA:
-${JSON.stringify(financialInsights, null, 2)}
+${topPrevMonthlyCategories.length > 0 ? `Top variable categories (last month — P3 limit with help, same as last-month verbatim):\n${topPrevMonthlyCategories.map((c: any, i: number) => `${i + 1}. ${c.category}: ${currencySymbol}${c.amount.toFixed(2)}`).join('\n')}` : ''}
+
+STRUCTURED FINANCIAL DATA (authoritative; no all-time category breakdown):
+${JSON.stringify(financialInsightsForAI, null, 2)}
 
 CONVERSATION CONTEXT:
 ${recentConversation}
@@ -2532,7 +2699,10 @@ P3 — Set a Target:
 - If the user has already clearly chosen a goal (e.g. "Goal", "saving goal"), do NOT ask "goal or limit" — go directly to Goal (ask for target name and amount).
 - Goal: Ask for target name and amount. Create the goal in the finance page. Send short confirmation with ✅ and button to review target.
 - Limit — alone: Ask for category and limit amount. Create the limit in the finance page. Send confirmation with ✅ and button to review limit.
-- Limit — with help: Use only VARIABLE spending categories from monthlyCategoryBreakdown (current month) in the backend; skip fixed costs. In your reply do NOT say "variable" — say "spending categories" or "your top spending categories". Present as a short markdown list with category and amount only (e.g. "1. **Groceries** · ${currencySymbol}180.51" — no "Variable" in the list). Let user choose one. When they confirm, include: "I've set a limit for [Category] at target ${currencySymbol}[amount]." Then ✅ and button to review limit. Use suggested amount 10–20% below current monthly spending for that category.
+- Limit — with help: Use **last month's** VARIABLE spend first (verbatim LAST MONTH line + JSON); if empty, use THIS MONTH line. Skip fixed costs; never say "variable" to the user (say "spending categories").
+- When they choose "with help" / "suggest": **Always show the full top spending-category list first** — copy the entire verbatim line from FINANCIAL DATA above (every bullet, same order and amounts). One short intro line is OK (e.g. last month). **After the list**, name **one** category and **one** suggested limit (~10–20% below that line). It is good to note which categories already have limits (one short clause). **Closing question: keep it to one short line only** — ask if that suggested limit works (e.g. "Good with ${currencySymbol}76 for Entertainment?" / "Does ${currencySymbol}76 work?"). Do **not** end with long multi-option text ("What do you think?", "that limit, another category, or a different amount?"). The user can still reply with another category or a different number; your wording stays minimal.
+- Never claim several limits are already saved in one message. Do **not** say "I've set the limits" (plural), fake "recaps" of many saved limits, or bulk bullet "Category at $X" as confirmed. The backend only saves when **one** exact sentence appears: "I've set a limit for [Category] at target ${currencySymbol}[amount]." After they confirm one, use that sentence once, then ✅. Never use "I've added your expense" for limits.
+- After one limit is saved, they can pick another category from the same list (or you suggest the next); same rules — one confirmation phrase per limit, same short closing question style.
 
 P4 — Analyse Budget:
 - Step 1: Check health from CURRENT MONTH data (monthly income, monthly expenses, monthly balance). Send a short message in TEXT form (e.g. "This month you've earned X, spent Y, and your balance is Z — looking good!" or "Uh-oh, you've spent more than you earned this month."). Do NOT use bullet points for the main snapshot. If you list spending categories, use bullet points only for that list. Only show total/all-time income and expenses if the user explicitly asked for them.
@@ -2542,8 +2712,8 @@ P5 — Explain Who Anita Is:
 - Step 1: Short explanation of what Anita does. Ask if user wants to analyse budget. If yes: follow P4. If no: "All the best with your financial journey! Come back anytime 😄"
 
 P6 — Explain Where Money Goes:
-- Step 1: Show CURRENT MONTH only. First give the main summary in TEXT form (e.g. "This month you've spent ${currencySymbol}X in your main spending categories."). Then list spending categories using BULLET POINTS only for the category list (monthlyCategoryBreakdown; VARIABLE only, skip fixed costs). E.g. "Your top spending categories: • Groceries ${currencySymbol}180.51 • Dining Out ${currencySymbol}109.40". Do NOT use bullet points for income/expense/balance — only for the category list. Then ask a single concise follow-up question.
-- Step 2: When the user confirms, create the limit in the database by including this exact phrase in your reply: "I've set a limit for [Category] at target ${currencySymbol}[amount]." Then add ✅. If user refuses to set a limit: "All the best with your financial journey! Come back anytime 😄"
+- Step 1: Show CURRENT MONTH only (thisMonth in STRUCTURED FINANCIAL DATA). First give the main summary in TEXT form. Then list top VARIABLE categories using the VERBATIM line from the rules above (same amounts). Do NOT use bullet points for income/expense/balance — only for the category list. Then ask a single concise follow-up question.
+- Step 2: If they agree to set a limit, keep the **full category list** visible from Step 1 if you reply in the same turn; otherwise repeat the verbatim list. Then treat it like P3: negotiate **one** category and **one** target; only after they confirm, output **one** "I've set a limit for [Category] at target ${currencySymbol}[amount]." Then ✅. Never claim multiple limits saved at once. If user refuses: "All the best with your financial journey! Come back anytime 😄"
 
 Categories (for P1, P2, P3, P6 — use EXACTLY these names, proper case, "&" not "and"): Rent, Mortgage, Electricity, Water & Sewage, Gas & Heating, Internet & Phone, Groceries, Dining Out, Gas & Fuel, Public Transportation, Rideshare & Taxi, Parking & Tolls, Streaming Services, Software & Apps, Shopping, Clothing & Fashion, Entertainment, Medical & Healthcare, Fitness & Gym, Personal Care, Education, Loan Payments, Debts, Leasing, Salary, Freelance & Side Income, Other. Never invent a category; always pick from this list.
 
@@ -2556,7 +2726,7 @@ Context → category (recognize from what the user says and use the canonical na
 - Gas & Fuel: gas station, gasoline, fuel (car). Gas & Heating: gas bill, heating (home).
 - Internet & Phone: internet, phone bill, mobile, radio tax, TV tax, Rundfunkbeitrag.
 - Income only (P1): Salary (salary, paycheck, wage), Freelance & Side Income (freelance, gig, side income, bonus).
-Use only numbers/categories from CURRENT MONTH / DETAILED FINANCIAL DATA above. Default to current month; use all-time totals only when user explicitly asks. For limits use only variable spending categories (e.g. Dining Out, Entertainment, Shopping, Streaming Services); never rent, debt, utilities.
+Use only numbers/categories from thisMonth / lastMonth in STRUCTURED FINANCIAL DATA above. Default to this month for snapshots; use allTime only when user explicitly asks. For P3 limit with help, use **lastMonth** for categories and amounts (fallback: thisMonth if last month empty). Use only variable spending categories for limits; never rent, debt, utilities.
 
 Fixed vs Variable (internal use only — do not say "variable" or "fixed" to the user):
 - Fixed costs: Rent, Mortgage, Electricity, Water & Sewage, Gas & Heating, Internet & Phone, Education, Medical & Healthcare, and any debt/loan repayments. Do NOT suggest limits for these.

@@ -61,11 +61,8 @@ final class BankSessionSyncController {
 
         lock.lock()
         let previous = chain
-        chain = Task { [weak self] in
-            guard let self else {
-                await MainActor.run { completion() }
-                return
-            }
+        // No `[weak self]` — this controller is a singleton and the task uses only `Self` / static APIs.
+        chain = Task {
             await previous?.value
 
             let lastSuccess = Self.lastSuccessfulSyncDate(forUserId: userId)

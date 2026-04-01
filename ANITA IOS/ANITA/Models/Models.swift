@@ -43,6 +43,8 @@ struct ChatCompletionRequest: Codable {
     let userCurrency: String?
     /// When false, backend MUST treat as free tier and enforce paywall for limits/analytics/goals. Sourced from SubscriptionManager.
     let isPremium: Bool?
+    /// IANA time zone (e.g. Europe/Berlin) so chat "this month" matches the user's calendar, not server UTC.
+    let userTimeZone: String?
     
     enum CodingKeys: String, CodingKey {
         case messages
@@ -53,6 +55,7 @@ struct ChatCompletionRequest: Codable {
         case userDisplayName
         case userCurrency
         case isPremium
+        case userTimeZone
     }
 }
 

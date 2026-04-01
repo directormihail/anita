@@ -99,7 +99,8 @@ class NetworkService: ObservableObject {
             conversationId: conversationId,
             userDisplayName: userDisplayName,
             userCurrency: userCurrency,
-            isPremium: isPremium
+            isPremium: isPremium,
+            userTimeZone: TimeZone.current.identifier
         )
         
         request.httpBody = try JSONEncoder().encode(requestBody)
