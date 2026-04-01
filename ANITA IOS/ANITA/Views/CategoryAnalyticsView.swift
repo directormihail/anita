@@ -261,6 +261,7 @@ struct CategoryRow: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: currency)
         formatter.maximumFractionDigits = 2
         return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
     }

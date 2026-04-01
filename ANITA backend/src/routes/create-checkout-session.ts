@@ -25,7 +25,7 @@ const stripe = stripeSecretKey
 const SUBSCRIPTION_PLANS: Record<string, { priceId: string; amount: number; name: string }> = {
   premium: {
     priceId: process.env.STRIPE_PRO_PRICE_ID || process.env.STRIPE_PREMIUM_PRICE_ID || 'price_pro_monthly',
-    amount: 499, // $4.99 in cents
+    amount: 999, // $9.99 in cents
     name: 'Premium',
   },
 };

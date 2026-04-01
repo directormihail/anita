@@ -72,6 +72,12 @@ class NetworkService: ObservableObject {
         return baseURL
     }
     
+    private func applyAuthorizationHeader(_ request: inout URLRequest) {
+        if let token = SupabaseService.shared.getAccessToken(), !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+    }
+    
     // MARK: - Chat Completion
     
     func sendChatMessage(messages: [ChatMessageRequest], maxTokens: Int = 800, temperature: Double = 0.7, userId: String? = nil, conversationId: String? = nil, userDisplayName: String? = nil, userCurrency: String? = nil, isPremium: Bool? = nil) async throws -> ChatCompletionResponse {
@@ -93,6 +99,7 @@ class NetworkService: ObservableObject {
         
         request.httpBody = try JSONEncoder().encode(requestBody)
         
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -127,6 +134,7 @@ class NetworkService: ObservableObject {
         
         request.httpBody = try JSONEncoder().encode(requestBody)
         
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -162,6 +170,7 @@ class NetworkService: ObservableObject {
         
         request.httpBody = try JSONEncoder().encode(requestBody)
         
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -195,6 +204,7 @@ class NetworkService: ObservableObject {
         
         request.httpBody = try JSONEncoder().encode(requestBody)
         
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -278,7 +288,8 @@ class NetworkService: ObservableObject {
         print("[NetworkService] Base URL configured: \(baseURL)")
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            applyAuthorizationHeader(&request)
+        let (data, response) = try await URLSession.shared.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 print("[NetworkService] ❌ Invalid response type")
@@ -332,8 +343,9 @@ class NetworkService: ObservableObject {
     
     func getPrivacyPolicy() async throws -> PrivacyResponse {
         let url = URL(string: "\(baseURL)/privacy")!
-        let request = URLRequest(url: url)
+        var request = URLRequest(url: url)
         
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse,
@@ -349,7 +361,8 @@ class NetworkService: ObservableObject {
     
     func getTermsOfUse() async throws -> TermsResponse {
         let url = URL(string: "\(baseURL)/terms")!
-        let request = URLRequest(url: url)
+        var request = URLRequest(url: url)
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
             throw NetworkError.invalidResponse
@@ -377,7 +390,8 @@ class NetworkService: ObservableObject {
             throw NetworkError.invalidResponse
         }
         
-        let request = URLRequest(url: url)
+        var request = URLRequest(url: url)
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -403,6 +417,7 @@ class NetworkService: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         struct Body: Encodable { let userId: String }
         request.httpBody = try JSONEncoder().encode(Body(userId: userId))
+        applyAuthorizationHeader(&request)
         let (_, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             throw NetworkError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
@@ -416,6 +431,9 @@ class NetworkService: ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // Heavy Stripe pagination on server; cap wait so hung servers don’t block forever.
+        request.timeoutInterval = min(max(Self.requestTimeout, 45), 120)
+        applyAuthorizationHeader(&request)
         let (_, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             throw NetworkError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
@@ -430,7 +448,8 @@ class NetworkService: ObservableObject {
         queryItems.append(URLQueryItem(name: "limit", value: String(limit)))
         urlComponents.queryItems = queryItems
         guard let url = urlComponents.url else { throw NetworkError.invalidResponse }
-        let request = URLRequest(url: url)
+        var request = URLRequest(url: url)
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
             if let err = try? JSONDecoder().decode(APIError.self, from: data) {
@@ -478,6 +497,7 @@ class NetworkService: ObservableObject {
         
         request.httpBody = try JSONEncoder().encode(requestBody)
         
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -521,6 +541,7 @@ class NetworkService: ObservableObject {
         
         request.httpBody = try JSONEncoder().encode(requestBody)
         
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -551,6 +572,7 @@ class NetworkService: ObservableObject {
         
         request.httpBody = try JSONEncoder().encode(requestBody)
         
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -577,6 +599,7 @@ class NetworkService: ObservableObject {
         let body = ["userId": userId]
         request.httpBody = try JSONEncoder().encode(body)
         
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -605,6 +628,7 @@ class NetworkService: ObservableObject {
             "toUserId": toUserId
         ]
         request.httpBody = try JSONEncoder().encode(body)
+        applyAuthorizationHeader(&request)
         let (_, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw NetworkError.invalidResponse
@@ -622,6 +646,7 @@ class NetworkService: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let body = ["userId": userId]
         request.httpBody = try JSONEncoder().encode(body)
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw NetworkError.invalidResponse
@@ -654,7 +679,8 @@ class NetworkService: ObservableObject {
         print("[NetworkService] Getting conversations from: \(url.absoluteString)")
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            applyAuthorizationHeader(&request)
+        let (data, response) = try await URLSession.shared.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw NetworkError.invalidResponse
@@ -719,7 +745,8 @@ class NetworkService: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            applyAuthorizationHeader(&request)
+        let (data, response) = try await URLSession.shared.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw NetworkError.invalidResponse
@@ -768,7 +795,8 @@ class NetworkService: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            applyAuthorizationHeader(&request)
+        let (data, response) = try await URLSession.shared.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw NetworkError.invalidResponse
@@ -814,6 +842,7 @@ class NetworkService: ObservableObject {
             "metadata": metadata ?? [:]
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else { throw NetworkError.invalidResponse }
         if httpResponse.statusCode == 200 {
@@ -833,6 +862,7 @@ class NetworkService: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = Self.requestTimeout
         request.httpBody = try JSONEncoder().encode(AppOpenRequest(userId: userId))
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else { throw NetworkError.invalidResponse }
         if httpResponse.statusCode == 200 {
@@ -855,7 +885,8 @@ class NetworkService: ObservableObject {
             throw NetworkError.invalidResponse
         }
         
-        let request = URLRequest(url: url)
+        var request = URLRequest(url: url)
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -894,6 +925,7 @@ class NetworkService: ObservableObject {
         
         request.httpBody = try JSONEncoder().encode(requestBody)
         
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -936,6 +968,7 @@ class NetworkService: ObservableObject {
         
         request.httpBody = try JSONEncoder().encode(requestBody)
         
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -966,6 +999,7 @@ class NetworkService: ObservableObject {
         
         request.httpBody = try JSONEncoder().encode(requestBody)
         
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -994,6 +1028,7 @@ class NetworkService: ObservableObject {
         let requestBody = CreateConversationRequest(userId: userId, title: title)
         request.httpBody = try JSONEncoder().encode(requestBody)
         
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -1040,7 +1075,8 @@ class NetworkService: ObservableObject {
             throw NetworkError.invalidResponse
         }
         
-        let request = URLRequest(url: url)
+        var request = URLRequest(url: url)
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -1073,6 +1109,7 @@ class NetworkService: ObservableObject {
         )
         request.httpBody = try JSONEncoder().encode(requestBody)
         
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -1103,6 +1140,7 @@ class NetworkService: ObservableObject {
             "message": message
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
             if let err = try? JSONDecoder().decode(APIError.self, from: data) {
@@ -1124,6 +1162,7 @@ class NetworkService: ObservableObject {
         if let m = message, !m.isEmpty { body["message"] = m }
         if let r = rating { body["rating"] = r }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
             if let err = try? JSONDecoder().decode(APIError.self, from: data) {
@@ -1150,6 +1189,7 @@ class NetworkService: ObservableObject {
         )
         request.httpBody = try JSONEncoder().encode(requestBody)
         
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -1177,7 +1217,8 @@ class NetworkService: ObservableObject {
             throw NetworkError.invalidResponse
         }
         
-        let request = URLRequest(url: url)
+        var request = URLRequest(url: url)
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -1212,6 +1253,7 @@ class NetworkService: ObservableObject {
         
         request.httpBody = try JSONEncoder().encode(requestBody)
         
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -1242,6 +1284,7 @@ class NetworkService: ObservableObject {
         
         request.httpBody = try JSONEncoder().encode(requestBody)
         
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -1290,6 +1333,7 @@ class NetworkService: ObservableObject {
         
         request.httpBody = try JSONEncoder().encode(requestBody)
         
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -1322,7 +1366,8 @@ class NetworkService: ObservableObject {
             throw NetworkError.invalidResponse
         }
         
-        let request = URLRequest(url: url)
+        var request = URLRequest(url: url)
+        applyAuthorizationHeader(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {

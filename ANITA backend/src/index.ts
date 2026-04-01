@@ -60,6 +60,7 @@ import { handleRefreshBankTransactions } from './routes/refresh-bank-transaction
 import { handleMigrateUserData } from './routes/migrate-user-data';
 import { applySecurityHeaders } from './utils/securityHeaders';
 import { requestIdMiddleware } from './middleware/requestId';
+import { requireAuthorizedUserId } from './utils/requireAuthorizedUser';
 import { getPrivacyPayload, getTermsPayload } from './legal/content';
 import * as logger from './utils/logger';
 
@@ -132,6 +133,76 @@ app.get('/privacy', (_req: Request, res: Response) => {
 // Terms of Use endpoint – full text for in-app display
 app.get('/terms', (_req: Request, res: Response) => {
   res.status(200).json(getTermsPayload());
+});
+
+
+// Require Bearer auth for all user-scoped v1 routes.
+const userScopedV1Routes = new Set<string>([
+  '/chat-completion',
+  '/transcribe',
+  '/analyze-file',
+  '/create-checkout-session',
+  '/verify-ios-subscription',
+  '/subscription',
+  '/transactions',
+  '/transactions/delete-manual-on-bank-link',
+  '/conversations',
+  '/create-conversation',
+  '/messages',
+  '/save-message',
+  '/save-message-feedback',
+  '/save-transaction',
+  '/update-transaction',
+  '/delete-transaction',
+  '/clear-user-data',
+  '/delete-account',
+  '/financial-metrics',
+  '/xp-stats',
+  '/xp-award',
+  '/app-open',
+  '/targets',
+  '/create-target',
+  '/update-target',
+  '/delete-target',
+  '/assets',
+  '/update-asset',
+  '/delete-asset',
+  '/financial-connections/session',
+  '/migrate-user-data',
+  '/bank-accounts',
+  '/bank-transactions',
+  '/bank-transactions/refresh',
+]);
+
+function requestedUserIdForV1Path(req: Request): string | null {
+  if (req.path === '/migrate-user-data') {
+    const toUserId = (req.body?.toUserId as string | undefined)?.trim?.();
+    return toUserId && toUserId.length > 0 ? toUserId : null;
+  }
+  const bodyUserId = (req.body?.userId as string | undefined)?.trim?.();
+  if (bodyUserId && bodyUserId.length > 0) return bodyUserId;
+  const queryUserId = (req.query.userId as string | undefined)?.trim?.();
+  return queryUserId && queryUserId.length > 0 ? queryUserId : null;
+}
+
+app.use('/api/v1', async (req: Request, res: Response, next: express.NextFunction) => {
+  if (!userScopedV1Routes.has(req.path)) {
+    next();
+    return;
+  }
+
+  const requestId = req.requestId || 'unknown';
+  const requestedUserId = requestedUserIdForV1Path(req);
+  if (!requestedUserId) {
+    res.status(400).json({ error: 'Missing userId', requestId });
+    return;
+  }
+
+  if (!(await requireAuthorizedUserId(req, res, requestedUserId, requestId))) {
+    return;
+  }
+
+  next();
 });
 
 // API Routes with versioning (v1)

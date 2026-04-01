@@ -20,6 +20,7 @@ private let appTabSelectedBlue = Color(red: 0.20, green: 0.47, blue: 1.0)
 private let appTabSelectedBlueUI = UIColor(red: 0.20, green: 0.47, blue: 1.0, alpha: 1.0)
 
 struct ContentView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var authViewModel = AuthViewModel()
     @StateObject private var userManager = UserManager.shared
     @State private var selectedTab = 0
@@ -85,6 +86,16 @@ struct ContentView: View {
             handleAuthURL(url)
         }
         .dismissKeyboardOnTap()
+    }
+
+    /// Bank data is refreshed from Stripe only while the user has the app open (foreground), not from push/webhooks alone.
+    private func scheduleBankSessionSync(trigger: BankSessionSyncController.Trigger) {
+        guard userManager.isAuthenticated,
+              userManager.hasCompletedOnboarding,
+              let uid = userManager.currentUser?.id,
+              !uid.isEmpty else { return }
+        guard userManager.usesBankDataOnly || userManager.hasEstablishedBankSync else { return }
+        BankSessionSyncController.shared.schedule(userId: uid, trigger: trigger) {}
     }
     
     /// Shown while restoring session from Keychain so we don't flash the login screen for logged-in users.
@@ -154,6 +165,7 @@ struct ContentView: View {
                 }
                 // Preload XP so Finance tab and sidebar show Level card immediately
                 Task { await XPStore.shared.refresh() }
+                scheduleBankSessionSync(trigger: .appForeground)
                 
                 // Normal item styling with slight transparency
                 appearance.stackedLayoutAppearance.normal.iconColor = UIColor(white: 0.8, alpha: 0.8)
@@ -171,6 +183,10 @@ struct ContentView: View {
                 if #available(iOS 15.0, *) {
                     UITabBar.appearance().scrollEdgeAppearance = appearance
                 }
+            }
+            .onChange(of: scenePhase) { _, phase in
+                guard phase == .active else { return }
+                scheduleBankSessionSync(trigger: .appForeground)
             }
         }
     }

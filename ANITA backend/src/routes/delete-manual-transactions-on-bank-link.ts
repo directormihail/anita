@@ -7,6 +7,7 @@ import { Request, Response } from 'express';
 import { createClient } from '@supabase/supabase-js';
 import { applySecurityHeaders } from '../utils/securityHeaders';
 import * as logger from '../utils/logger';
+import { requireAuthorizedUserId } from '../utils/requireAuthorizedUser';
 
 function getSupabaseClient() {
   const supabaseUrl = process.env.SUPABASE_URL;
@@ -36,6 +37,10 @@ export async function handleDeleteManualTransactionsOnBankLink(req: Request, res
 
   if (!userId) {
     res.status(400).json({ error: 'Missing userId', requestId });
+    return;
+  }
+
+  if (!(await requireAuthorizedUserId(req, res, userId, requestId))) {
     return;
   }
 

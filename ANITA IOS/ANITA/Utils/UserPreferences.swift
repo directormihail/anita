@@ -43,7 +43,8 @@ class UserPreferences: ObservableObject {
     }
     
     private func syncFromSupabase() async {
-        guard let userId = userManager.userId, supabaseService.isAuthenticated else {
+        let userId = userManager.userId
+        guard !userId.isEmpty, supabaseService.isAuthenticated else {
             return
         }
         
@@ -140,7 +141,8 @@ class UserPreferences: ObservableObject {
     }
     
     private func saveToSupabase(currency: String? = nil, dateFormat: String? = nil, numberFormat: String? = nil, emailNotifications: Bool? = nil) {
-        guard let userId = userManager.userId, supabaseService.isAuthenticated else {
+        let userId = userManager.userId
+        guard !userId.isEmpty, supabaseService.isAuthenticated else {
             return
         }
         
@@ -198,16 +200,20 @@ class UserPreferences: ObservableObject {
     // MARK: - Formatting Functions
     
     func formatCurrency(_ amount: Double, currencyCode: String? = nil) -> String {
+        let code = currencyCode ?? currency
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-        formatter.currencyCode = currencyCode ?? currency
+        formatter.currencyCode = code
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: code)
         return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
     }
     
     func formatAmount(_ amount: Double, currencyCode: String? = nil, showSign: Bool = false, isIncome: Bool = false) -> String {
+        let code = currencyCode ?? currency
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-        formatter.currencyCode = currencyCode ?? currency
+        formatter.currencyCode = code
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: code)
         let formatted = formatter.string(from: NSNumber(value: abs(amount))) ?? "$0.00"
         
         if showSign {
@@ -283,6 +289,87 @@ class UserPreferences: ObservableObject {
         case "ZAR": return "R"
         default: return "$"
         }
+    }
+}
+
+// MARK: - Currency display locale (USD always US-style app-wide: $ before amount)
+
+/// Locales for `NumberFormatter` so symbol placement and grouping match expectations, independent of the device region.
+enum AnitaCurrencyDisplay {
+    static func locale(forCurrencyCode raw: String) -> Locale {
+        let code = raw.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        switch code {
+        case "USD":
+            return Locale(identifier: "en_US_POSIX")
+        case "EUR":
+            return Locale(identifier: "de_DE")
+        case "CHF":
+            return Locale(identifier: "de_CH")
+        case "GBP":
+            return Locale(identifier: "en_GB")
+        case "JPY":
+            return Locale(identifier: "ja_JP")
+        case "CAD":
+            return Locale(identifier: "en_CA")
+        case "AUD":
+            return Locale(identifier: "en_AU")
+        case "CNY":
+            return Locale(identifier: "zh_CN")
+        case "INR":
+            return Locale(identifier: "en_IN")
+        case "BRL":
+            return Locale(identifier: "pt_BR")
+        case "MXN":
+            return Locale(identifier: "es_MX")
+        case "SGD":
+            return Locale(identifier: "en_SG")
+        case "HKD":
+            return Locale(identifier: "zh_HK")
+        case "NZD":
+            return Locale(identifier: "en_NZ")
+        case "ZAR":
+            return Locale(identifier: "en_ZA")
+        case "KRW":
+            return Locale(identifier: "ko_KR")
+        default:
+            return Locale(identifier: "en_US_POSIX")
+        }
+    }
+    
+    /// Symbol used with `tightenFormattedCurrency` (matches Finance compact display).
+    static func displaySymbol(forCurrencyCode raw: String) -> String {
+        let c = raw.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        switch c {
+        case "USD": return "$"
+        case "EUR": return "€"
+        case "GBP": return "£"
+        case "JPY": return "¥"
+        case "CAD": return "C$"
+        case "AUD": return "A$"
+        case "CHF": return "CHF"
+        case "CNY": return "¥"
+        case "INR": return "₹"
+        case "BRL": return "R$"
+        case "MXN": return "MX$"
+        case "SGD": return "S$"
+        case "HKD": return "HK$"
+        case "NZD": return "NZ$"
+        case "ZAR": return "R"
+        default: return "$"
+        }
+    }
+    
+    /// Removes ICU/formatter space between currency symbol and digits (e.g. `"$ 1,200"` → `"$1,200"`). Skips CHF.
+    static func tightenFormattedCurrency(_ string: String, currencyCode: String) -> String {
+        let code = currencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if code == "CHF" { return string }
+        let symbol = displaySymbol(forCurrencyCode: currencyCode)
+        guard !symbol.isEmpty else { return string }
+        let escaped = NSRegularExpression.escapedPattern(for: symbol)
+        let pattern = "([-+]?)(\(escaped))[\\s\\u{00a0}\\u{202f}]+(?=[0-9])"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return string }
+        let range = NSRange(string.startIndex..., in: string)
+        return regex.stringByReplacingMatches(in: string, options: [], range: range, withTemplate: "$1$2")
     }
 }
 

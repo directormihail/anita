@@ -6,12 +6,12 @@
  */
 
 const WEB_PRIVACY_URL = 'https://anita.app/privacy';
-const WEB_TERMS_URL = 'https://anita.app/terms';
+const WEB_TERMS_URL = 'https://terns-of-use-ykct.vercel.app/';
 
 export const PRIVACY_POLICY_FULL = `
 Privacy Policy
 ANITA
-Last updated: February 2025
+Last updated: March 2026
 
 1. Introduction
 
@@ -23,9 +23,11 @@ ANITA is committed to protecting your privacy. This Privacy Policy explains in d
 
 ANITA collects information that you provide directly when you create an account or use the app: your email address and authentication credentials (including those used for Sign in with Apple or Google where applicable), your name and profile information if you choose to provide them, your currency and language preferences, and any other details you enter in your profile or settings. Paid subscriptions are processed by Apple via in-app purchase; ANITA does not store your payment card details.
 
-2.2 Financial and usage data
+2.2 Financial and usage data (including connected bank data)
 
-To provide the app’s core features, ANITA collects and stores: financial transactions you enter or upload (such as income and expenses, amounts, dates, categories, and descriptions), chat messages and conversation history with the in-app assistant, financial targets and goals you set, budget information, and any notes or labels you add. If you use voice input, the audio may be sent to a transcription provider to convert speech to text; that processing is necessary to provide the feature.
+To provide the app’s core features, ANITA collects and stores: financial transactions you enter or upload (such as income and expenses, amounts, dates, categories, and descriptions), chat messages and conversation history with the in-app assistant, financial targets and goals you set, budget information, and any notes or labels you add. If you connect a bank account via Stripe Financial Connections, we also receive and process permissioned account data such as account identifiers, institution metadata, balances, ownership details (where available), and transaction history made available through that connection. If you use voice input, the audio may be sent to a transcription provider to convert speech to text; that processing is necessary to provide the feature.
+
+ANITA does not receive or store your online banking username or password. Authentication to your financial institution is performed in the Financial Connections flow provided by Stripe and/or the institution.
 
 2.3 Automatically collected information
 
@@ -57,15 +59,23 @@ Google: If you use Google sign-in where offered, authentication and basic profil
 
 PostHog: We use PostHog to collect and process product and usage analytics (see section 2.4). PostHog receives pseudonymised usage and activity data (e.g. app events, screen views, device type, session information). Data is processed in the United States. PostHog’s privacy policy is at https://posthog.com/privacy.
 
+Stripe Financial Connections: If you choose to connect a bank account, Stripe provides bank-linking and permissioned financial data access infrastructure. Stripe may receive and process data needed to authenticate, maintain, and refresh your connection and to provide account/transaction data to ANITA. Stripe’s privacy and product terms apply to that processing: https://stripe.com/privacy and https://stripe.com/legal/financial-connections.
+
+Financial institutions and data providers: Your bank or other account provider may share account and transaction data with Stripe and ANITA based on your authorization. Availability, fields, update frequency, and historical depth can vary by institution and may be delayed, incomplete, or changed by the institution.
+
 Your personal information is not sold. Data is shared with these service providers only as necessary to operate the Service, under agreements that require them to protect your data and use it only for the purposes specified.
 
 6. Data retention and security
 
-Your data is retained for as long as your account is active and as required by law. After you delete your account, your personal data is removed or anonymized within a reasonable period (typically within 30 days), except where retention is required for legal, regulatory, or legitimate business purposes. Industry-standard technical and organisational measures are used to protect your data, including encryption where appropriate, access controls, and secure hosting. No system can be completely secure; you and relevant authorities will be notified as required by law if a breach affecting your personal data becomes known.
+Your data is retained for as long as your account is active and as required by law. After you delete your account, your personal data is removed or anonymized within a reasonable period (typically within 30 days), except where retention is required for legal, regulatory, or legitimate business purposes. Connected-bank data already imported into your ANITA account may remain in backups or archives for a limited period consistent with our retention and security obligations. Industry-standard technical and organisational measures are used to protect your data, including encryption where appropriate, access controls, and secure hosting. No system can be completely secure; you and relevant authorities will be notified as required by law if a breach affecting your personal data becomes known.
 
 7. Your rights (GDPR and CCPA)
 
-If you are in the European Economic Area or another jurisdiction with similar laws you may have the right to: access the personal data held about you; request correction of inaccurate or incomplete data; request erasure of your data in certain circumstances; restrict processing in certain cases; receive a copy of your data in a portable format; object to certain processing; and withdraw consent where processing is based on consent. You may also have the right to lodge a complaint with a supervisory authority. If you are a California resident you may have additional rights under the CCPA, including the right to know what personal information is collected and how it is used, the right to request deletion, and the right to non-discrimination for exercising your rights. Personal information is not sold. To exercise any of these rights you can use the data management options in the app’s Settings (such as export or clear data and account deletion), send a message via the Support option in the app’s Settings, or email us at anita.finance.sup@gmail.com. Messages you send via Support, Feedback, or email are stored and used to respond and improve the service. Responses will be handled within the time required by applicable law where applicable.
+If you are in the European Economic Area or another jurisdiction with similar laws you may have the right to: access the personal data held about you; request correction of inaccurate or incomplete data; request erasure of your data in certain circumstances; restrict processing in certain cases; receive a copy of your data in a portable format; object to certain processing; and withdraw consent where processing is based on consent. You may also have the right to lodge a complaint with a supervisory authority. If you are a California resident you may have additional rights under the CCPA, including the right to know what personal information is collected and how it is used, the right to request deletion, and the right to non-discrimination for exercising your rights. Personal information is not sold.
+
+For connected bank accounts, you can disconnect the connection in ANITA (where available) and/or revoke access through the institution or provider flow. Revoking access stops future data pulls but does not automatically delete data already stored in your ANITA account unless you also request deletion or delete your account.
+
+To exercise any rights you can use the data management options in the app’s Settings (such as export or clear data and account deletion), send a message via the Support option in the app’s Settings, or email us at anita.finance.sup@gmail.com. Messages you send via Support, Feedback, or email are stored and used to respond and improve the service. Responses will be handled within the time required by applicable law where applicable.
 
 8. International data transfers
 
@@ -87,7 +97,7 @@ For questions about this Privacy Policy, to exercise your rights, or for data pr
 export const TERMS_OF_USE_FULL = `
 Terms of Use
 ANITA
-Last updated: February 2025
+Last updated: March 2026
 
 1. Agreement to terms
 
@@ -95,7 +105,7 @@ By accessing or using ANITA ("Service"), you agree to be bound by these Terms of
 
 2. Description of the service
 
-ANITA is a personal finance assistant that helps you track income and expenses through natural language chat, voice input, and manual data entry. The app allows you to record transactions, view analytics and spending patterns, set financial goals and budgets, and receive AI-generated insights and suggestions based on the data you provide. The Service is intended for personal, non-commercial use only. You may not use it for any business or commercial purpose without ANITA’s prior written agreement.
+ANITA is a personal finance assistant that helps you track income and expenses through natural language chat, voice input, manual data entry, and optional connected bank feeds (via Stripe Financial Connections). The app allows you to record transactions, view analytics and spending patterns, set financial goals and budgets, and receive AI-generated insights and suggestions based on the data you provide. The Service is intended for personal, non-commercial use only. You may not use it for any business or commercial purpose without ANITA’s prior written agreement.
 
 3. Not financial, legal, or tax advice – important disclaimer
 
@@ -117,49 +127,55 @@ To use certain features you must create an account. You agree to provide accurat
 
 6. Financial data and your responsibility
 
-You are solely responsible for the accuracy of the financial data you enter into the Service. ANITA is not responsible for any decisions you make based on the Service or for your compliance with tax, regulatory, or other legal obligations. You should verify important figures and consult qualified professionals where appropriate.
+You are solely responsible for the accuracy of the financial data you enter into the Service. If you connect bank accounts, you are responsible for ensuring that you are authorized to share that account data and for reviewing imported data. Institution-provided data may be delayed, incomplete, duplicated, reclassified, or unavailable. ANITA is not responsible for institution outages, provider outages, delayed refreshes, or incorrect source data from third parties. ANITA is not responsible for any decisions you make based on the Service or for your compliance with tax, regulatory, or other legal obligations. You should verify important figures and consult qualified professionals where appropriate.
 
-7. Privacy and collection of information
+7. Connected account access (Stripe Financial Connections)
+
+If you connect a bank account, you authorize ANITA and its providers to access and process the account data you permit through the connection flow. You may revoke that access at any time through available disconnect/revocation mechanisms. Revocation stops future data access but does not by itself delete data already stored in ANITA.
+
+ANITA does not store your online banking credentials. Authentication is handled by Stripe Financial Connections and/or your institution.
+
+8. Privacy and collection of information
 
 Your use of the Service is also governed by the Privacy Policy. By using the Service you consent to our collection, use, and sharing of your information as described in the Privacy Policy. We collect information you provide, information about how you use the app (usage and activity data), and other data as set out in the Privacy Policy. Please read it carefully.
 
-8. Intellectual property
+9. Intellectual property
 
 The Service and its content, features, design, and branding are owned by ANITA or its licensors and are protected by copyright, trademark, and other intellectual property laws. You may not copy, modify, distribute, or create derivative works from the Service or its content without ANITA’s prior written permission. You may not remove or alter any proprietary notices.
 
-9. Service availability and changes
+10. Service availability and changes
 
 ANITA strives to keep the Service available but does not guarantee that it will be uninterrupted or error-free. ANITA may modify, suspend, or discontinue the Service or any feature at any time, with or without notice. ANITA is not liable to you or any third party for any such change.
 
-10. Limitation of liability
+11. Limitation of liability
 
 To the maximum extent permitted by applicable law, ANITA and its affiliates, officers, directors, employees, and agents shall not be liable for any indirect, incidental, special, consequential, or punitive damages (including loss of profits, revenue, data, or use) arising out of or in connection with your use of the Service or your reliance on any content, including AI-generated content. Total liability to you for any claims arising from or related to the Service shall not exceed the amount you paid in the twelve months preceding the claim, or one hundred United States dollars, whichever is greater. Some jurisdictions do not allow the exclusion or limitation of certain damages; in those jurisdictions liability is limited to the maximum extent permitted by law.
 
-11. Indemnification
+12. Indemnification
 
 You agree to indemnify, defend, and hold harmless ANITA and its affiliates, officers, directors, employees, and agents from and against any claims, damages, losses, liabilities, and expenses (including reasonable legal fees) arising out of or related to your use of the Service, your violation of these Terms, or your violation of any third-party rights.
 
-12. Termination
+13. Termination
 
 ANITA may suspend or terminate your access to the Service at any time, with or without notice, for any reason, including if you have violated these Terms. You may stop using the Service at any time. Upon termination your right to use the Service ceases immediately. Provisions that by their nature should survive termination (including disclaimers, limitation of liability, indemnity, and governing law) will survive.
 
-13. Changes to these terms
+14. Changes to these terms
 
 These Terms may be updated from time to time. The updated version will be posted in the app and the "Last updated" date will be revised. Your continued use of the Service after the changes take effect constitutes your acceptance of the new Terms. For material changes you may be notified in the app. If you do not agree to the updated Terms you must stop using the Service.
 
-14. Governing law and disputes
+15. Governing law and disputes
 
 These Terms are governed by the laws of the jurisdiction in which ANITA operates, without regard to its conflict of law rules. Any dispute arising out of or relating to these Terms or the Service shall be resolved exclusively in the courts of that jurisdiction, except where prohibited by law.
 
-15. Severability
+16. Severability
 
 If any provision of these Terms is held to be invalid or unenforceable, the remaining provisions will remain in full force and effect.
 
-16. Entire agreement
+17. Entire agreement
 
 These Terms together with the Privacy Policy constitute the entire agreement between you and ANITA regarding the Service and supersede any prior agreements or understandings.
 
-17. Support and contact
+18. Support and contact
 
 ANITA does not provide a separate website or email for support. For questions about these Terms or for support, use the Support and Feedback options in the app’s Settings. Messages you send there are stored in the service’s database and used to handle your request and improve the service.
 `.trim();
@@ -167,9 +183,9 @@ ANITA does not provide a separate website or email for support. For questions ab
 export function getPrivacyPayload() {
   return {
     privacyPolicy: WEB_PRIVACY_URL,
-    dataCollection: 'ANITA collects account data, financial transactions, chat history, preferences, and usage data necessary to provide and improve the Service. We also collect product and usage analytics (e.g. how you use the app, which features you use, and session data) via PostHog to improve the product; see the full Privacy Policy for details.',
+    dataCollection: 'ANITA collects account data, financial transactions, chat history, preferences, and usage data necessary to provide and improve the Service. If you connect bank accounts via Stripe Financial Connections, ANITA also processes permissioned account and transaction data from that connection. We also collect product and usage analytics (e.g. how you use the app, which features you use, and session data) via PostHog to improve the product; see the full Privacy Policy for details.',
     dataUsage: 'Data is used to provide the app, power AI features, manage subscriptions, and communicate with you. Your data is not used for advertising profiling.',
-    dataSharing: 'Data is shared only with service providers (e.g. Supabase, OpenAI, Apple, Google) as needed to operate the Service. Your data is not sold.',
+    dataSharing: 'Data is shared only with service providers (e.g. Supabase, Stripe Financial Connections, OpenAI, Apple, Google, PostHog) as needed to operate the Service. Your data is not sold.',
     contact: 'Support in Settings (app) or anita.finance.sup@gmail.com',
     fullText: PRIVACY_POLICY_FULL,
   };

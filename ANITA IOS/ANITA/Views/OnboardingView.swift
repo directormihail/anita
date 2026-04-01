@@ -1410,7 +1410,6 @@ private struct BankConnectionOnboardingStep: View {
         errorMessage = nil
         isConnecting = true
         Task { @MainActor in
-            defer { isConnecting = false }
             do {
                 let linked = try await BankConnectionTester.shared.startTestFlow(userId: userId, userEmail: userEmail)
                 if linked {
@@ -1420,18 +1419,17 @@ private struct BankConnectionOnboardingStep: View {
                     } catch {
                         print("[Onboarding] deleteManualTransactionsOnBankLink failed: \(error.localizedDescription)")
                     }
-                    do {
-                        try await NetworkService.shared.refreshBankTransactions(userId: userId)
-                    } catch {
-                        print("[Onboarding] refreshBankTransactions failed: \(error.localizedDescription)")
-                    }
-                    NotificationCenter.default.post(name: .anitaBankSyncCompleted, object: nil)
+                    isConnecting = false
+                    let uid = userId
+                    BankSessionSyncController.shared.schedule(userId: uid, trigger: .afterBankLinkSuccess)
                     onFinish()
                 } else {
+                    isConnecting = false
                     showStripeRetryState = true
                     errorMessage = "Connection was canceled or not completed. Please retry."
                 }
             } catch {
+                isConnecting = false
                 showStripeRetryState = true
                 errorMessage = error.localizedDescription
             }

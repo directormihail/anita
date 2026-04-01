@@ -1399,7 +1399,7 @@ struct LegalDocumentSheetView: View {
     @State private var loadFailed = false
     
     private let basePrivacyURL = "https://anita.app/privacy"
-    private let baseTermsURL = "https://anita.app/terms"
+    private let baseTermsURL = "https://terns-of-use-ykct.vercel.app/"
     
     var body: some View {
         NavigationView {

@@ -604,50 +604,12 @@ class ChatViewModel: ObservableObject {
         let userCurrency = currencyCode ?? (UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD")
         
         // Get locale for proper currency formatting (EUR uses comma, USD uses period, etc.)
-        let locale = getLocaleForCurrency(userCurrency)
-        
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = userCurrency
-        formatter.locale = locale
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: userCurrency)
         
         return formatter.string(from: NSNumber(value: amount)) ?? "\(getCurrencySymbol(userCurrency))\(String(format: "%.2f", amount))"
-    }
-    
-    // Get locale for currency formatting
-    private func getLocaleForCurrency(_ currency: String) -> Locale {
-        switch currency {
-        case "EUR":
-            return Locale(identifier: "de_DE") // German locale uses comma for decimals
-        case "GBP":
-            return Locale(identifier: "en_GB")
-        case "JPY":
-            return Locale(identifier: "ja_JP")
-        case "CAD":
-            return Locale(identifier: "en_CA")
-        case "AUD":
-            return Locale(identifier: "en_AU")
-        case "CHF":
-            return Locale(identifier: "de_CH")
-        case "CNY":
-            return Locale(identifier: "zh_CN")
-        case "INR":
-            return Locale(identifier: "en_IN")
-        case "BRL":
-            return Locale(identifier: "pt_BR")
-        case "MXN":
-            return Locale(identifier: "es_MX")
-        case "SGD":
-            return Locale(identifier: "en_SG")
-        case "HKD":
-            return Locale(identifier: "zh_HK")
-        case "NZD":
-            return Locale(identifier: "en_NZ")
-        case "ZAR":
-            return Locale(identifier: "en_ZA")
-        default:
-            return Locale(identifier: "en_US") // USD default
-        }
     }
     
     // Get currency symbol

@@ -112,6 +112,7 @@ struct UpgradeView: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = userCurrency
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: userCurrency)
         formatter.maximumFractionDigits = 2
         formatter.minimumFractionDigits = 0
         return formatter.string(from: NSNumber(value: amount)) ?? "\(amount)"
@@ -119,7 +120,7 @@ struct UpgradeView: View {
     
     /// Premium price in user's chosen currency (same as database / rest of app).
     private var premiumPriceString: String {
-        formatSubscriptionPrice(4.99)
+        formatSubscriptionPrice(9.99)
     }
 
     /// Lifetime price in user's chosen currency.
@@ -398,7 +399,7 @@ struct UpgradeView: View {
                                 Text("·")
                                     .foregroundColor(.white.opacity(0.4))
                                 Button(action: {
-                                    if let url = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/") {
+                                    if let url = URL(string: "https://terns-of-use-ykct.vercel.app/") {
                                         UIApplication.shared.open(url)
                                     }
                                 }) {
@@ -778,6 +779,8 @@ private struct PaymentOptionCard: View {
             .padding(.vertical, 11)
             .padding(.top, 2)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            // Spacers are not tappable by default; shape the full label so the entire card selects the plan.
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
         .disabled(isLocked)
@@ -1812,6 +1815,7 @@ struct SubscriptionPlanPlaceholder: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = userCurrency
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: userCurrency)
         formatter.maximumFractionDigits = 2
         formatter.minimumFractionDigits = 0
         return formatter.string(from: NSNumber(value: amount)) ?? "\(amount)"
@@ -1829,7 +1833,7 @@ struct SubscriptionPlanPlaceholder: View {
     var placeholderPrice: String {
         switch planType {
         case .pro:
-            return formatSubscriptionPrice(4.99)
+            return formatSubscriptionPrice(9.99)
         case .free:
             return formatSubscriptionPrice(0)
         }

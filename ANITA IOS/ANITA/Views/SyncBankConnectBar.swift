@@ -33,7 +33,6 @@ enum BankLinkFlow {
         }
         errorMessage.wrappedValue = nil
         isConnecting.wrappedValue = true
-        defer { isConnecting.wrappedValue = false }
         do {
             let linked = try await BankConnectionTester.shared.startTestFlow(
                 userId: uid,
@@ -46,15 +45,16 @@ enum BankLinkFlow {
                 } catch {
                     print("[BankLinkFlow] deleteManualTransactionsOnBankLink failed: \(error.localizedDescription)")
                 }
-                do {
-                    try await NetworkService.shared.refreshBankTransactions(userId: uid)
-                } catch {
-                    print("[BankLinkFlow] refreshBankTransactions failed: \(error.localizedDescription)")
-                }
+                isConnecting.wrappedValue = false
                 onRefresh()
-                NotificationCenter.default.post(name: .anitaBankSyncCompleted, object: nil)
+                BankSessionSyncController.shared.schedule(userId: uid, trigger: .afterBankLinkSuccess) {
+                    onRefresh()
+                }
+            } else {
+                isConnecting.wrappedValue = false
             }
         } catch {
+            isConnecting.wrappedValue = false
             errorMessage.wrappedValue = error.localizedDescription
         }
     }

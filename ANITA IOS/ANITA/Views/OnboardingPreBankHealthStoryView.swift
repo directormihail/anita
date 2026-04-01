@@ -32,6 +32,7 @@ struct OnboardingPreBankHealthStoryView: View {
     @State private var showUserBubble: Bool = false
     @State private var showAnitaTyping2: Bool = false
     @State private var showAnitaClosing: Bool = false
+    @State private var pendingHealGeneration: Int?
     
     @State private var ringWiggle: CGFloat = 0
     @State private var scoreCelebrationScale: CGFloat = 1.0
@@ -69,7 +70,11 @@ struct OnboardingPreBankHealthStoryView: View {
         formatter.numberStyle = .currency
         formatter.currencyCode = code
         formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: amount)) ?? "\(amount)"
+        formatter.minimumFractionDigits = 2
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: code)
+        formatter.usesGroupingSeparator = true
+        let raw = formatter.string(from: NSNumber(value: amount)) ?? "\(amount)"
+        return AnitaCurrencyDisplay.tightenFormattedCurrency(raw, currencyCode: code)
     }
     
     var body: some View {
@@ -165,12 +170,6 @@ struct OnboardingPreBankHealthStoryView: View {
                     .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundColor(balanceAmount < 0 ? redAccent : greenAccent)
                     .contentTransition(.numericText())
-                
-                Text(AppL10n.t("onboarding.pre_bank.boost_hint", languageCode: languageCode))
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                    .foregroundColor(.white.opacity(0.38))
-                    .padding(.top, 4)
-                    .opacity(healingStarted ? 0 : 1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, 12)
@@ -282,11 +281,15 @@ struct OnboardingPreBankHealthStoryView: View {
                     .transition(.scale(scale: 0.92).combined(with: .opacity))
             }
             if showAnitaOpening {
-                anitaFriendBubble(anitaOpeningText)
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .leading).combined(with: .opacity).combined(with: .scale(scale: 0.94)),
-                        removal: .opacity
-                    ))
+                OnboardingFriendTypewriterBubble(fullText: anitaOpeningText, onTypingComplete: {
+                    withAnimation(.spring(response: 0.42, dampingFraction: 0.78)) {
+                        showReplyChips = true
+                    }
+                })
+                .transition(.asymmetric(
+                    insertion: .move(edge: .leading).combined(with: .opacity).combined(with: .scale(scale: 0.94)),
+                    removal: .opacity
+                ))
             }
             if showReplyChips {
                 replyChipsRow
@@ -304,11 +307,18 @@ struct OnboardingPreBankHealthStoryView: View {
                     .transition(.scale(scale: 0.92).combined(with: .opacity))
             }
             if showAnitaClosing {
-                anitaFriendBubble(AppL10n.t("onboarding.pre_bank.anita_closing", languageCode: languageCode))
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .leading).combined(with: .opacity).combined(with: .scale(scale: 0.94)),
-                        removal: .opacity
-                    ))
+                OnboardingFriendTypewriterBubble(
+                    fullText: AppL10n.t("onboarding.pre_bank.anita_closing", languageCode: languageCode),
+                    onTypingComplete: {
+                        let g = pendingHealGeneration ?? sequenceGeneration
+                        pendingHealGeneration = nil
+                        startHealingAnimation(generation: g)
+                    }
+                )
+                .transition(.asymmetric(
+                    insertion: .move(edge: .leading).combined(with: .opacity).combined(with: .scale(scale: 0.94)),
+                    removal: .opacity
+                ))
             }
         }
         .animation(.spring(response: 0.48, dampingFraction: 0.78), value: showAnitaTyping1)
@@ -328,33 +338,6 @@ struct OnboardingPreBankHealthStoryView: View {
             FriendTypingDots()
         }
         .padding(.vertical, 4)
-    }
-    
-    private func anitaFriendBubble(_ text: String) -> some View {
-        HStack(alignment: .top, spacing: 0) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text("ANITA")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundColor(.white.opacity(0.38))
-                    .tracking(1.1)
-                    .padding(.bottom, 6)
-                Text(text)
-                    .font(.body)
-                    .foregroundColor(.white)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .lineSpacing(6)
-                    .kerning(0.2)
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .financeSolidGlassTile(cornerRadius: 16)
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.white.opacity(0.10), lineWidth: 0.85)
-            )
-            .shadow(color: Color.black.opacity(0.22), radius: 10, x: 0, y: 5)
-            Spacer(minLength: 8)
-        }
     }
     
     private func userFriendBubble(_ text: String) -> some View {
@@ -418,15 +401,12 @@ struct OnboardingPreBankHealthStoryView: View {
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.55 + 0.95) {
             guard gen == sequenceGeneration else { return }
+            pendingHealGeneration = gen
             withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
                 showAnitaTyping2 = false
                 showAnitaClosing = true
             }
             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55 + 0.95 + 1.05) {
-            guard gen == sequenceGeneration else { return }
-            startHealingAnimation(generation: gen)
         }
     }
     
@@ -459,6 +439,7 @@ struct OnboardingPreBankHealthStoryView: View {
                 )
                 .shadow(color: Color.black.opacity(0.35), radius: 18, x: 0, y: 10)
                 .shadow(color: Color.white.opacity(0.06), radius: 4, x: 0, y: -1)
+                .contentShape(Rectangle())
         }
         .buttonStyle(PremiumButtonStyle())
         .padding(.horizontal, 20)
@@ -486,6 +467,7 @@ struct OnboardingPreBankHealthStoryView: View {
         showUserBubble = false
         showAnitaTyping2 = false
         showAnitaClosing = false
+        pendingHealGeneration = nil
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             guard gen == sequenceGeneration else { return }
@@ -503,7 +485,6 @@ struct OnboardingPreBankHealthStoryView: View {
             withAnimation(.spring(response: 0.42, dampingFraction: 0.78)) {
                 showAnitaTyping1 = false
                 showAnitaOpening = true
-                showReplyChips = true
             }
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         }
@@ -582,6 +563,119 @@ struct OnboardingPreBankHealthStoryView: View {
 }
 
 // MARK: - Subviews
+
+/// Character-at-a-time reveal matching `TypewriterWelcomeMessageView` in `ChatView`.
+private struct OnboardingFriendTypewriterBubble: View {
+    let fullText: String
+    let onTypingComplete: () -> Void
+    
+    @State private var visibleUnitCount = 0
+    @State private var typingTask: Task<Void, Never>?
+    @State private var didCallComplete = false
+    
+    private var sequences: [String] {
+        Self.splitComposedSequences(fullText)
+    }
+    
+    private var visibleText: String {
+        let seq = sequences
+        guard visibleUnitCount > 0, !seq.isEmpty else { return "" }
+        let n = min(visibleUnitCount, seq.count)
+        return seq.prefix(n).joined()
+    }
+    
+    private var typingComplete: Bool {
+        !sequences.isEmpty && visibleUnitCount >= sequences.count
+    }
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("ANITA")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundColor(.white.opacity(0.38))
+                    .tracking(1.1)
+                    .padding(.bottom, 6)
+                Text(visibleText)
+                    .font(.body)
+                    .foregroundColor(.white)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .lineSpacing(6)
+                    .kerning(0.2)
+                    .transaction { $0.animation = nil }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .financeSolidGlassTile(cornerRadius: 16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.white.opacity(0.10), lineWidth: 0.85)
+            )
+            .shadow(color: Color.black.opacity(0.22), radius: 10, x: 0, y: 5)
+            Spacer(minLength: 8)
+        }
+        .onAppear(perform: startTyping)
+        .onDisappear {
+            typingTask?.cancel()
+            typingTask = nil
+        }
+        .onChange(of: fullText) { _, _ in
+            restartTyping()
+        }
+        .onChange(of: typingComplete) { _, done in
+            guard done, !didCallComplete else { return }
+            didCallComplete = true
+            onTypingComplete()
+        }
+    }
+    
+    private func restartTyping() {
+        typingTask?.cancel()
+        didCallComplete = false
+        visibleUnitCount = 0
+        startTyping()
+    }
+    
+    private func startTyping() {
+        typingTask?.cancel()
+        let seq = Self.splitComposedSequences(fullText)
+        guard !seq.isEmpty else {
+            visibleUnitCount = 0
+            if !didCallComplete {
+                didCallComplete = true
+                onTypingComplete()
+            }
+            return
+        }
+        typingTask = Task {
+            for i in 1...seq.count {
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    visibleUnitCount = i
+                }
+                if i < seq.count {
+                    let pause = Self.delayNanos(after: seq[i - 1])
+                    try? await Task.sleep(nanoseconds: pause)
+                }
+            }
+        }
+    }
+    
+    private static func delayNanos(after unit: String) -> UInt64 {
+        if unit == "\n" { return 95_000_000 }
+        if unit == " " { return 14_000_000 }
+        if let c = unit.first, ".!?".contains(c) { return 52_000_000 }
+        return 28_000_000
+    }
+    
+    private static func splitComposedSequences(_ s: String) -> [String] {
+        var out: [String] = []
+        s.enumerateSubstrings(in: s.startIndex..<s.endIndex, options: .byComposedCharacterSequences) { substring, _, _, _ in
+            if let substring { out.append(String(substring)) }
+        }
+        return out
+    }
+}
 
 private struct FriendTypingDots: View {
     var body: some View {

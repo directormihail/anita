@@ -10,6 +10,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { applySecurityHeaders } from '../utils/securityHeaders';
 import * as logger from '../utils/logger';
 import { categorizeUncategorizedBankTransactions } from '../utils/categorizeBankTransactions';
+import { requireAuthorizedUserId } from '../utils/requireAuthorizedUser';
 
 function getStripe(): Stripe | null {
   const raw = (process.env.STRIPE_SECRET_KEY ?? '').trim().replace(/^["']|["']$/g, '');
@@ -92,6 +93,10 @@ export async function handleRefreshBankTransactions(req: Request, res: Response)
       (req.body?.userId as string)?.trim?.() ?? (req.query.userId as string)?.trim?.();
     if (!userId || userId.length > 200) {
       res.status(400).json({ error: 'Missing or invalid userId', requestId });
+      return;
+    }
+
+    if (!(await requireAuthorizedUserId(req, res, userId, requestId))) {
       return;
     }
 

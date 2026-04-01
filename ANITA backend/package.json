@@ -9,7 +9,8 @@
     "start": "node -r dotenv/config dist/index.js",
     "type-check": "tsc --noEmit",
     "test:ai-categories": "tsx scripts/test-ai-categorization.ts",
-    "inspect-stripe-format": "tsx scripts/inspect-stripe-transaction-format.ts"
+    "inspect-stripe-format": "tsx scripts/inspect-stripe-transaction-format.ts",
+    "test:bank-sync-24h": "tsx scripts/bank-sync-24h-policy-check.ts"
   },
   "keywords": ["anita", "finance", "api"],
   "author": "",

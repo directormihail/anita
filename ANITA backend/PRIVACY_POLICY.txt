@@ -1,6 +1,6 @@
 Privacy Policy
 ANITA
-Last updated: February 2025
+Last updated: March 2026
 
 1. Introduction
 
@@ -12,9 +12,11 @@ ANITA is committed to protecting your privacy. This Privacy Policy explains in d
 
 ANITA collects information that you provide directly when you create an account or use the app: your email address and authentication credentials (including those used for Sign in with Apple or Google where applicable), your name and profile information if you choose to provide them, your currency and language preferences, and any other details you enter in your profile or settings. Paid subscriptions are processed by Apple via in-app purchase; ANITA does not store your payment card details.
 
-2.2 Financial and usage data
+2.2 Financial and usage data (including connected bank data)
 
-To provide the app's core features, ANITA collects and stores: financial transactions you enter or upload (such as income and expenses, amounts, dates, categories, and descriptions), chat messages and conversation history with the in-app assistant, financial targets and goals you set, budget information, and any notes or labels you add. If you use voice input, the audio may be sent to a transcription provider to convert speech to text; that processing is necessary to provide the feature.
+To provide the app's core features, ANITA collects and stores: financial transactions you enter or upload (such as income and expenses, amounts, dates, categories, and descriptions), chat messages and conversation history with the in-app assistant, financial targets and goals you set, budget information, and any notes or labels you add. If you connect a bank account via Stripe Financial Connections, we also receive and process permissioned account data such as account identifiers, institution metadata, balances, ownership details (where available), and transaction history made available through that connection. If you use voice input, the audio may be sent to a transcription provider to convert speech to text; that processing is necessary to provide the feature.
+
+ANITA does not receive or store your online banking username or password. Authentication to your financial institution is performed in the Financial Connections flow provided by Stripe and/or the institution.
 
 2.3 Automatically collected information
 
@@ -46,15 +48,23 @@ Google: If you use Google sign-in where offered, authentication and basic profil
 
 PostHog: We use PostHog to collect and process product and usage analytics (see section 2.4). PostHog receives pseudonymised usage and activity data (e.g. app events, screen views, device type, session information). Data is processed in the United States. PostHog's privacy policy is at https://posthog.com/privacy.
 
+Stripe Financial Connections: If you choose to connect a bank account, Stripe provides bank-linking and permissioned financial data access infrastructure. Stripe may receive and process data needed to authenticate, maintain, and refresh your connection and to provide account/transaction data to ANITA. Stripe's privacy and product terms apply to that processing: https://stripe.com/privacy and https://stripe.com/legal/financial-connections.
+
+Financial institutions and data providers: Your bank or other account provider may share account and transaction data with Stripe and ANITA based on your authorization. Availability, fields, update frequency, and historical depth can vary by institution and may be delayed, incomplete, or changed by the institution.
+
 Your personal information is not sold. Data is shared with these service providers only as necessary to operate the Service, under agreements that require them to protect your data and use it only for the purposes specified.
 
 6. Data retention and security
 
-Your data is retained for as long as your account is active and as required by law. After you delete your account, your personal data is removed or anonymized within a reasonable period (typically within 30 days), except where retention is required for legal, regulatory, or legitimate business purposes. Industry-standard technical and organisational measures are used to protect your data, including encryption where appropriate, access controls, and secure hosting. No system can be completely secure; you and relevant authorities will be notified as required by law if a breach affecting your personal data becomes known.
+Your data is retained for as long as your account is active and as required by law. After you delete your account, your personal data is removed or anonymized within a reasonable period (typically within 30 days), except where retention is required for legal, regulatory, or legitimate business purposes. Connected-bank data already imported into your ANITA account may remain in backups or archives for a limited period consistent with our retention and security obligations. Industry-standard technical and organisational measures are used to protect your data, including encryption where appropriate, access controls, and secure hosting. No system can be completely secure; you and relevant authorities will be notified as required by law if a breach affecting your personal data becomes known.
 
 7. Your rights (GDPR and CCPA)
 
-If you are in the European Economic Area or another jurisdiction with similar laws you may have the right to: access the personal data held about you; request correction of inaccurate or incomplete data; request erasure of your data in certain circumstances; restrict processing in certain cases; receive a copy of your data in a portable format; object to certain processing; and withdraw consent where processing is based on consent. You may also have the right to lodge a complaint with a supervisory authority. If you are a California resident you may have additional rights under the CCPA, including the right to know what personal information is collected and how it is used, the right to request deletion, and the right to non-discrimination for exercising your rights. Personal information is not sold. To exercise any of these rights you can use the data management options in the app's Settings (such as export or clear data and account deletion), send a message via the Support option in the app's Settings, or email us at anita.finance.sup@gmail.com. Messages you send via Support, Feedback, or email are stored and used to respond and improve the service. Responses will be handled within the time required by applicable law where applicable.
+If you are in the European Economic Area or another jurisdiction with similar laws you may have the right to: access the personal data held about you; request correction of inaccurate or incomplete data; request erasure of your data in certain circumstances; restrict processing in certain cases; receive a copy of your data in a portable format; object to certain processing; and withdraw consent where processing is based on consent. You may also have the right to lodge a complaint with a supervisory authority. If you are a California resident you may have additional rights under the CCPA, including the right to know what personal information is collected and how it is used, the right to request deletion, and the right to non-discrimination for exercising your rights. Personal information is not sold.
+
+For connected bank accounts, you can disconnect the connection in ANITA (where available) and/or revoke access through the institution or provider flow. Revoking access stops future data pulls but does not automatically delete data already stored in your ANITA account unless you also request deletion or delete your account.
+
+To exercise any of these rights you can use the data management options in the app's Settings (such as export or clear data and account deletion), send a message via the Support option in the app's Settings, or email us at anita.finance.sup@gmail.com. Messages you send via Support, Feedback, or email are stored and used to respond and improve the service. Responses will be handled within the time required by applicable law where applicable.
 
 8. International data transfers
 

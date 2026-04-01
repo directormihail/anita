@@ -1,7 +1,7 @@
 /**
  * Stripe Webhook handler for Financial Connections
- * Handles financial_connections.account.created and account.refreshed;
- * fetches balances/transactions from Stripe and stores them in Supabase.
+ * Handles financial_connections.account.created (initial link). account.refreshed is
+ * acknowledged only — bank data is refreshed when the user opens the app (client → refresh API).
  */
 
 import { Request, Response } from 'express';
@@ -230,12 +230,14 @@ export async function handleStripeWebhook(req: Request, res: Response): Promise<
 
   try {
     const eventType = event.type as string;
-    if (eventType === 'financial_connections.account.created' || eventType === 'financial_connections.account.refreshed') {
+    if (eventType === 'financial_connections.account.created') {
       const account = (event.data as { object: Stripe.FinancialConnections.Account }).object;
       const customerId = typeof account.account_holder === 'string' ? account.account_holder : (account.account_holder as { customer?: string })?.customer ?? (account as any).customer;
       if (customerId) {
         await processAccount(supabase, account.id, customerId, requestId);
       }
+    } else if (eventType === 'financial_connections.account.refreshed') {
+      logger.info('Stripe webhook: account.refreshed acknowledged (sync on next app open)', { requestId, type: eventType });
     } else {
       // Acknowledge other events (e.g. setup_intent.created, checkout.session.completed) so Stripe doesn't retry
       logger.info('Stripe webhook received (no handler)', { requestId, type: eventType });

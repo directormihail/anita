@@ -126,7 +126,6 @@ enum AppL10n {
             "onboarding.pre_bank.reply_hint": "Tap your answer",
             "onboarding.pre_bank.anita_closing": "there — ✨ your score and balance look much better now. that’s the idea: less stress, a little more breathing room.",
             "onboarding.pre_bank.continue": "Continue",
-            "onboarding.pre_bank.boost_hint": "Tap the ring to play with the animation",
             // Welcome / Auth
             "welcome.title": "Welcome to ANITA",
             "welcome.subtitle": "Clarity for your money",
@@ -695,7 +694,6 @@ enum AppL10n {
             "onboarding.pre_bank.reply_hint": "Tippe deine Antwort",
             "onboarding.pre_bank.anita_closing": "so ✨ Score und Kontostand sehen jetzt deutlich besser aus. genau darum geht’s: weniger Stress, etwas mehr Luft.",
             "onboarding.pre_bank.continue": "Weiter",
-            "onboarding.pre_bank.boost_hint": "Ring antippen, um die Animation zu sehen",
             "welcome.title": "Willkommen bei ANITA",
             "welcome.subtitle": "Klarheit für dein Geld",
             "welcome.anita_intro": "Hey Schatz—hier ist Anita. Ich freu mich echt darauf, mit dir über deine Finanzen zu quatschen und dich durch den ganzen Kram zu bringen. Keine Predigt, nur gute Laune und klarere Zahlen. Versprochen: harmloser, als es klingt.",

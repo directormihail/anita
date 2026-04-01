@@ -101,23 +101,6 @@ class FinanceViewModel: ObservableObject {
     
     var usesBankDataOnly: Bool { UserManager.shared.usesBankDataOnly }
     
-    // MARK: - Bank sync throttling (once per day, background-only)
-    private static let lastBankSyncKey = "anita_last_bank_sync_date"
-    
-    /// Returns true if we should trigger a background bank sync (at most once per calendar day).
-    static func shouldPerformDailyBankSync() -> Bool {
-        let defaults = UserDefaults.standard
-        if let last = defaults.object(forKey: lastBankSyncKey) as? Date {
-            let cal = Calendar.current
-            if cal.isDateInToday(last) { return false }
-        }
-        return true
-    }
-    
-    static func markBankSyncPerformed() {
-        UserDefaults.standard.set(Date(), forKey: lastBankSyncKey)
-    }
-    
     func loadData() {
         isLoading = true
         errorMessage = nil
@@ -147,19 +130,11 @@ class FinanceViewModel: ObservableObject {
                 if usesBankDataOnly {
                     // Bank mode: always use effectiveUserId so logged-in users share data across devices,
                     // but anonymous users still see their own bank data.
-                    // IMPORTANT: Do NOT sync from Stripe here – we want fast loads using
-                    // the cached metrics/transactions that are already in our database.
-                    // However, right after the user connects a bank, the backend import/metrics
-                    // may still be updating. In that case, force a refresh once and keep
-                    // Finance in the loading state until the backend is ready.
+                    // Do not sync from Stripe here — fast loads from DB. Fresh bank data is
+                    // requested when the user opens the app (foreground) or right after linking,
+                    // via BankSessionSyncController; Finance then reloads on .anitaBankSyncCompleted.
                     if UserManager.shared.isJustConnectedBank {
-                        do {
-                            try await networkService.refreshBankTransactions(userId: userId)
-                            UserManager.shared.clearJustConnectedBank()
-                        } catch {
-                            // Keep the flag until the next successful load attempt.
-                            print("[FinanceViewModel] refreshBankTransactions failed: \(error.localizedDescription)")
-                        }
+                        UserManager.shared.clearJustConnectedBank()
                     }
 
                     let fromStr = String(format: "%04d-%02d-01", year, month)
@@ -242,9 +217,7 @@ class FinanceViewModel: ObservableObject {
                 let manualHasData = metrics.metrics.monthlyIncome > 0 || metrics.metrics.monthlyExpenses > 0
                 let bankHasData = (bankMetrics?.metrics.monthlyIncome ?? 0) > 0 || (bankMetrics?.metrics.monthlyExpenses ?? 0) > 0
                 let useBankForDisplay = !manualHasData && bankHasData
-                // We no longer trigger a Stripe/bank sync in the hot path.
-                // If both manual and bank metrics are empty, we keep showing zeros/transactions
-                // from our DB and let a separate daily background sync refresh bank data.
+                // No Stripe sync in the hot path; bank refresh runs on app open / after link only.
                 var bankTransactionsForMonth: [TransactionItem]?
                 let finalBankMetrics = bankMetrics
                 let finalPreviousBankMetrics = previousMonthBankMetrics
@@ -378,8 +351,7 @@ class FinanceViewModel: ObservableObject {
         loadData()
     }
     
-    /// Call from pull-to-refresh. We no longer force a bank sync here; instead we rely on
-    /// a separate daily background sync so that refresh stays fast and uses cached data.
+    /// Pull-to-refresh reloads from our API/DB only; Stripe is synced on app foreground (see BankSessionSyncController).
     func refreshAsync() async {
         loadData()
     }
@@ -413,8 +385,13 @@ class FinanceViewModel: ObservableObject {
     
     /// Compute income, expenses, and balance from a list of transactions (so top card matches the list when API returns zeros).
     private static func metricsFromTransactions(_ transactions: [TransactionItem]) -> (income: Double, expenses: Double, balance: Double) {
-        let income = transactions.filter { $0.type.lowercased() == "income" }.reduce(0.0) { $0 + $1.amount }
-        let expenses = transactions.filter { $0.type.lowercased() == "expense" }.reduce(0.0) { $0 + $1.amount }
+        // Normalize signs defensively: some payloads can carry negative expense amounts.
+        let income = transactions
+            .filter { $0.type.lowercased() == "income" }
+            .reduce(0.0) { $0 + abs($1.amount) }
+        let expenses = transactions
+            .filter { $0.type.lowercased() == "expense" }
+            .reduce(0.0) { $0 + abs($1.amount) }
         return (income, expenses, income - expenses)
     }
     
@@ -1093,10 +1070,14 @@ class FinanceViewModel: ObservableObject {
     /// Monthly income to display in the top card.
     /// Prefers the sum of the visible transaction list for the selected month so it always matches what the user sees.
     var displayMonthlyIncome: Double {
-        let txIncome = transactionsForSelectedMonth
+        let monthTransactions = transactionsForSelectedMonth
+        let txIncome = monthTransactions
             .filter { $0.type.lowercased() == "income" }
-            .reduce(0.0) { $0 + $1.amount }
-        if txIncome > 0 {
+            .reduce(0.0) { $0 + abs($1.amount) }
+        let txExpenses = monthTransactions
+            .filter { $0.type.lowercased() == "expense" }
+            .reduce(0.0) { $0 + abs($1.amount) }
+        if !monthTransactions.isEmpty || txIncome > 0 || txExpenses > 0 {
             return txIncome
         }
         return monthlyIncome
@@ -1105,10 +1086,14 @@ class FinanceViewModel: ObservableObject {
     /// Monthly expenses to display in the top card.
     /// Prefers the sum of the visible transaction list for the selected month so it always matches what the user sees.
     var displayMonthlyExpenses: Double {
-        let txExpenses = transactionsForSelectedMonth
+        let monthTransactions = transactionsForSelectedMonth
+        let txIncome = monthTransactions
+            .filter { $0.type.lowercased() == "income" }
+            .reduce(0.0) { $0 + abs($1.amount) }
+        let txExpenses = monthTransactions
             .filter { $0.type.lowercased() == "expense" }
-            .reduce(0.0) { $0 + $1.amount }
-        if txExpenses > 0 {
+            .reduce(0.0) { $0 + abs($1.amount) }
+        if !monthTransactions.isEmpty || txIncome > 0 || txExpenses > 0 {
             return txExpenses
         }
         return monthlyExpenses
@@ -1120,16 +1105,16 @@ class FinanceViewModel: ObservableObject {
         if !transactionsForSelectedMonth.isEmpty {
             let income = transactionsForSelectedMonth
                 .filter { $0.type.lowercased() == "income" }
-                .reduce(0.0) { $0 + $1.amount }
+                .reduce(0.0) { $0 + abs($1.amount) }
             let expenses = transactionsForSelectedMonth
                 .filter { $0.type.lowercased() == "expense" }
-                .reduce(0.0) { $0 + $1.amount }
+                .reduce(0.0) { $0 + abs($1.amount) }
             let transfersToGoal = transactionsForSelectedMonth
                 .filter { $0.type.lowercased() == "transfer" && $0.category.lowercased().contains("to goal") }
-                .reduce(0.0) { $0 + $1.amount }
+                .reduce(0.0) { $0 + abs($1.amount) }
             let transfersFromGoal = transactionsForSelectedMonth
                 .filter { $0.type.lowercased() == "transfer" && $0.category.lowercased().contains("from goal") }
-                .reduce(0.0) { $0 + $1.amount }
+                .reduce(0.0) { $0 + abs($1.amount) }
             return income - expenses - transfersToGoal + transfersFromGoal
         }
         let derived = monthlyIncome - monthlyExpenses
@@ -1207,8 +1192,8 @@ class FinanceViewModel: ObservableObject {
     }
     
     func calculateHealthScore() -> HealthScore {
-        let income = monthlyIncome
-        let expenses = monthlyExpenses
+        let income = displayMonthlyIncome
+        let expenses = displayMonthlyExpenses
         
         guard income > 0 else {
             return HealthScore(

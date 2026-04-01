@@ -47,11 +47,13 @@
 		A100009A /* PostHog in Frameworks */ = {isa = PBXBuildFile; productRef = A1000099 /* PostHog */; };
 		A10000B1 /* ResetPasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000B0 /* ResetPasswordView.swift */; };
 		A2000001 /* BankConnectionTester.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000 /* BankConnectionTester.swift */; };
+		A2000011 /* BankSessionSyncController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000010 /* BankSessionSyncController.swift */; };
 		A3000003 /* StripeFinancialConnections in Frameworks */ = {isa = PBXBuildFile; productRef = A3000004 /* StripeFinancialConnections */; };
 		Aa31fd725f3f /* TextFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = Af035dc2b2fe /* TextFormatter.swift */; };
 		A10000D1 /* SyncBankConnectBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000D0 /* SyncBankConnectBar.swift */; };
 		A10000D3 /* OnboardingPreBankHealthStoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000D2 /* OnboardingPreBankHealthStoryView.swift */; };
 		A10000E1 /* WelcomeBankPartners.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000E0 /* WelcomeBankPartners.swift */; };
+		A10000F1 /* UserPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000F0 /* UserPreferences.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -97,10 +99,12 @@
 		A1000096 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
 		A10000B0 /* ResetPasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResetPasswordView.swift; sourceTree = "<group>"; };
 		A2000000 /* BankConnectionTester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankConnectionTester.swift; sourceTree = "<group>"; };
+		A2000010 /* BankSessionSyncController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankSessionSyncController.swift; sourceTree = "<group>"; };
 		Af035dc2b2fe /* TextFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFormatter.swift; sourceTree = "<group>"; };
 		A10000D0 /* SyncBankConnectBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncBankConnectBar.swift; sourceTree = "<group>"; };
 		A10000D2 /* OnboardingPreBankHealthStoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingPreBankHealthStoryView.swift; sourceTree = "<group>"; };
 		A10000E0 /* WelcomeBankPartners.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeBankPartners.swift; sourceTree = "<group>"; };
+		A10000F0 /* UserPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserPreferences.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -193,6 +197,7 @@
 				A1000075 /* NotificationService.swift */,
 				A1000090 /* XPStore.swift */,
 				A2000000 /* BankConnectionTester.swift */,
+				A2000010 /* BankSessionSyncController.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -225,6 +230,7 @@
 				A1000041 /* UserManager.swift */,
 				A1000096 /* KeychainHelper.swift */,
 				A1000080 /* AppL10n.swift */,
+				A10000F0 /* UserPreferences.swift */,
 				A1000048 /* LiquidGlassModifier.swift */,
 				A1000052 /* Config.swift */,
 				A1000071 /* CategoryDefinitions.swift */,
@@ -374,8 +380,10 @@
 				A1000093 /* AmountParsing.swift in Sources */,
 				A1000095 /* SubscriptionManager.swift in Sources */,
 				A1000097 /* KeychainHelper.swift in Sources */,
+				A10000F1 /* UserPreferences.swift in Sources */,
 				A10000B1 /* ResetPasswordView.swift in Sources */,
 				A2000001 /* BankConnectionTester.swift in Sources */,
+				A2000011 /* BankSessionSyncController.swift in Sources */,
 				A10000D1 /* SyncBankConnectBar.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

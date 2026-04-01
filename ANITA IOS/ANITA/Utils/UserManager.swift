@@ -22,6 +22,7 @@ class UserManager: ObservableObject {
     private let numberFormatKeyBase = "anita_number_format"
     private let transactionDataSourceKeyBase = "anita_transaction_data_source"
     private let bankSyncEstablishedKeyBase = "anita_bank_sync_established"
+    private let awaitingInitialFinanceKeyBase = "anita_awaiting_initial_finance_payload"
     private let supabaseService = SupabaseService.shared
     
     /// "manual" = user adds transactions by hand. "bank" = transactions from linked bank only, no manual add.
@@ -47,8 +48,7 @@ class UserManager: ObservableObject {
         let v = (value == "bank") ? "bank" : "manual"
         transactionDataSource = v
         UserDefaults.standard.set(v, forKey: prefKey(transactionDataSourceKeyBase))
-        // When user connects a bank, we want Finance to show a longer loading state
-        // until the backend import/metrics are ready (avoid showing cached partial values).
+        // Flag used when switching to bank mode; Finance clears it without blocking on Stripe.
         if v == "bank" {
             setJustConnectedBank(true)
         } else {
@@ -84,6 +84,18 @@ class UserManager: ObservableObject {
         guard !hasEstablishedBankSync else { return }
         hasEstablishedBankSync = true
         UserDefaults.standard.set(true, forKey: prefKey(bankSyncEstablishedKeyBase))
+    }
+    
+    var awaitingInitialFinancePayload: Bool {
+        UserDefaults.standard.bool(forKey: prefKey(awaitingInitialFinanceKeyBase))
+    }
+    
+    func markAwaitingInitialFinancePayload() {
+        UserDefaults.standard.set(true, forKey: prefKey(awaitingInitialFinanceKeyBase))
+    }
+    
+    func clearAwaitingInitialFinancePayload() {
+        UserDefaults.standard.set(false, forKey: prefKey(awaitingInitialFinanceKeyBase))
     }
     
     // MARK: - Test bank connection flow (global flag, set before auth)
@@ -409,6 +421,7 @@ class UserManager: ObservableObject {
         UserDefaults.standard.set(true, forKey: prefKey(onboardingCompletedKey))
         UserDefaults.standard.set(false, forKey: prefKey(onboardingSyncedKey))
         UserDefaults.standard.set(false, forKey: prefKey(preferencesSyncedKey))
+        markAwaitingInitialFinancePayload()
         Task {
             await syncSavedOnboardingToSupabaseIfNeeded()
         }
@@ -428,6 +441,7 @@ class UserManager: ObservableObject {
         UserDefaults.standard.set(true, forKey: prefKey(onboardingCompletedKey))
         UserDefaults.standard.set(false, forKey: prefKey(onboardingSyncedKey))
         UserDefaults.standard.set(false, forKey: prefKey(preferencesSyncedKey))
+        markAwaitingInitialFinancePayload()
     }
     
     private func syncSavedOnboardingToSupabaseIfNeeded() async {
@@ -614,6 +628,7 @@ class UserManager: ObservableObject {
             profileNameKeyBase, onboardingCompletedKey, onboardingSyncedKey, preferencesSyncedKey,
             postSignupPlansPendingKey, onboardingSurveyKey, preferredLanguageKey,
             userCurrencyKeyBase, numberFormatKeyBase, transactionDataSourceKeyBase, bankSyncEstablishedKeyBase,
+            awaitingInitialFinanceKeyBase,
             Self.justConnectedBankKeyBase, "anita_date_format", "anita_email_notifications"
         ]
         for base in keys {

@@ -17,6 +17,19 @@ fileprivate func financeCurrencySymbolOnly(_ code: String) -> String {
     }
 }
 
+/// Tightens `NumberFormatter` output when a custom `currencySymbol` leaves a space before the amount (e.g. `"$ 1,200"` → `"$1,200"`). Skips CHF where a space after `CHF` is conventional.
+fileprivate func financeCollapseCurrencySymbolSpacing(_ string: String, currencyCode: String) -> String {
+    let code = currencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+    if code == "CHF" { return string }
+    let symbol = financeCurrencySymbolOnly(currencyCode)
+    guard !symbol.isEmpty else { return string }
+    let escaped = NSRegularExpression.escapedPattern(for: symbol)
+    let pattern = "([-+]?)(\(escaped))[\\s\\u{00a0}\\u{202f}]+(?=[0-9])"
+    guard let regex = try? NSRegularExpression(pattern: pattern) else { return string }
+    let range = NSRange(string.startIndex..., in: string)
+    return regex.stringByReplacingMatches(in: string, options: [], range: range, withTemplate: "$1$2")
+}
+
 // Custom iOS-style transitions - contained animations
 extension AnyTransition {
     static var expandSection: AnyTransition {
@@ -206,8 +219,29 @@ struct FinanceView: View {
     @State private var healthScoreTimer: Timer?
     @State private var animationDebounceTimer: Timer?
     @State private var loadingArcPhase: Bool = false
+    /// First session after onboarding: bank-only users stay on the hero loading state until we see imported data, a bank-sync notification, or a timeout.
+    @State private var financeFirstHydrationStartedAt: Date?
+    @State private var financeHydrationTrustsBankSync = false
     
     // MARK: - Helper Functions
+    
+    private func syncFinanceFirstHydrationGate() {
+        guard userManager.awaitingInitialFinancePayload else { return }
+        guard viewModel.hasLoadedOnce, !viewModel.isLoading else { return }
+        if !viewModel.usesBankDataOnly {
+            userManager.clearAwaitingInitialFinancePayload()
+            return
+        }
+        let hasRows = !viewModel.transactions.isEmpty
+        let hasMetrics = abs(viewModel.monthlyIncome) > 0.000_001
+            || abs(viewModel.monthlyExpenses) > 0.000_001
+            || abs(viewModel.monthlyBalance) > 0.000_001
+            || abs(viewModel.totalBalance) > 0.000_001
+        let timedOut = financeFirstHydrationStartedAt.map { Date().timeIntervalSince($0) >= 32 } ?? false
+        if hasRows || hasMetrics || timedOut || financeHydrationTrustsBankSync {
+            userManager.clearAwaitingInitialFinancePayload()
+        }
+    }
     
     /// Health score is based only on income vs expenses for the selected month.
     private var currentHealthScore: FinanceViewModel.HealthScore {
@@ -230,10 +264,13 @@ struct FinanceView: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: currency)
         formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+        formatter.usesGroupingSeparator = true
+        let raw = formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+        return financeCollapseCurrencySymbolSpacing(raw, currencyCode: currency)
     }
     
     func monthYearString(from date: Date) -> String {
@@ -470,7 +507,23 @@ struct FinanceView: View {
     private var balanceCardView: some View {
         // If we are still loading the finance payload or have not yet completed a successful load,
         // show a stable placeholder card with no amounts to avoid flashing incorrect data.
-        let isStillLoading = viewModel.isLoading || !viewModel.hasLoadedOnce
+        let needsFirstSessionPaint = userManager.awaitingInitialFinancePayload
+        let gateTimeout = financeFirstHydrationStartedAt.map { Date().timeIntervalSince($0) >= 32 } ?? false
+        let bankDataLooksPresent = !viewModel.transactions.isEmpty
+            || abs(viewModel.monthlyIncome) > 0.000_001
+            || abs(viewModel.monthlyExpenses) > 0.000_001
+            || abs(viewModel.monthlyBalance) > 0.000_001
+            || abs(viewModel.totalBalance) > 0.000_001
+        let firstBankSessionReady = !needsFirstSessionPaint
+            || !viewModel.usesBankDataOnly
+            || (viewModel.hasLoadedOnce && !viewModel.isLoading && (bankDataLooksPresent || gateTimeout || financeHydrationTrustsBankSync))
+        let firstManualSessionReady = !needsFirstSessionPaint
+            || viewModel.usesBankDataOnly
+            || (viewModel.hasLoadedOnce && !viewModel.isLoading)
+        let isStillLoading = viewModel.isLoading
+            || !viewModel.hasLoadedOnce
+            || !firstManualSessionReady
+            || !firstBankSessionReady
         
         // When we do have data, prefer the computed values that are consistent with the visible list.
         let healthScore = currentHealthScore
@@ -2110,16 +2163,27 @@ struct FinanceView: View {
             .background(Color.black)
         }
         .onAppear {
+            if financeFirstHydrationStartedAt == nil {
+                financeFirstHydrationStartedAt = Date()
+            }
             viewModel.loadData()
             // Refresh shared XP store so Level card is up to date (single source of truth)
             Task { await XPStore.shared.refresh() }
             Task { await subscriptionManager.refresh() }
-            // Health score will update automatically when isLoading changes to false
+            syncFinanceFirstHydrationGate()
         }
         .onReceive(NotificationCenter.default.publisher(for: .anitaBankSyncCompleted)) { _ in
+            financeHydrationTrustsBankSync = true
             viewModel.refresh()
             viewModel.invalidateAndReloadHistoricalData()
+            syncFinanceFirstHydrationGate()
         }
+        .onChange(of: viewModel.hasLoadedOnce) { _, _ in syncFinanceFirstHydrationGate() }
+        .onChange(of: viewModel.isLoading) { _, _ in syncFinanceFirstHydrationGate() }
+        .onChange(of: viewModel.transactions.count) { _, _ in syncFinanceFirstHydrationGate() }
+        .onChange(of: viewModel.monthlyIncome) { _, _ in syncFinanceFirstHydrationGate() }
+        .onChange(of: viewModel.monthlyExpenses) { _, _ in syncFinanceFirstHydrationGate() }
+        .onChange(of: viewModel.totalBalance) { _, _ in syncFinanceFirstHydrationGate() }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LanguageChanged"))) { _ in
             languageRefreshTrigger = UUID()
         }
@@ -2340,10 +2404,13 @@ struct TransactionRow: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: currency)
         formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
-        let formatted = formatter.string(from: NSNumber(value: abs(amount))) ?? "$0.00"
+        formatter.usesGroupingSeparator = true
+        let rawFormatted = formatter.string(from: NSNumber(value: abs(amount))) ?? "$0.00"
+        let formatted = financeCollapseCurrencySymbolSpacing(rawFormatted, currencyCode: currency)
         if transaction.type == "transfer" {
             return formatted
         }
@@ -2596,10 +2663,13 @@ struct TargetRow: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: currency)
         formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+        formatter.usesGroupingSeparator = true
+        let raw = formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+        return financeCollapseCurrencySymbolSpacing(raw, currencyCode: currency)
     }
 }
 
@@ -2768,47 +2838,22 @@ struct AddMoneyToGoalSheet: View {
         }
     }
     
-    private func getLocaleForCurrency(_ currencyCode: String) -> Locale {
-        // Map currency codes to appropriate locales for correct formatting
-        let localeMap: [String: String] = [
-            "USD": "en_US",
-            "EUR": "de_DE", // Uses comma as decimal separator
-            "GBP": "en_GB",
-            "JPY": "ja_JP",
-            "CAD": "en_CA",
-            "AUD": "en_AU",
-            "CHF": "de_CH",
-            "CNY": "zh_CN",
-            "INR": "en_IN",
-            "BRL": "pt_BR", // Uses comma as decimal separator
-            "MXN": "es_MX",
-            "KRW": "ko_KR"
-        ]
-        
-        if let localeIdentifier = localeMap[currencyCode] {
-            return Locale(identifier: localeIdentifier)
-        }
-        
-        // Default to US locale if currency not found
-        return Locale(identifier: "en_US")
-    }
-    
     private func formatDisplayAmount() -> String {
         // Use user's preferred currency from settings
         let userCurrency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
-        let locale = getLocaleForCurrency(userCurrency)
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = userCurrency
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: userCurrency)
         formatter.currencySymbol = financeCurrencySymbolOnly(userCurrency)
-        formatter.locale = locale
         formatter.usesGroupingSeparator = false // No thousand separators
         
         // If amount is "0" or empty, show just "0" with currency
         if amount == "0" || amount.isEmpty {
             formatter.minimumFractionDigits = 0
             formatter.maximumFractionDigits = 0
-            return formatter.string(from: NSNumber(value: 0)) ?? "0"
+            let r = formatter.string(from: NSNumber(value: 0)) ?? "0"
+            return financeCollapseCurrencySymbolSpacing(r, currencyCode: userCurrency)
         }
         
         // Parse the amount value (accepts both comma and dot as decimal separator)
@@ -2826,13 +2871,15 @@ struct AddMoneyToGoalSheet: View {
                 formatter.maximumFractionDigits = 0
             }
             
-            return formatter.string(from: NSNumber(value: value)) ?? "0"
+            let r = formatter.string(from: NSNumber(value: value)) ?? "0"
+            return financeCollapseCurrencySymbolSpacing(r, currencyCode: userCurrency)
         }
         
         // Fallback
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: 0)) ?? "0"
+        let r = formatter.string(from: NSNumber(value: 0)) ?? "0"
+        return financeCollapseCurrencySymbolSpacing(r, currencyCode: userCurrency)
     }
     
     private func addMoneyToGoal() {
@@ -3077,47 +3124,22 @@ struct ChangeAmountSheet: View {
         }
     }
     
-    private func getLocaleForCurrency(_ currencyCode: String) -> Locale {
-        // Map currency codes to appropriate locales for correct formatting
-        let localeMap: [String: String] = [
-            "USD": "en_US",
-            "EUR": "de_DE", // Uses comma as decimal separator
-            "GBP": "en_GB",
-            "JPY": "ja_JP",
-            "CAD": "en_CA",
-            "AUD": "en_AU",
-            "CHF": "de_CH",
-            "CNY": "zh_CN",
-            "INR": "en_IN",
-            "BRL": "pt_BR", // Uses comma as decimal separator
-            "MXN": "es_MX",
-            "KRW": "ko_KR"
-        ]
-        
-        if let localeIdentifier = localeMap[currencyCode] {
-            return Locale(identifier: localeIdentifier)
-        }
-        
-        // Default to US locale if currency not found
-        return Locale(identifier: "en_US")
-    }
-    
     private func formatDisplayAmount() -> String {
         // Use user's preferred currency from settings
         let userCurrency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
-        let locale = getLocaleForCurrency(userCurrency)
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = userCurrency
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: userCurrency)
         formatter.currencySymbol = financeCurrencySymbolOnly(userCurrency)
-        formatter.locale = locale
         formatter.usesGroupingSeparator = false // No thousand separators
         
         // If amount is "0" or empty, show just "0" with currency
         if amount == "0" || amount.isEmpty {
             formatter.minimumFractionDigits = 0
             formatter.maximumFractionDigits = 0
-            return formatter.string(from: NSNumber(value: 0)) ?? "0"
+            let r = formatter.string(from: NSNumber(value: 0)) ?? "0"
+            return financeCollapseCurrencySymbolSpacing(r, currencyCode: userCurrency)
         }
         
         // Parse the amount value (accepts both comma and dot as decimal separator)
@@ -3135,13 +3157,15 @@ struct ChangeAmountSheet: View {
                 formatter.maximumFractionDigits = 0
             }
             
-            return formatter.string(from: NSNumber(value: value)) ?? "0"
+            let r = formatter.string(from: NSNumber(value: value)) ?? "0"
+            return financeCollapseCurrencySymbolSpacing(r, currencyCode: userCurrency)
         }
         
         // Fallback
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: 0)) ?? "0"
+        let r = formatter.string(from: NSNumber(value: 0)) ?? "0"
+        return financeCollapseCurrencySymbolSpacing(r, currencyCode: userCurrency)
     }
     
     private func changeAmount() {
@@ -3820,43 +3844,20 @@ struct TakeMoneyFromGoalSheet: View {
         }
     }
     
-    private func getLocaleForCurrency(_ currencyCode: String) -> Locale {
-        let localeMap: [String: String] = [
-            "USD": "en_US",
-            "EUR": "de_DE",
-            "GBP": "en_GB",
-            "JPY": "ja_JP",
-            "CAD": "en_CA",
-            "AUD": "en_AU",
-            "CHF": "de_CH",
-            "CNY": "zh_CN",
-            "INR": "en_IN",
-            "BRL": "pt_BR",
-            "MXN": "es_MX",
-            "KRW": "ko_KR"
-        ]
-        
-        if let localeIdentifier = localeMap[currencyCode] {
-            return Locale(identifier: localeIdentifier)
-        }
-        
-        return Locale(identifier: "en_US")
-    }
-    
     private func formatDisplayAmount() -> String {
         let userCurrency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
-        let locale = getLocaleForCurrency(userCurrency)
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = userCurrency
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: userCurrency)
         formatter.currencySymbol = financeCurrencySymbolOnly(userCurrency)
-        formatter.locale = locale
         formatter.usesGroupingSeparator = false
         
         if amount == "0" || amount.isEmpty {
             formatter.minimumFractionDigits = 0
             formatter.maximumFractionDigits = 0
-            return formatter.string(from: NSNumber(value: 0)) ?? "0"
+            let r = formatter.string(from: NSNumber(value: 0)) ?? "0"
+            return financeCollapseCurrencySymbolSpacing(r, currencyCode: userCurrency)
         }
         
         if let value = amount.parseAmount() {
@@ -3870,12 +3871,14 @@ struct TakeMoneyFromGoalSheet: View {
                 formatter.maximumFractionDigits = 0
             }
             
-            return formatter.string(from: NSNumber(value: value)) ?? "0"
+            let r = formatter.string(from: NSNumber(value: value)) ?? "0"
+            return financeCollapseCurrencySymbolSpacing(r, currencyCode: userCurrency)
         }
         
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: 0)) ?? "0"
+        let r = formatter.string(from: NSNumber(value: 0)) ?? "0"
+        return financeCollapseCurrencySymbolSpacing(r, currencyCode: userCurrency)
     }
     
     private func takeMoneyFromGoal() {
@@ -4429,39 +4432,32 @@ struct AddValueToAssetSheet: View {
         }
     }
     
-    private func getLocaleForCurrency(_ currencyCode: String) -> Locale {
-        let localeMap: [String: String] = [
-            "USD": "en_US", "EUR": "de_DE", "GBP": "en_GB", "JPY": "ja_JP",
-            "CAD": "en_CA", "AUD": "en_AU", "CHF": "de_CH", "CNY": "zh_CN",
-            "INR": "en_IN", "BRL": "pt_BR", "MXN": "es_MX", "KRW": "ko_KR"
-        ]
-        return Locale(identifier: localeMap[currencyCode] ?? "en_US")
-    }
-    
     private func formatDisplayAmount() -> String {
         let userCurrency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
-        let locale = getLocaleForCurrency(userCurrency)
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = userCurrency
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: userCurrency)
         formatter.currencySymbol = financeCurrencySymbolOnly(userCurrency)
-        formatter.locale = locale
         formatter.usesGroupingSeparator = false
         
         if amount == "0" || amount.isEmpty {
             formatter.minimumFractionDigits = 0
             formatter.maximumFractionDigits = 0
-            return formatter.string(from: NSNumber(value: 0)) ?? "0"
+            let r = formatter.string(from: NSNumber(value: 0)) ?? "0"
+            return financeCollapseCurrencySymbolSpacing(r, currencyCode: userCurrency)
         }
         
         if let value = Double(amount) {
             let hasDecimal = amount.contains(".") || amount.contains(",")
             formatter.minimumFractionDigits = hasDecimal ? 0 : 0
             formatter.maximumFractionDigits = hasDecimal ? 2 : 0
-            return formatter.string(from: NSNumber(value: value)) ?? "0"
+            let r = formatter.string(from: NSNumber(value: value)) ?? "0"
+            return financeCollapseCurrencySymbolSpacing(r, currencyCode: userCurrency)
         }
         
-        return formatter.string(from: NSNumber(value: 0)) ?? "0"
+        let r = formatter.string(from: NSNumber(value: 0)) ?? "0"
+        return financeCollapseCurrencySymbolSpacing(r, currencyCode: userCurrency)
     }
     
     private func addValueToAsset() {
@@ -4663,39 +4659,32 @@ struct ReduceAssetValueSheet: View {
         }
     }
     
-    private func getLocaleForCurrency(_ currencyCode: String) -> Locale {
-        let localeMap: [String: String] = [
-            "USD": "en_US", "EUR": "de_DE", "GBP": "en_GB", "JPY": "ja_JP",
-            "CAD": "en_CA", "AUD": "en_AU", "CHF": "de_CH", "CNY": "zh_CN",
-            "INR": "en_IN", "BRL": "pt_BR", "MXN": "es_MX", "KRW": "ko_KR"
-        ]
-        return Locale(identifier: localeMap[currencyCode] ?? "en_US")
-    }
-    
     private func formatDisplayAmount() -> String {
         let userCurrency = UserDefaults.standard.string(forKey: "anita_user_currency") ?? "USD"
-        let locale = getLocaleForCurrency(userCurrency)
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = userCurrency
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: userCurrency)
         formatter.currencySymbol = financeCurrencySymbolOnly(userCurrency)
-        formatter.locale = locale
         formatter.usesGroupingSeparator = false
         
         if amount == "0" || amount.isEmpty {
             formatter.minimumFractionDigits = 0
             formatter.maximumFractionDigits = 0
-            return formatter.string(from: NSNumber(value: 0)) ?? "0"
+            let r = formatter.string(from: NSNumber(value: 0)) ?? "0"
+            return financeCollapseCurrencySymbolSpacing(r, currencyCode: userCurrency)
         }
         
         if let value = Double(amount) {
             let hasDecimal = amount.contains(".") || amount.contains(",")
             formatter.minimumFractionDigits = hasDecimal ? 0 : 0
             formatter.maximumFractionDigits = hasDecimal ? 2 : 0
-            return formatter.string(from: NSNumber(value: value)) ?? "0"
+            let r = formatter.string(from: NSNumber(value: value)) ?? "0"
+            return financeCollapseCurrencySymbolSpacing(r, currencyCode: userCurrency)
         }
         
-        return formatter.string(from: NSNumber(value: 0)) ?? "0"
+        let r = formatter.string(from: NSNumber(value: 0)) ?? "0"
+        return financeCollapseCurrencySymbolSpacing(r, currencyCode: userCurrency)
     }
     
     private func reduceAssetValue() {
@@ -5149,10 +5138,13 @@ struct GoalRow: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: currency)
         formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+        formatter.usesGroupingSeparator = true
+        let raw = formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+        return financeCollapseCurrencySymbolSpacing(raw, currencyCode: currency)
     }
 }
 
@@ -5314,10 +5306,13 @@ struct AssetRow: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: currency)
         formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+        formatter.usesGroupingSeparator = true
+        let raw = formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+        return financeCollapseCurrencySymbolSpacing(raw, currencyCode: currency)
     }
     
     private func getTranslatedAssetType(_ type: String) -> String {
@@ -5457,10 +5452,13 @@ struct FinanceCategoryRow: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = userCurrency
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: userCurrency)
         formatter.currencySymbol = financeCurrencySymbolOnly(userCurrency)
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+        formatter.usesGroupingSeparator = true
+        let raw = formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+        return financeCollapseCurrencySymbolSpacing(raw, currencyCode: userCurrency)
     }
     
     var body: some View {
@@ -7342,10 +7340,13 @@ struct DeleteTransactionSheet: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: currency)
         formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+        formatter.usesGroupingSeparator = true
+        let raw = formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+        return financeCollapseCurrencySymbolSpacing(raw, currencyCode: currency)
     }
     
     var body: some View {
@@ -7538,10 +7539,13 @@ struct BalanceLineChart: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: currency)
         formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: amount)) ?? "$0"
+        formatter.usesGroupingSeparator = true
+        let raw0 = formatter.string(from: NSNumber(value: amount)) ?? "$0"
+        return financeCollapseCurrencySymbolSpacing(raw0, currencyCode: currency)
     }
     
     private func formatMonth(_ date: Date) -> String {
@@ -7649,10 +7653,13 @@ struct IncomeExpenseBarChart: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: currency)
         formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: amount)) ?? "$0"
+        formatter.usesGroupingSeparator = true
+        let raw0 = formatter.string(from: NSNumber(value: amount)) ?? "$0"
+        return financeCollapseCurrencySymbolSpacing(raw0, currencyCode: currency)
     }
     
     private func formatMonth(_ date: Date) -> String {
@@ -7814,10 +7821,13 @@ struct MonthToMonthComparisonView: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: currency)
         formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+        formatter.usesGroupingSeparator = true
+        let raw = formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+        return financeCollapseCurrencySymbolSpacing(raw, currencyCode: currency)
     }
     
     var body: some View {
@@ -8065,10 +8075,13 @@ struct EnhancedMonthToMonthComparisonView: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: currency)
         formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+        formatter.usesGroupingSeparator = true
+        let raw = formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+        return financeCollapseCurrencySymbolSpacing(raw, currencyCode: currency)
     }
     
     var body: some View {
@@ -8246,10 +8259,13 @@ struct EnhancedInteractiveBalanceChart: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: currency)
         formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: amount)) ?? "$0"
+        formatter.usesGroupingSeparator = true
+        let raw0 = formatter.string(from: NSNumber(value: amount)) ?? "$0"
+        return financeCollapseCurrencySymbolSpacing(raw0, currencyCode: currency)
     }
     
     private func formatMonth(_ date: Date) -> String {
@@ -8332,10 +8348,13 @@ struct BalanceDetailSheet: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: currency)
         formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+        formatter.usesGroupingSeparator = true
+        let raw = formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+        return financeCollapseCurrencySymbolSpacing(raw, currencyCode: currency)
     }
     
     private func formatFullDate(_ date: Date) -> String {
@@ -8554,10 +8573,13 @@ struct EnhancedNetWorthChart: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: currency)
         formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: amount)) ?? "$0"
+        formatter.usesGroupingSeparator = true
+        let raw0 = formatter.string(from: NSNumber(value: amount)) ?? "$0"
+        return financeCollapseCurrencySymbolSpacing(raw0, currencyCode: currency)
     }
     
     private func formatMonth(_ date: Date) -> String {
@@ -9033,10 +9055,13 @@ struct NetWorthDetailSheet: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: currency)
         formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+        formatter.usesGroupingSeparator = true
+        let raw = formatter.string(from: NSNumber(value: amount)) ?? "$0.00"
+        return financeCollapseCurrencySymbolSpacing(raw, currencyCode: currency)
     }
     
     private func formatFullDate(_ date: Date) -> String {
@@ -9189,10 +9214,13 @@ struct EnhancedIncomeExpenseBarChart: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currency
+        formatter.locale = AnitaCurrencyDisplay.locale(forCurrencyCode: currency)
         formatter.currencySymbol = financeCurrencySymbolOnly(currency)
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: amount)) ?? "$0"
+        formatter.usesGroupingSeparator = true
+        let raw0 = formatter.string(from: NSNumber(value: amount)) ?? "$0"
+        return financeCollapseCurrencySymbolSpacing(raw0, currencyCode: currency)
     }
     
     private func formatMonth(_ date: Date) -> String {
