@@ -9,6 +9,7 @@ import { rateLimitMiddleware, RATE_LIMITS } from '../utils/rateLimiter';
 import { applySecurityHeaders } from '../utils/securityHeaders';
 import * as logger from '../utils/logger';
 
+const appStoreBillingOnly = (process.env.APP_STORE_BILLING_ONLY ?? 'true').toLowerCase() === 'true';
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 
 if (!stripeSecretKey) {
@@ -87,6 +88,15 @@ export async function handleCreateCheckoutSession(req: Request, res: Response): 
 
   try {
     const requestId = req.requestId || 'unknown';
+
+    // This app uses StoreKit subscriptions. Keep Stripe checkout disabled unless explicitly enabled.
+    if (appStoreBillingOnly) {
+      res.status(410).json({
+        error: 'Stripe Checkout is disabled for App Store billing-only mode.',
+        requestId,
+      });
+      return;
+    }
     
     if (!stripe) {
       logger.error('Stripe not configured', { requestId });

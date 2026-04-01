@@ -2,7 +2,7 @@
 //  SubscriptionManager.swift
 //  ANITA
 //
-//  Single source of truth for premium status and subscription plan name (backend + StoreKit fallback).
+//  Single source of truth for premium status and subscription plan name (backend per user account).
 //
 
 import Foundation
@@ -25,14 +25,13 @@ class SubscriptionManager: ObservableObject {
     }
     
     private let networkService = NetworkService.shared
-    private let storeKitService = StoreKitService.shared
     private let userManager = UserManager.shared
     
     private init() {
         Task { await refresh() }
     }
     
-    /// Refresh premium status and plan name from backend (and StoreKit as fallback when offline).
+    /// Refresh premium status and plan name from backend for the current authenticated user.
     func refresh() async {
         let uid = userManager.userId
         guard !uid.isEmpty else {
@@ -47,16 +46,12 @@ class SubscriptionManager: ObservableObject {
         do {
             let response = try await networkService.getSubscription(userId: uid)
             let sub = response.subscription
-            // Use StoreKit entitlements as an additional source of truth so trial/cancellation
-            // are reflected even if the backend subscription record hasn't been updated yet.
-            let storeKitPurchased = storeKitService.isPurchased("com.anita.pro.monthly") || storeKitService.isPurchased("com.anita.pro.lifetime")
-            isPremium = (sub.plan != "free" && sub.status == "active" && storeKitPurchased)
+            isPremium = (sub.plan != "free" && sub.status == "active")
             subscriptionPlan = (sub.plan == "premium" || sub.plan == "pro" || sub.plan == "ultimate") ? "premium" : "free"
         } catch {
-            // Offline or backend error: use StoreKit as fallback
-            let purchased = storeKitService.isPurchased("com.anita.pro.monthly") || storeKitService.isPurchased("com.anita.pro.lifetime")
-            isPremium = purchased
-            subscriptionPlan = purchased ? "premium" : "free"
+            // Backend unavailable: do not auto-upgrade based on device entitlements to avoid cross-account premium leakage.
+            isPremium = false
+            subscriptionPlan = "free"
         }
     }
 }

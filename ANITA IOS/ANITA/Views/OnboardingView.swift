@@ -1351,6 +1351,33 @@ private struct BankConnectionOnboardingStep: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(isConnecting)
+
+                Button {
+                    showStripeRetryState = false
+                    errorMessage = nil
+                    UserManager.shared.setTransactionDataSource("manual")
+                    onFinish()
+                } label: {
+                    HStack {
+                        Image(systemName: "forward.fill")
+                            .font(.system(size: 17, weight: .semibold))
+                        Text("Skip for now")
+                            .font(.system(size: 17, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(Color.white.opacity(0.08))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(isConnecting)
             }
             
             if let msg = errorMessage {

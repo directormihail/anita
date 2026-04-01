@@ -104,6 +104,9 @@ class StoreKitService: ObservableObject {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 30
+        if let token = SupabaseService.shared.getAccessToken(), !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
         
         do {
             let requestBody: [String: Any] = [

@@ -234,6 +234,7 @@ class NetworkService: ObservableObject {
         request.httpMethod = "POST"
         request.timeoutInterval = Self.requestTimeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        applyAuthorizationHeader(&request)
         
         let requestBody = CreateFinancialConnectionsSessionRequest(
             userId: userId,
