@@ -93,6 +93,7 @@ class StoreKitService: ObservableObject {
     
     /// Verify subscription with backend API (uses same URL as Settings → Backend URL)
     private func verifySubscriptionWithBackend(userId: String, transactionId: String, productId: String) async {
+        _ = try? await SupabaseService.shared.getCurrentUser()
         let baseUrl = NetworkService.shared.getCurrentBaseURL()
         let baseUrlTrimmed = baseUrl.hasSuffix("/") ? String(baseUrl.dropLast()) : baseUrl
         guard let url = URL(string: "\(baseUrlTrimmed)/api/v1/verify-ios-subscription") else {
@@ -117,8 +118,18 @@ class StoreKitService: ObservableObject {
             
             request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
             
-            let (data, response) = try await URLSession.shared.data(for: request)
+            var (data, response) = try await URLSession.shared.data(for: request)
             
+            if let httpResponse = response as? HTTPURLResponse {
+                if httpResponse.statusCode == 401 {
+                    _ = try? await SupabaseService.shared.getCurrentUser()
+                    if let token = SupabaseService.shared.getAccessToken(), !token.isEmpty {
+                        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                    }
+                    (data, response) = try await URLSession.shared.data(for: request)
+                }
+            }
+
             if let httpResponse = response as? HTTPURLResponse {
                 if httpResponse.statusCode == 200 {
                     if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],

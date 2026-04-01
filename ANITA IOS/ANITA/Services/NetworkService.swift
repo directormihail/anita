@@ -77,6 +77,11 @@ class NetworkService: ObservableObject {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
     }
+
+    /// Touches Supabase auth endpoint so expired access tokens are refreshed before protected backend calls.
+    private func refreshAuthSessionIfNeeded() async {
+        _ = try? await SupabaseService.shared.getCurrentUser()
+    }
     
     // MARK: - Chat Completion
     
@@ -225,6 +230,7 @@ class NetworkService: ObservableObject {
     // MARK: - Stripe Financial Connections
     
     func createFinancialConnectionsSession(userId: String, userEmail: String?) async throws -> CreateFinancialConnectionsSessionResponse {
+        await refreshAuthSessionIfNeeded()
         let sessionURL = "\(baseURL)/api/v1/financial-connections/session"
         print("[NetworkService] Bank connection: POST \(sessionURL)")
         guard let url = URL(string: sessionURL) else {
@@ -243,8 +249,8 @@ class NetworkService: ObservableObject {
         
         request.httpBody = try JSONEncoder().encode(requestBody)
         
-        let data: Data
-        let response: URLResponse
+        var data: Data
+        var response: URLResponse
         do {
             (data, response) = try await URLSession.shared.data(for: request)
         } catch {
@@ -256,6 +262,20 @@ class NetworkService: ObservableObject {
             throw NetworkError.invalidResponse
         }
         
+        if httpResponse.statusCode == 401 {
+            await refreshAuthSessionIfNeeded()
+            var retryRequest = request
+            applyAuthorizationHeader(&retryRequest)
+            (data, response) = try await URLSession.shared.data(for: retryRequest)
+            guard let retryHttpResponse = response as? HTTPURLResponse else {
+                throw NetworkError.invalidResponse
+            }
+            if retryHttpResponse.statusCode == 200 {
+                let decoder = JSONDecoder()
+                return try decoder.decode(CreateFinancialConnectionsSessionResponse.self, from: data)
+            }
+        }
+
         if httpResponse.statusCode == 200 {
             let decoder = JSONDecoder()
             return try decoder.decode(CreateFinancialConnectionsSessionResponse.self, from: data)
@@ -1360,6 +1380,7 @@ class NetworkService: ObservableObject {
     // MARK: - Subscription
     
     func getSubscription(userId: String) async throws -> GetSubscriptionResponse {
+        await refreshAuthSessionIfNeeded()
         var urlComponents = URLComponents(string: "\(baseURL)/api/v1/subscription")!
         urlComponents.queryItems = [URLQueryItem(name: "userId", value: userId)]
         
@@ -1369,12 +1390,26 @@ class NetworkService: ObservableObject {
         
         var request = URLRequest(url: url)
         applyAuthorizationHeader(&request)
-        let (data, response) = try await URLSession.shared.data(for: request)
+        var (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
             throw NetworkError.invalidResponse
         }
         
+        if httpResponse.statusCode == 401 {
+            await refreshAuthSessionIfNeeded()
+            var retryRequest = request
+            applyAuthorizationHeader(&retryRequest)
+            (data, response) = try await URLSession.shared.data(for: retryRequest)
+            guard let retryHttpResponse = response as? HTTPURLResponse else {
+                throw NetworkError.invalidResponse
+            }
+            if retryHttpResponse.statusCode == 200 {
+                let decoder = JSONDecoder()
+                return try decoder.decode(GetSubscriptionResponse.self, from: data)
+            }
+        }
+
         if httpResponse.statusCode == 200 {
             let decoder = JSONDecoder()
             return try decoder.decode(GetSubscriptionResponse.self, from: data)
