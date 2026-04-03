@@ -64,7 +64,7 @@ struct UpgradeView: View {
         if let subscription = databaseSubscription, subscription.status == "active" {
             return (subscription.plan == "premium" || subscription.plan == "pro" || subscription.plan == "ultimate") ? "premium" : "free"
         }
-        if storeKitService.isPurchased("com.anita.pro.monthly") || storeKitService.isPurchased("com.anita.pro.lifetime") {
+        if storeKitService.isPurchased(StoreKitService.monthlyProductID) || storeKitService.isLifetimePurchased() {
             return "premium"
         }
         return "free"
@@ -72,11 +72,8 @@ struct UpgradeView: View {
 
     private var isPremiumActive: Bool { currentPlan == "premium" }
 
-    private let monthlyProductId = "com.anita.pro.monthly"
-    private let lifetimeProductId = "com.anita.pro.lifetime"
-
-    private var hasMonthlyEntitlement: Bool { storeKitService.isPurchased(monthlyProductId) }
-    private var hasLifetimeEntitlement: Bool { storeKitService.isPurchased(lifetimeProductId) }
+    private var hasMonthlyEntitlement: Bool { storeKitService.isPurchased(StoreKitService.monthlyProductID) }
+    private var hasLifetimeEntitlement: Bool { storeKitService.isLifetimePurchased() }
 
     /// If the backend says the user is premium but StoreKit entitlements aren't loaded yet,
     /// disable both CTAs to avoid re-purchasing.
@@ -99,7 +96,7 @@ struct UpgradeView: View {
     private var effectiveBillingOption: BillingOption { selectedBillingOption }
 
     private var selectedProductIdForContinue: String {
-        effectiveBillingOption == .monthly ? monthlyProductId : lifetimeProductId
+        effectiveBillingOption == .monthly ? StoreKitService.monthlyProductID : StoreKitService.lifetimeProductID
     }
     
     /// User's currency from database (profiles.currency_code), synced to UserDefaults.
@@ -247,7 +244,7 @@ struct UpgradeView: View {
                             Button(action: {
                                 // Monthly is configured in App Store Connect with a 3-day free trial.
                                 // We show a clear pre-confirmation message so users know what will happen.
-                                if selectedProductIdForContinue == monthlyProductId {
+                                if selectedProductIdForContinue == StoreKitService.monthlyProductID {
                                     pendingMonthlyTrialProductId = selectedProductIdForContinue
                                     activeAlert = .monthlyTrialConfirmation
                                 } else {

@@ -15,7 +15,7 @@
           "locale" : "en_US"
         }
       ],
-      "productID" : "com.anita.pro.lifetime",
+      "productID" : "com.anita.pro.lifetime.v2",
       "referenceName" : "Pro Lifetime",
       "type" : "NonConsumable"
     }

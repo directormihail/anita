@@ -17,11 +17,14 @@ class StoreKitService: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     
-    // Product IDs - these should match your App Store Connect product IDs
-    private let productIDs = [
-        "com.anita.pro.monthly",  // Pro Plan - recurring (monthly)
-        "com.anita.pro.lifetime"  // Pro Plan - one-time lifetime
-    ]
+    /// Auto-renewable monthly Premium — unchanged; must match App Store Connect.
+    static let monthlyProductID = "com.anita.pro.monthly"
+
+    /// Non-consumable lifetime Unlock — create this exact ID in App Store Connect (In‑App Purchases).
+    static let lifetimeProductID = "com.anita.pro.lifetime.v2"
+
+    /// Earlier lifetime ID only for entitlement checks / restore (product may no longer be sold).
+    private static let legacyLifetimeProductID = "com.anita.pro.lifetime"
     
     private init() {
         Task {
@@ -30,22 +33,34 @@ class StoreKitService: ObservableObject {
         }
     }
     
-    /// Load available products from App Store
+    /// Load monthly subscription and lifetime IAP separately so a missing or failing lifetime load never blocks monthly.
     func loadProducts() async {
         isLoading = true
         errorMessage = nil
-        
+
+        var byId: [String: Product] = [:]
+
         do {
-            let products = try await Product.products(for: productIDs)
-            self.products = products.sorted { $0.price < $1.price }
-            isLoading = false
-            if products.isEmpty {
-                errorMessage = AppL10n.t("plans.sandbox_hint")
-            }
+            let monthly = try await Product.products(for: [Self.monthlyProductID])
+            for p in monthly { byId[p.id] = p }
         } catch {
+            print("[StoreKit] Monthly product load failed: \(error)")
+        }
+
+        do {
+            let lifetime = try await Product.products(for: [Self.lifetimeProductID])
+            for p in lifetime { byId[p.id] = p }
+        } catch {
+            print("[StoreKit] Lifetime product load failed: \(error)")
+        }
+
+        products = byId.values.sorted { $0.price < $1.price }
+        isLoading = false
+
+        if byId[Self.monthlyProductID] == nil {
             errorMessage = AppL10n.t("plans.sandbox_hint")
-            isLoading = false
-            print("Error loading products: \(error)")
+        } else {
+            errorMessage = nil
         }
     }
     
@@ -204,6 +219,12 @@ class StoreKitService: ObservableObject {
     /// Check if a product is purchased
     func isPurchased(_ productID: String) -> Bool {
         return purchasedProductIDs.contains(productID)
+    }
+
+    /// Lifetime via current or legacy Product ID (restore still returns the ID used at purchase time).
+    func isLifetimePurchased() -> Bool {
+        purchasedProductIDs.contains(Self.lifetimeProductID)
+            || purchasedProductIDs.contains(Self.legacyLifetimeProductID)
     }
     
     /// Get product by ID
