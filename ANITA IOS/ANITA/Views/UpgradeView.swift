@@ -58,10 +58,15 @@ struct UpgradeView: View {
     }
     
     private let networkService = NetworkService.shared
+    private let userManager = UserManager.shared
     
-    // Determine current plan - prioritize database subscription over StoreKit. Free or Premium.
+    // Determine current plan for this app account.
+    // For authenticated users, trust backend account state only (prevents cross-account leakage
+    // from Apple ID entitlements on the same device). For guests, fall back to local entitlements.
     private var currentPlan: String {
-        if let subscription = databaseSubscription, subscription.status == "active" {
+        if userManager.isAuthenticated {
+            guard let subscription = databaseSubscription else { return "free" }
+            guard subscription.status == "active" else { return "free" }
             return (subscription.plan == "premium" || subscription.plan == "pro" || subscription.plan == "ultimate") ? "premium" : "free"
         }
         if storeKitService.isPurchased(StoreKitService.monthlyProductID) || storeKitService.isLifetimePurchased() {
@@ -74,6 +79,9 @@ struct UpgradeView: View {
 
     private var hasMonthlyEntitlement: Bool { storeKitService.isPurchased(StoreKitService.monthlyProductID) }
     private var hasLifetimeEntitlement: Bool { storeKitService.isLifetimePurchased() }
+    private var shouldUseBackendForPlanState: Bool { userManager.isAuthenticated }
+    private var showMonthlyPurchasedState: Bool { shouldUseBackendForPlanState ? false : hasMonthlyEntitlement }
+    private var showLifetimePurchasedState: Bool { shouldUseBackendForPlanState ? false : hasLifetimeEntitlement }
 
     /// If the backend says the user is premium but StoreKit entitlements aren't loaded yet,
     /// disable both CTAs to avoid re-purchasing.
@@ -83,10 +91,24 @@ struct UpgradeView: View {
 
     private var isMonthlyCurrentPlan: Bool { hasMonthlyEntitlement || premiumFallbackIsCurrent }
     private var isLifetimeCurrentPlan: Bool { hasLifetimeEntitlement || premiumFallbackIsCurrent }
+    private var isSelectedPlanCurrent: Bool {
+        if shouldUseBackendForPlanState {
+            return isPremiumActive
+        }
+        switch effectiveBillingOption {
+        case .monthly:
+            return isMonthlyCurrentPlan
+        case .lifetime:
+            return isLifetimeCurrentPlan
+        }
+    }
 
     private var usesLifetimeTerms: Bool {
         // If the user already has Premium, show terms based on what they own.
         if isPremiumActive {
+            if shouldUseBackendForPlanState {
+                return selectedBillingOption == .lifetime
+            }
             return hasLifetimeEntitlement
         }
         // If not premium yet, show terms based on what they selected to buy.
@@ -223,7 +245,7 @@ struct UpgradeView: View {
                                     description: AppL10n.t("plans.monthly_fully_protected"),
                                     option: .monthly,
                                     selectedOption: effectiveBillingOption,
-                                    isPurchased: hasMonthlyEntitlement,
+                                    isPurchased: showMonthlyPurchasedState,
                                     isLocked: storeKitService.isLoading,
                                     onSelect: { selectionHaptic(); selectedBillingOption = .monthly }
                                 )
@@ -235,7 +257,7 @@ struct UpgradeView: View {
                                     description: AppL10n.t("plans.lifetime_pay_once_forever"),
                                     option: .lifetime,
                                     selectedOption: effectiveBillingOption,
-                                    isPurchased: hasLifetimeEntitlement,
+                                    isPurchased: showLifetimePurchasedState,
                                     isLocked: storeKitService.isLoading,
                                     onSelect: { selectionHaptic(); selectedBillingOption = .lifetime }
                                 )
@@ -251,20 +273,23 @@ struct UpgradeView: View {
                                     Task { await purchasePlan(productId: selectedProductIdForContinue) }
                                 }
                             }) {
-                                if storeKitService.isLoading {
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                        .scaleEffect(0.9)
-                                } else {
-                                    Text(isPremiumActive ? AppL10n.t("plans.current") : AppL10n.t("plans.continue"))
-                                        .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                        .foregroundColor(.white)
-                                        .frame(maxWidth: .infinity)
+                                ZStack {
+                                    if storeKitService.isLoading {
+                                        ProgressView()
+                                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                            .scaleEffect(0.9)
+                                    } else {
+                                        Text(isSelectedPlanCurrent ? AppL10n.t("plans.current") : AppL10n.t("plans.continue"))
+                                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                            .foregroundColor(.white)
+                                    }
                                 }
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
-                            .disabled(isPremiumActive || storeKitService.isLoading)
-                            .allowsHitTesting(!isPremiumActive && !storeKitService.isLoading)
+                            .disabled(isSelectedPlanCurrent || storeKitService.isLoading)
+                            .allowsHitTesting(!isSelectedPlanCurrent && !storeKitService.isLoading)
                             .frame(maxWidth: .infinity)
                             .frame(height: 56)
                             .background(
@@ -337,7 +362,7 @@ struct UpgradeView: View {
                             .buttonStyle(.plain)
                             .disabled(storeKitService.isLoading || isRestoring)
                             
-                            if hasMonthlyEntitlement {
+                            if shouldUseBackendForPlanState ? isPremiumActive : hasMonthlyEntitlement {
                                 Rectangle()
                                     .fill(Color.white.opacity(0.08))
                                     .frame(height: 1)
