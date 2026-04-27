@@ -2,9 +2,6 @@
 //  TextFormatter.swift
 //  ANITA
 //
-//  Text formatting utility for structured AI responses
-//  Similar to webapp's TextFormatter
-//
 
 import Foundation
 import SwiftUI
@@ -25,18 +22,11 @@ struct FormattedTextElement {
 
 @MainActor
 public class TextFormatter {
-    /**
-     * Format a complete AI response with structure
-     * Parses markdown-style formatting and converts to AttributedString
-     */
     public static func formatResponse(_ text: String) -> AttributedString {
         let elements = parseStructuredText(text)
         return elementsToAttributedString(elements)
     }
     
-    /**
-     * Parse AI response text and convert it to structured format
-     */
     private static func parseStructuredText(_ text: String) -> [FormattedTextElement] {
         let lines = text.components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespaces) }
@@ -365,7 +355,7 @@ public class TextFormatter {
             
         case .listItem:
             // Add bullet point with proper spacing
-            // Note: Numbered lists will show as bullet points for consistency with webapp
+            // Numbered lists render as bullets (AttributedString limitation)
             var bullet = AttributedString("• ")
             bullet.foregroundColor = .white.opacity(0.8)
             bullet.font = .system(size: 16)
@@ -469,7 +459,7 @@ public class TextFormatter {
         }
         
         // Parse italic text (*text*) - but not if it's part of **text**
-        // Note: We'll skip italic for now as SwiftUI Font doesn't have direct italic support
+        // Italic omitted — mixed italic in AttributedString is awkward in SwiftUI
         // The bold formatting is more important for the structured responses
         
         return result

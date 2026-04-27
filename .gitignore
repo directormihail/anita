@@ -162,19 +162,16 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
-# IDEs and editors
+# IDEs and editors (keep machine-specific tools out of the repo)
 .idea
+.cursor/
 .project
 .classpath
 .c9/
 *.launch
 .settings/
 *.sublime-workspace
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
+.vscode/
 
 # Python
 __pycache__/

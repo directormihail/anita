@@ -174,17 +174,12 @@ struct SidebarMenu: View {
     }
     
     private func handleNewConversation() {
-        // Close sidebar and start new conversation
         isPresented = false
-        // TODO: Trigger new conversation in ChatView
-        // This could use a notification or environment object
         NotificationCenter.default.post(name: NSNotification.Name("NewConversation"), object: nil)
     }
     
     private func handleConversationTap(_ conversationId: String) {
-        // Close sidebar and open conversation
         isPresented = false
-        // TODO: Load conversation in ChatView
         NotificationCenter.default.post(name: NSNotification.Name("OpenConversation"), object: conversationId)
     }
     

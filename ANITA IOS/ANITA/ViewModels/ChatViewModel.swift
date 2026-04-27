@@ -31,7 +31,6 @@ class ChatViewModel: ObservableObject {
     private static let welcomeHookLastIndexKey = "anita_chat_welcome_hook_last_index"
     private static let welcomeHookCount = 10
     
-    /// Fallback when assistant response is empty or fails validation (difficult context / malformed).
     private static let invalidResponseFallbackMessages: [String] = [
         "I got a bit confused there. Try again with something like \"add expense 50 for groceries\" or \"how's my budget?\" — I'll get it next time! 💡",
         "My reply got lost in translation. Ask me to add a transaction, set a goal, or show your budget and we're good! ✨",
@@ -57,7 +56,6 @@ class ChatViewModel: ObservableObject {
             || lower.contains("could not connect") || lower.contains("network error")
     }
     
-    /// Prefix the AI must use when responding with a premium paywall (so we can show upgrade sheet). Strip before displaying.
     private static let premiumResponsePrefix = "[PREMIUM]"
     
     /// Free tier: substring match — spending / balance / history questions need bank-linked data (Premium).
@@ -132,7 +130,6 @@ class ChatViewModel: ObservableObject {
         }
     }
     
-    /// Local assistant greeting when the chat is empty (no API call; not gated on AI consent).
     func ensureWelcomeGreetingIfNeeded() {
         guard userManager.isAuthenticated else { return }
         guard messages.isEmpty else { return }
@@ -634,15 +631,14 @@ class ChatViewModel: ObservableObject {
         }
     }
     
-    // Send a quick AI response without full chat flow
-    private func sendAIResponse(_ responseText: String) async {
+    private func postAssistantText(_ responseText: String) async {
         // Create conversation if needed
         var conversationId = currentConversationId
         if conversationId == nil {
             do {
                 conversationId = try await createConversation(title: "New Conversation")
             } catch {
-                print("[ChatViewModel] Error creating conversation for AI response: \(error.localizedDescription)")
+                print("[ChatViewModel] Error creating conversation: \(error.localizedDescription)")
             }
         }
         
@@ -709,7 +705,7 @@ class ChatViewModel: ObservableObject {
                     await saveMessage(welcome, conversationId: convId)
                 }
                 await saveMessage(userMessage, conversationId: convId)
-                await sendAIResponse(AppL10n.t("chat.bank_blocks_manual_transaction"))
+                await postAssistantText(AppL10n.t("chat.bank_blocks_manual_transaction"))
                 if let cid = currentConversationId {
                     NotificationCenter.default.post(name: NSNotification.Name("ConversationUpdated"), object: cid)
                 }
@@ -726,11 +722,7 @@ class ChatViewModel: ObservableObject {
         
         Task {
             do {
-                // Free tier: no message limit — freemium has unlimited chat; premium features (analytics, limits, goals) gated by backend.
-                
-                // No trigger words: every message is sent to the AI. The AI analyzes the full message and conversation context, interprets intent, and responds (no client-side shortcuts).
-                
-                // Device has no network (e.g. airplane mode, WiFi off) → show connection fallback so we never show sign-in by mistake
+                // Offline → connection fallback (don’t confuse with auth)
                 if !(await Self.hasDeviceNetwork()) {
                     print("[ChatViewModel] No device network path")
                     await MainActor.run {
@@ -867,7 +859,7 @@ class ChatViewModel: ObservableObject {
                 )
                 print("[ChatViewModel] Received response from backend")
                 
-                // Strip [PREMIUM] prefix if AI used it (free-tier intent gating); then sanitize
+                // Strip [PREMIUM] from backend paywall replies
                 var responseText = response.response
                 var shouldShowPaywall = response.requiresUpgrade == true
                 if responseText.trimmingCharacters(in: .whitespacesAndNewlines).uppercased().hasPrefix(Self.premiumResponsePrefix.uppercased()) {
@@ -957,7 +949,6 @@ class ChatViewModel: ObservableObject {
 
     private func buildSystemPrompt() -> String? {
         let survey = OnboardingSurveyResponse.loadFromUserDefaults(userId: userId)
-        // Use app-chosen language (Settings) so AI and paywall messages match what the user sees in the UI.
         let languageCode = AppL10n.currentLanguageCode()
         
         let languageName: String
@@ -990,7 +981,6 @@ class ChatViewModel: ObservableObject {
             lines.append("Onboarding preferences: \(formatted). Use them to personalize your advice.")
         }
         
-        // Free tier: AI must understand the main idea of the user's message and gate premium intents with a funny paywall
         if !SubscriptionManager.shared.isPremium {
             lines.append("")
             lines.append("FREE TIER RULES — The user is on the free plan. You must understand the context and main idea of what they say.")

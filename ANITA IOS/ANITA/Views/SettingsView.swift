@@ -1879,9 +1879,6 @@ struct AuthSheet: View {
     }
 }
 
-// MARK: - Note: Subscription Plan Components are defined in UpgradeView.swift
-// Using PlanType, FreePlanCard, SubscriptionPlanCard, and FeatureRow from UpgradeView
-
 #Preview("Settings") {
     SettingsView(selectedTab: .constant(2))
 }

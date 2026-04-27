@@ -2,15 +2,12 @@
 //  AppL10n.swift
 //  ANITA
 //
-//  Lightweight in-app localization driven by onboarding language selection.
-//
 
 import Foundation
 
 enum AppL10n {
     static let preferredLanguageKey = "anita_preferred_language_code"
     
-    /// If user has a saved language (en/de), use it. Otherwise auto-detect from device: de → German, else → English.
     static func currentLanguageCode() -> String {
         if let saved = UserDefaults.standard.string(forKey: preferredLanguageKey) {
             return saved == "de" ? "de" : "en"
@@ -40,7 +37,6 @@ enum AppL10n {
         return key
     }
     
-    /// Returns localized level title for XP level widget (chat sidebar + finance page). Keys match XPLevelConfig in Models.swift.
     static func translatedLevelTitle(_ title: String) -> String {
         let keyMap: [String: String] = [
             "Newcomer": "level.newcomer",
@@ -106,12 +102,12 @@ enum AppL10n {
             "onboarding.fomo.bullet2_short": "Income, spending and goals in one place.",
             "onboarding.fomo.bullet3_title": "Feel good about money",
             "onboarding.fomo.bullet3": "Small steps, big wins. You're in control, at your own pace.",
-            "onboarding.fomo.bullet4_title": "AI makes finance easy",
+            "onboarding.fomo.bullet4_title": "AI-backed answers",
             "onboarding.fomo.bullet4": "Get answers and next steps in plain language.",
             "onboarding.fomo.bullet4_short": "Get answers and next steps in plain language.",
             "onboarding.fomo.phrase1": "Money made simple ✨",
             "onboarding.fomo.phrase2": "Hit those goals 🎯",
-            "onboarding.fomo.phrase3": "AI gets you 🤖",
+            "onboarding.fomo.phrase3": "Ask ANITA anything ✨",
             "onboarding.fomo.phrase4": "One app. Done 💪",
             "onboarding.fomo.phrase5": "Chat ANITA. Win 🚀",
             "onboarding.pre_bank.health_label": "Health preview",
@@ -135,12 +131,12 @@ enum AppL10n {
             "welcome.secured_by_stripe": "Secured by Stripe",
             "welcome.get_started": "Get Started",
             "welcome.sign_in": "Log In",
-            "welcome.feature.chat.title": "AI Chat",
+            "welcome.feature.chat.title": "AI chat",
             "welcome.feature.chat.desc": "Talk naturally, track automatically",
             "welcome.feature.finance.title": "Finance Dashboard",
             "welcome.feature.finance.desc": "See where money goes, stop leaks",
             "welcome.feature.goals.title": "Smart Goals",
-            "welcome.feature.goals.desc": "AI breaks down goals into steps",
+            "welcome.feature.goals.desc": "AI turns goals into steps",
             "welcome.hero.scene_overview_title": "See your money clearly",
             "welcome.hero.scene_overview_sub": "Spot waste early—so more stays in your pocket, not who-knows-where.",
             "welcome.hero.scene_goals_title": "Grow savings on purpose",
@@ -244,11 +240,11 @@ enum AppL10n {
             "paywall.upgrade_button": "Upgrade",
             "chat.upgrade_banner_title": "Full AI & unlimited messages",
             "chat.upgrade_banner_short": "Understand your finances better with Premium",
-            "chat.upgrade_banner_body": "Upgrade to Premium for full AI capabilities and unlimited chat.",
+            "chat.upgrade_banner_body": "Upgrade for the full AI experience and unlimited chat.",
             "chat.upgrade_banner_line": "Unlock with Premium",
             "chat.limit_reached": "You've used your 10 free messages this month. Upgrade to Premium for unlimited chat.",
             
-            "plans.feature.full_ai": "Full AI capabilities",
+            "plans.feature.full_ai": "Full AI chat & insights",
             "plans.feature.spending_limits": "Spending limits",
             "plans.feature.saving_goals": "Saving goals",
             "plans.feature.assets": "Assets tracking",
@@ -301,16 +297,16 @@ enum AppL10n {
             "chat.set_target": "Set a Target",
             "chat.analytics": "Analytics",
             "chat.ask_finance": "Ask about finance",
-            "chat.ai_consent_title": "AI-Powered Chat",
-            "chat.ai_consent_message": "Your messages and related data are sent to our servers and processed by OpenAI to provide chat and financial guidance. We use this only to respond to you and improve the service. See our Privacy Policy in Settings for details.",
+            "chat.ai_consent_title": "AI-powered chat",
+            "chat.ai_consent_message": "Messages are sent to our servers and processed (including via OpenAI) to power ANITA’s replies. See Privacy Policy in Settings.",
             "chat.ai_consent_continue": "Continue",
             "chat.ai_consent_not_now": "Not Now",
             "chat.notifications_hint": "Daily reminders: Settings → Notifications",
             "chat.header_bank_pill_connect": "Connect",
             "chat.header_bank_pill_linked": "Linked",
-            "chat.paywall_anita_1": "Ooh, I’d love to dive into your spending charts and goals, but that’s the premium stuff! 🎩 Upgrade and I’ll show you the full picture. For now I’m your add-expense-and-income buddy. Try \"add expense 20 for coffee\" or \"add income 2000 salary\" and we’re good! 💰",
-            "chat.paywall_anita_2": "That question hits different, and by that I mean it’s locked behind Premium. 🔐 Want analytics, goals, or \"where did my money go\"? Upgrade and we’ll go there. Right now I’ve got you for adding expenses and income, plus the basics about me. Give it a try! 📊➡️💎",
-            "chat.paywall_anita_3": "My free-tier alter ego can only do two things really well: log expenses and log income (and answer \"who’s ANITA?\"). Everything else, like charts, goals, limits, and breakdowns, is Premium territory. Upgrade and I’ll unlock my full therapist mode. 🦉💰",
+            "chat.paywall_anita_1": "I’d love to dig into charts and goals—that’s Premium. For now try “add expense 20 coffee” or “add income 2000 salary”. Upgrade when you want the full AI. 💰",
+            "chat.paywall_anita_2": "That question needs Premium (analytics, goals, the deep stuff). Free tier: logging income/expenses and basics. 🔐",
+            "chat.paywall_anita_3": "Free ANITA handles expenses, income, and small talk. Charts, goals, breakdowns = Premium. Unlock the rest anytime. 📊",
             "chat.bank_blocks_manual_transaction": "Your bank is connected, so transactions come from your account automatically. You can’t add them manually here. Ask me about budgets, goals, or how you’re doing this month instead.",
             
             // Finance View
@@ -531,13 +527,13 @@ enum AppL10n {
             "asset_type.vehicle": "Vehicle",
             "asset_type.cash": "Cash",
             
-            // AI Recommendations
-            "ai_recommendation.increase_savings_rate": "Increase Savings Rate",
-            "ai_recommendation.savings_rate_description": "Your current savings rate is %@%%. Consider saving at least 20%% of your income.",
-            "ai_recommendation.review_category_spending": "Review %@ Spending",
-            "ai_recommendation.category_spending_description": "You're spending %@ on %@ this month. Consider setting a budget limit.",
-            "ai_recommendation.accelerate_goal": "Accelerate %@",
-            "ai_recommendation.goal_progress_description": "You're %@%% towards your goal with %d days remaining. Consider increasing monthly contributions.",
+            // Finance tips
+            "finance_tip.increase_savings_rate": "Increase savings rate",
+            "finance_tip.savings_rate_description": "Savings rate is %@%% — aim for ~20%% of income if you can.",
+            "finance_tip.review_category_spending": "Look at %@ spending",
+            "finance_tip.category_spending_description": "%@ on %@ this month — a budget limit might help.",
+            "finance_tip.accelerate_goal": "Speed up %@",
+            "finance_tip.goal_progress_description": "%@%% there with %d days left — bump the monthly amount?",
             
             // XP Info (sidebar i button)
             "xp_info.title": "How XP Works",
@@ -589,7 +585,7 @@ enum AppL10n {
             "settings.feedback": "Feedback",
             "settings.visit_website": "Visit Website",
             "settings.version": "Version",
-            "settings.about_description": "ANITA - Your Personal Finance AI Assistant",
+            "settings.about_description": "ANITA — AI finance companion",
             "settings.clear_data_title": "Clear All Data",
             "settings.clear_data_message": "Are you sure you want to clear all data? This action cannot be undone.",
             "settings.clear": "Clear",
@@ -660,7 +656,7 @@ enum AppL10n {
             "onboarding.fomo.title": "Dabei!",
             "onboarding.fomo.subtitle": "Dein persönlicher Finanzassistent.",
             "onboarding.fomo.tagline_emoji": "🤖",
-            "onboarding.fomo.tagline": "KI führt dich · Klare Daten",
+            "onboarding.fomo.tagline": "KI führt dich · klare Daten",
             "onboarding.fomo.tagline_text": "Dein Geld, klar und einfach.",
             "onboarding.fomo.emoji1": "🎯",
             "onboarding.fomo.emoji2": "📊",
@@ -674,12 +670,12 @@ enum AppL10n {
             "onboarding.fomo.bullet2_short": "Einnahmen, Ausgaben und Ziele an einem Ort.",
             "onboarding.fomo.bullet3_title": "Gut fühlen mit Geld",
             "onboarding.fomo.bullet3": "Kleine Schritte, große Erfolge. Du bestimmst das Tempo.",
-            "onboarding.fomo.bullet4_title": "KI macht Finanzen leicht",
+            "onboarding.fomo.bullet4_title": "Antworten mit KI",
             "onboarding.fomo.bullet4": "Antworten und nächste Schritte, verständlich erklärt.",
             "onboarding.fomo.bullet4_short": "Antworten und nächste Schritte, verständlich erklärt.",
             "onboarding.fomo.phrase1": "Geld ganz easy ✨",
             "onboarding.fomo.phrase2": "Ziele knacken 🎯",
-            "onboarding.fomo.phrase3": "KI hat's kapiert 🤖",
+            "onboarding.fomo.phrase3": "Frag ANITA einfach ✨",
             "onboarding.fomo.phrase4": "Eine App. Fertig 💪",
             "onboarding.fomo.phrase5": "ANITA chatten. Gewinnen 🚀",
             "onboarding.pre_bank.health_label": "Gesundheits-Vorschau",
@@ -746,7 +742,7 @@ enum AppL10n {
             "login.by_continuing": "Wenn du fortfährst, stimmst du zu:",
             "login.email": "E‑Mail",
             "login.password": "Passwort",
-"login.reset.send": "Link senden",
+            "login.reset.send": "Link senden",
              "login.reset.help": "Gib deine E‑Mail ein, dann senden wir dir einen Reset‑Link.",
              "login.reset.sent": "Schau in deiner E‑Mail nach dem Link zum Zurücksetzen des Passworts.",
              "login.reset.sent_title": "E‑Mail prüfen",
@@ -803,13 +799,13 @@ enum AppL10n {
             "plans.feature.basic_functions": "Nur Grundfunktionen",
             "paywall.upgrade_to_use": "Upgrade auf Premium, um diese Funktion zu nutzen.",
             "paywall.upgrade_button": "Upgrade",
-            "chat.upgrade_banner_title": "Vollständige KI & unbegrenzte Nachrichten",
+            "chat.upgrade_banner_title": "Volle KI & unbegrenzte Nachrichten",
             "chat.upgrade_banner_short": "Finanzen besser verstehen mit Premium",
-            "chat.upgrade_banner_body": "Upgrade auf Premium für volle KI-Funktionen und unbegrenzten Chat.",
+            "chat.upgrade_banner_body": "Upgrade für die volle KI‑Erfahrung und unbegrenzten Chat.",
             "chat.upgrade_banner_line": "Mit Premium freischalten",
             "chat.limit_reached": "Du hast deine 10 kostenlosen Nachrichten diesen Monat verbraucht. Upgrade auf Premium für unbegrenzten Chat.",
             
-            "plans.feature.full_ai": "Vollständige KI-Funktionen",
+            "plans.feature.full_ai": "Voller KI‑Chat & Einblicke",
             "plans.feature.spending_limits": "Ausgabenlimits",
             "plans.feature.saving_goals": "Sparziele",
             "plans.feature.assets": "Vermögen erfassen",
@@ -860,8 +856,8 @@ enum AppL10n {
             "chat.set_target": "Ziel setzen",
             "chat.analytics": "Analysen",
             "chat.ask_finance": "Frage zu Finanzen",
-            "chat.ai_consent_title": "KI-Chat",
-            "chat.ai_consent_message": "Deine Nachrichten und zugehörigen Daten werden an unsere Server gesendet und von OpenAI verarbeitet, um den Chat und Finanzberatung bereitzustellen. Siehe Datenschutz in den Einstellungen.",
+            "chat.ai_consent_title": "KI‑Chat",
+            "chat.ai_consent_message": "Nachrichten gehen an unsere Server und werden verarbeitet (u. a. über OpenAI) für ANITAs Antworten. Details in der Datenschutzerklärung unter Einstellungen.",
             "chat.ai_consent_continue": "Weiter",
             "chat.ai_consent_not_now": "Nicht jetzt",
             "chat.notifications_hint": "Tägliche Erinnerungen: Einstellungen → Benachrichtigungen",
@@ -989,7 +985,7 @@ enum AppL10n {
             "settings.feedback": "Feedback",
             "settings.visit_website": "Website besuchen",
             "settings.version": "Version",
-            "settings.about_description": "ANITA - Dein persönlicher Finanz‑KI‑Assistent",
+            "settings.about_description": "ANITA — KI‑Finanzbegleiter",
             "settings.clear_data_title": "Alle Daten löschen",
             "settings.clear_data_message": "Möchtest du wirklich alle Daten löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
             "settings.clear": "Löschen",
@@ -1108,12 +1104,12 @@ enum AppL10n {
             "asset_type.vehicle": "Fahrzeug",
             "asset_type.cash": "Bargeld",
             
-            "ai_recommendation.increase_savings_rate": "Sparquote erhöhen",
-            "ai_recommendation.savings_rate_description": "Ihre aktuelle Sparquote beträgt %@%%. Erwägen Sie, mindestens 20%% Ihres Einkommens zu sparen.",
-            "ai_recommendation.review_category_spending": "%@ Ausgaben überprüfen",
-            "ai_recommendation.category_spending_description": "Sie geben diesen Monat %@ für %@ aus. Erwägen Sie, ein Budgetlimit festzulegen.",
-            "ai_recommendation.accelerate_goal": "%@ beschleunigen",
-            "ai_recommendation.goal_progress_description": "Sie sind %@%% auf dem Weg zu Ihrem Ziel mit %d verbleibenden Tagen. Erwägen Sie, monatliche Beiträge zu erhöhen.",
+            "finance_tip.increase_savings_rate": "Sparquote erhöhen",
+            "finance_tip.savings_rate_description": "Deine Sparquote liegt bei %@%%. Ziel: mindestens 20%% vom Einkommen.",
+            "finance_tip.review_category_spending": "%@‑Ausgaben checken",
+            "finance_tip.category_spending_description": "Du gibst diesen Monat %@ für %@ aus — überleg ein Limit.",
+            "finance_tip.accelerate_goal": "%@ näher ranbringen",
+            "finance_tip.goal_progress_description": "Du bist %@%% beim Ziel, noch %d Tage — kannst du mehr pro Monat einzahlen?",
             
             "level.newcomer": "Neuling",
             "level.explorer": "Entdecker",

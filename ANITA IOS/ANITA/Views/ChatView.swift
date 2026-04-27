@@ -2,8 +2,6 @@
 //  ChatView.swift
 //  ANITA
 //
-//  Chat interface matching webapp design
-//
 
 import SwiftUI
 
@@ -21,12 +19,10 @@ struct ChatView: View {
     @State private var bankLinkError: String?
     @State private var showBankLinkErrorAlert = false
     @State private var showBankConnectConfirm = false
-    /// Quick-start grid stays visible until the user sends their first message; greeting sits under the buttons.
     private var showQuickStartChrome: Bool {
         !viewModel.messages.contains { $0.role == "user" }
     }
     
-    /// Before sending to AI we must have user consent (App Store AI disclosure). If not yet given, show sheet; on Continue, set consent and send.
     private func requestSendMessage() {
         if UserDefaults.standard.bool(forKey: aiConsentKey) {
             viewModel.sendMessage()
@@ -46,11 +42,9 @@ struct ChatView: View {
     
     var body: some View {
         ZStack {
-            // Black background
             Color.black
                 .ignoresSafeArea()
             
-            // Main content with edge-swipe to open sidebar (thin strip so hamburger button stays tappable)
             mainContentView
                 .overlay(alignment: .leading) {
                     Color.clear
@@ -71,9 +65,7 @@ struct ChatView: View {
                 .scaleEffect(isSidebarPresented ? 0.95 : 1.0)
                 .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isSidebarPresented)
             
-            // Sidebar overlay
             if isSidebarPresented {
-                // Dimming overlay
                 Color.black.opacity(0.5)
                     .ignoresSafeArea()
                     .onTapGesture {
@@ -82,7 +74,6 @@ struct ChatView: View {
                         }
                     }
                 
-                // Sidebar menu — proper width for card + list
                 HStack(spacing: 0) {
                     SidebarMenu(isPresented: $isSidebarPresented)
                         .frame(width: min(UIScreen.main.bounds.width * 0.72, 340))
@@ -109,10 +100,8 @@ struct ChatView: View {
             if viewModel.currentConversationId == nil, viewModel.messages.isEmpty {
                 viewModel.ensureWelcomeGreetingIfNeeded()
             }
-            // If we have a current conversation but no messages loaded, try to load them
             if let conversationId = viewModel.currentConversationId, viewModel.messages.isEmpty {
                 Task {
-                    print("[ChatView] onAppear: Loading messages for conversation: \(conversationId)")
                     await viewModel.loadMessages(conversationId: conversationId)
                 }
             }
@@ -777,7 +766,6 @@ struct MessageBubble: View {
                         }
                 } else {
                     // ANITA message: Formatted structured text, left-aligned, no bubble
-                    // Match webapp's structured message display with GPT-like spacing
                     VStack(alignment: .leading, spacing: 0) {
                         Text(TextFormatter.formatResponse(message.content))
                             .frame(maxWidth: UIScreen.main.bounds.width * 0.9, alignment: .leading)
@@ -1189,7 +1177,6 @@ struct CurrencyLoadingAnimation: View {
     }
 }
 
-// MARK: - AI consent (App Store third-party AI disclosure)
 struct AIConsentSheetView: View {
     var onContinue: () -> Void
     var onNotNow: () -> Void

@@ -19,9 +19,7 @@ class NetworkService: ObservableObject {
         #endif
     }
     
-    /// Base URL: `BACKEND_URL` env (Xcode scheme) → UserDefaults `backendURL` (Settings) → `Config.backendURL`.
-    /// In **Release**, a stored localhost URL is ignored so TestFlight falls back to production instead of a useless loopback URL.
-    /// In **Debug**, UserDefaults is honored (Mac IP for a physical device); previously Debug ignored Settings entirely, so the app never “saw” the server.
+    /// Env → UserDefaults (`backendURL` from Settings) → `Config.backendURL`. Release ignores saved localhost.
     private var rawBaseURL: String {
         if let env = ProcessInfo.processInfo.environment["BACKEND_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines), !env.isEmpty {
             return env
@@ -32,6 +30,12 @@ class NetworkService: ObservableObject {
         }
         let normalized = url.hasSuffix("/") ? String(url.dropLast()) : url
         #if DEBUG
+        #if targetEnvironment(simulator)
+        let lower = normalized.lowercased()
+        if lower.hasPrefix("http://localhost") || lower.hasPrefix("http://127.0.0.1") || lower.contains("localhost") || lower.contains("127.0.0.1") {
+            return Config.productionBackendURL
+        }
+        #endif
         return normalized
         #else
         let lower = normalized.lowercased()

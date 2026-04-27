@@ -31,9 +31,6 @@ class SidebarViewModel: ObservableObject {
     private var xpStatsDidUpdateObserver: NSObjectProtocol?
     
     init(userId: String? = nil) {
-        // Note: We don't store userId as a property anymore
-        // Instead, we always get it fresh from UserManager when loading data
-        // This ensures we use the correct authenticated user ID
         print("[SidebarViewModel] Initialized")
         
         // Observe authentication changes to refresh data
