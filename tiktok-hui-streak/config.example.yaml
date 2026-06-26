@@ -1,0 +1,16 @@
+# Copy to config.yaml and fill in your details.
+
+# Friend's TikTok display name or @username as shown in your DM list
+friend_name: "your_friend_username"
+
+# Message sent every day
+message: "HUI"
+
+# Daily send time in 24h format (your computer's local timezone)
+send_time: "09:00"
+
+# Optional: run browser headless after first login (set false for debugging)
+headless: true
+
+# Seconds to wait for TikTok pages to load
+page_timeout_seconds: 30
